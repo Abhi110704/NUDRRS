@@ -1,0 +1,228 @@
+===============================================================================
+                    GIT SETUP & REPOSITORY IMPORT INSTRUCTIONS
+===============================================================================
+
+REPOSITORY DETAILS:
+- GitHub URL: https://github.com/Abhi110704/NUDRRS.git
+- Admin Username: HackerXHacker
+- Admin Password: Hacker123
+
+===============================================================================
+                          INITIAL REPOSITORY SETUP
+===============================================================================
+
+1. CREATE GITHUB REPOSITORY (If not already created)
+   - Go to: https://github.com/
+   - Login with: HackerXHacker / Hacker123
+   - Click "New Repository"
+   - Repository name: NUDRRS
+   - Description: National Unified Disaster Response & Relief System - SIH 2025
+   - Set to Public
+   - Initialize with README: No (we have our own)
+   - Click "Create Repository"
+
+2. INITIALIZE LOCAL GIT REPOSITORY
+   cd e:\Internship\CascadeProjects\windsurf-project
+   git init
+   git add .
+   git commit -m "Initial commit: NUDRRS Emergency Response System"
+
+3. CONNECT TO REMOTE REPOSITORY
+   git remote add origin https://github.com/Abhi110704/NUDRRS.git
+   git branch -M main
+   git push -u origin main
+
+===============================================================================
+                        IMPORT EXISTING PROJECT TO GIT
+===============================================================================
+
+STEP 1: PREPARE PROJECT
+   # Navigate to project directory
+   cd e:\Internship\CascadeProjects\windsurf-project
+   
+   # Create .gitignore file
+   echo "node_modules/" > .gitignore
+   echo "__pycache__/" >> .gitignore
+   echo "*.pyc" >> .gitignore
+   echo ".env" >> .gitignore
+   echo "venv/" >> .gitignore
+   echo "db.sqlite3" >> .gitignore
+
+STEP 2: INITIALIZE GIT
+   git init
+   git add .
+   git commit -m "feat: Initial NUDRRS project setup with modern UI enhancements"
+
+STEP 3: CONNECT TO GITHUB
+   git remote add origin https://github.com/Abhi110704/NUDRRS.git
+   git branch -M main
+   
+   # If repository exists and has content:
+   git pull origin main --allow-unrelated-histories
+   
+   # Push to GitHub
+   git push -u origin main
+
+===============================================================================
+                           AUTHENTICATION SETUP
+===============================================================================
+
+METHOD 1: HTTPS with Personal Access Token (Recommended)
+   1. Go to GitHub Settings > Developer settings > Personal access tokens
+   2. Generate new token with repo permissions
+   3. Use token as password when prompted
+
+METHOD 2: SSH Key Setup
+   # Generate SSH key
+   ssh-keygen -t rsa -b 4096 -C "your-email@example.com"
+   
+   # Add to SSH agent
+   ssh-add ~/.ssh/id_rsa
+   
+   # Copy public key to GitHub
+   cat ~/.ssh/id_rsa.pub
+   # Paste in GitHub Settings > SSH and GPG keys
+
+METHOD 3: Git Credential Manager
+   git config --global credential.helper manager-core
+   # Enter credentials when prompted
+
+===============================================================================
+                            COMMON GIT COMMANDS
+===============================================================================
+
+DAILY WORKFLOW:
+   git status                    # Check file status
+   git add .                     # Stage all changes
+   git add filename              # Stage specific file
+   git commit -m "message"       # Commit changes
+   git push origin main          # Push to GitHub
+   git pull origin main          # Pull latest changes
+
+BRANCHING:
+   git branch feature-name       # Create new branch
+   git checkout feature-name     # Switch to branch
+   git checkout -b feature-name  # Create and switch
+   git merge feature-name        # Merge branch to main
+   git branch -d feature-name    # Delete branch
+
+COLLABORATION:
+   git clone https://github.com/Abhi110704/NUDRRS.git  # Clone repository
+   git fetch origin              # Fetch remote changes
+   git pull origin main          # Pull and merge changes
+   git push origin branch-name   # Push branch to remote
+
+===============================================================================
+                          PROJECT STRUCTURE FOR GIT
+===============================================================================
+
+NUDRRS/
+├── .gitignore                  # Git ignore rules
+├── README.md                   # Project documentation
+├── NEW_USER_SETUP_GUIDE.txt    # Setup instructions
+├── DEPLOYMENT_GUIDE.md         # Deployment guide
+├── docker-compose.yml          # Docker configuration
+├── backend/                    # Django backend
+│   ├── requirements.txt        # Python dependencies
+│   ├── manage.py              # Django management
+│   └── nudrrs/                # Main project
+├── frontend/                   # React frontend
+│   ├── package.json           # Node dependencies
+│   ├── src/                   # Source code
+│   └── public/                # Static files
+└── docs/                      # Documentation
+
+===============================================================================
+                           COMMIT MESSAGE CONVENTIONS
+===============================================================================
+
+FORMAT: type(scope): description
+
+TYPES:
+- feat: New feature
+- fix: Bug fix
+- docs: Documentation changes
+- style: Code style changes
+- refactor: Code refactoring
+- test: Adding tests
+- chore: Maintenance tasks
+
+EXAMPLES:
+   git commit -m "feat(frontend): add modern glassmorphism UI design"
+   git commit -m "fix(backend): resolve API authentication issues"
+   git commit -m "docs: update README with deployment instructions"
+   git commit -m "feat(map): implement live location tracking"
+
+===============================================================================
+                              TROUBLESHOOTING
+===============================================================================
+
+ISSUE: Permission denied (publickey)
+SOLUTION: Set up SSH key or use HTTPS with token
+
+ISSUE: Repository not found
+SOLUTION: Check URL and authentication credentials
+
+ISSUE: Merge conflicts
+SOLUTION: 
+   git status
+   # Edit conflicted files
+   git add .
+   git commit -m "resolve merge conflicts"
+
+ISSUE: Large files
+SOLUTION: Use Git LFS for files > 100MB
+   git lfs track "*.zip"
+   git add .gitattributes
+
+ISSUE: Accidentally committed sensitive data
+SOLUTION: 
+   git rm --cached filename
+   git commit -m "remove sensitive file"
+   # Add to .gitignore
+
+===============================================================================
+                            REPOSITORY MAINTENANCE
+===============================================================================
+
+REGULAR TASKS:
+1. Update .gitignore as needed
+2. Create meaningful commit messages
+3. Use branches for new features
+4. Regular pushes to backup work
+5. Pull before starting work
+6. Review changes before committing
+
+SECURITY:
+- Never commit passwords or API keys
+- Use environment variables for secrets
+- Add sensitive files to .gitignore
+- Regular security audits
+
+===============================================================================
+                              QUICK REFERENCE
+===============================================================================
+
+FIRST TIME SETUP:
+   git clone https://github.com/Abhi110704/NUDRRS.git
+   cd NUDRRS
+   # Follow NEW_USER_SETUP_GUIDE.txt
+
+DAILY WORKFLOW:
+   git pull origin main
+   # Make changes
+   git add .
+   git commit -m "descriptive message"
+   git push origin main
+
+EMERGENCY BACKUP:
+   git add .
+   git commit -m "WIP: backup current work"
+   git push origin main
+
+===============================================================================
+
+For support: Contact HackerXHacker team or create GitHub issue
+Repository: https://github.com/Abhi110704/NUDRRS.git
+
+===============================================================================
