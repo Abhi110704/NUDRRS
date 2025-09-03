@@ -125,16 +125,4 @@ windsurf-project/
 
 ---
 
-## 🚀 **Deployment**
-
-**For detailed deployment instructions**: See [DEPLOYMENT_GUIDE.md](DEPLOYMENT_GUIDE.md)
-
-**Quick Demo Setup:**
-```bash
-docker-compose up --build
-# Access at localhost:3000
-```
-
----
-
 **Made by Team HackerXHacker for India's Emergency Response Revolution**
