@@ -75,7 +75,6 @@ Mobile App          WebSocket         Predictions         Real-time Storage
 | **Database** | PostgreSQL + PostGIS |
 | **Real-time** | WebSocket + Redis |
 | **Maps** | Google Maps + Leaflet |
-| **Deployment** | Docker + Docker Compose |
 
 ---
 
