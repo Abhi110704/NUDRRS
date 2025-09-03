@@ -137,4 +137,4 @@ docker-compose up --build
 
 ---
 
-**Made with ❤️ by Team HackerXHacker for India's Emergency Response Revolution**
+**Made by Team HackerXHacker for India's Emergency Response Revolution**
