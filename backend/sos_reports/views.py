@@ -1,7 +1,7 @@
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
-from rest_framework.permissions import AllowAny
+from rest_framework.permissions import AllowAny, IsAuthenticated
 from django.db.models import Q, Count
 from .models import SOSReport, ReportMedia, ReportUpdate
 from .serializers import SOSReportSerializer, SOSReportCreateSerializer, ReportMediaSerializer
@@ -26,9 +26,23 @@ class SOSReportViewSet(viewsets.ModelViewSet):
         return SOSReportSerializer
     
     def get_queryset(self):
+        queryset = SOSReport.objects.all()
+        
         # Filter by demo mode if specified
         is_demo = self.request.query_params.get('is_demo', 'false').lower() == 'true'
-        return SOSReport.objects.filter(is_demo=is_demo)
+        if is_demo:
+            queryset = queryset.filter(is_demo=True)
+        else:
+            queryset = queryset.filter(is_demo=False)
+        
+        # Filter by user if specified and user is not admin
+        user_id = self.request.query_params.get('user')
+        if user_id and not (self.request.user.is_authenticated and 
+                           hasattr(self.request.user, 'profile') and 
+                           self.request.user.profile.role == 'ADMIN'):
+            queryset = queryset.filter(user_id=user_id)
+        
+        return queryset
     
     def create(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)
@@ -175,5 +189,54 @@ class SOSReportViewSet(viewsets.ModelViewSet):
         for priority, _ in SOSReport.PRIORITY_CHOICES:
             count = reports.filter(priority=priority).count()
             stats['by_priority'][priority] = count
+        
+        return Response(stats)
+    
+    @action(detail=True, methods=['patch'], permission_classes=[IsAuthenticated])
+    def verify(self, request, pk=None):
+        """Admin verification of a report"""
+        from django.utils import timezone
+        
+        report = self.get_object()
+        
+        # Check if user is admin
+        if not (hasattr(request.user, 'profile') and request.user.profile.role == 'ADMIN'):
+            return Response({'error': 'Admin privileges required'}, status=status.HTTP_403_FORBIDDEN)
+        
+        action_type = request.data.get('action', 'verify')
+        
+        if action_type == 'verify':
+            report.status = 'VERIFIED'
+            report.verified_by = request.user
+            report.verified_at = timezone.now()
+        elif action_type == 'reject':
+            report.status = 'REJECTED'
+            report.verified_by = request.user
+            report.verified_at = timezone.now()
+        
+        report.save()
+        
+        return Response({
+            'message': f'Report {action_type}ed successfully',
+            'report': SOSReportSerializer(report).data
+        })
+    
+    @action(detail=False, methods=['get'], permission_classes=[IsAuthenticated])
+    def admin_stats(self, request):
+        """Get admin-specific statistics"""
+        # Check if user is admin
+        if not (hasattr(request.user, 'profile') and request.user.profile.role == 'ADMIN'):
+            return Response({'error': 'Admin privileges required'}, status=status.HTTP_403_FORBIDDEN)
+        
+        queryset = self.get_queryset()
+        
+        stats = {
+            'total_reports': queryset.count(),
+            'pending_verification': queryset.filter(status='PENDING').count(),
+            'verified_reports': queryset.filter(status='VERIFIED').count(),
+            'rejected_reports': queryset.filter(status='REJECTED').count(),
+            'high_priority_pending': queryset.filter(status='PENDING', priority__in=['HIGH', 'CRITICAL']).count(),
+            'recent_reports': queryset.order_by('-created_at')[:10].count()
+        }
         
         return Response(stats)

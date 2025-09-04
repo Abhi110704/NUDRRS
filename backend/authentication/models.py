@@ -15,12 +15,12 @@ class UserProfile(models.Model):
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='profile')
     role = models.CharField(max_length=20, choices=ROLE_CHOICES, default='VIEWER')
     phone_number = models.CharField(
-        max_length=15, 
+        max_length=20, 
         blank=True,
         validators=[
             RegexValidator(
-                regex=r'^(\+91[\-\s]?)?[0]?(91)?[789]\d{9}$',
-                message='Enter a valid Indian phone number (e.g., +91-9876543210 or 9876543210)'
+                regex=r'^\+[1-9]\d{1,14}$',
+                message='Enter a valid international phone number (e.g., +919876543210)'
             )
         ]
     )
@@ -48,12 +48,12 @@ class Organization(models.Model):
     contact_person = models.CharField(max_length=100, blank=True)
     contact_email = models.EmailField(blank=True)
     contact_phone = models.CharField(
-        max_length=15, 
+        max_length=20, 
         blank=True,
         validators=[
             RegexValidator(
-                regex=r'^(\+91[\-\s]?)?[0]?(91)?[789]\d{9}$',
-                message='Enter a valid Indian phone number (e.g., +91-9876543210 or 9876543210)'
+                regex=r'^\+[1-9]\d{1,14}$',
+                message='Enter a valid international phone number (e.g., +919876543210)'
             )
         ]
     )

@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import {
   Box, Typography, TextField, Button, Paper, Container, Grid,
-  Alert, CircularProgress, Divider, Chip, useTheme, useMediaQuery
+  Alert, CircularProgress, Divider, Chip, useTheme, useMediaQuery,
+  FormControl, InputLabel, Select, MenuItem, InputAdornment
 } from '@mui/material';
 import {
   Login as LoginIcon, PersonAdd, Security,
@@ -18,6 +19,7 @@ const Login = () => {
     confirmPassword: '',
     firstName: '',
     lastName: '',
+    countryCode: '+91',
     phoneNumber: '',
     organization: ''
   });
@@ -27,6 +29,27 @@ const Login = () => {
   const { login, register } = useAuth();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
+
+  // Country codes for phone numbers
+  const countryCodes = [
+    { code: '+91', country: 'India', flag: '🇮🇳' },
+    { code: '+1', country: 'USA', flag: '🇺🇸' },
+    { code: '+44', country: 'UK', flag: '🇬🇧' },
+    { code: '+86', country: 'China', flag: '🇨🇳' },
+    { code: '+81', country: 'Japan', flag: '🇯🇵' },
+    { code: '+49', country: 'Germany', flag: '🇩🇪' },
+    { code: '+33', country: 'France', flag: '🇫🇷' },
+    { code: '+61', country: 'Australia', flag: '🇦🇺' },
+    { code: '+55', country: 'Brazil', flag: '🇧🇷' },
+    { code: '+7', country: 'Russia', flag: '🇷🇺' },
+    { code: '+971', country: 'UAE', flag: '🇦🇪' },
+    { code: '+966', country: 'Saudi Arabia', flag: '🇸🇦' },
+    { code: '+92', country: 'Pakistan', flag: '🇵🇰' },
+    { code: '+880', country: 'Bangladesh', flag: '🇧🇩' },
+    { code: '+94', country: 'Sri Lanka', flag: '🇱🇰' },
+    { code: '+977', country: 'Nepal', flag: '🇳🇵' },
+    { code: '+975', country: 'Bhutan', flag: '🇧🇹' },
+  ];
 
   const handleInputChange = (e) => {
     setFormData({
@@ -58,7 +81,7 @@ const Login = () => {
           password2: formData.confirmPassword,
           first_name: formData.firstName,
           last_name: formData.lastName,
-          phone_number: formData.phoneNumber,
+          phone_number: `${formData.countryCode}${formData.phoneNumber}`,
           organization: formData.organization
         };
         
@@ -81,6 +104,7 @@ const Login = () => {
       confirmPassword: '',
       firstName: '',
       lastName: '',
+      countryCode: '+91',
       phoneNumber: '',
       organization: ''
     });
@@ -200,22 +224,46 @@ const Login = () => {
                     />
                   </Grid>
                   <Grid item xs={12}>
-                    <TextField
-                      fullWidth
-                      label="Phone Number"
-                      name="phoneNumber"
-                      value={formData.phoneNumber}
-                      onChange={handleInputChange}
-                      required
-                      inputProps={{
-                        maxLength: 15,
-                        pattern: "^(\+91[\-\s]?)?[0]?(91)?[789]\d{9}$"
-                      }}
-                      helperText="Format: +91-9876543210 or 9876543210"
-                      InputProps={{
-                        startAdornment: <Phone sx={{ mr: 1, color: 'text.secondary' }} />
-                      }}
-                    />
+                    <Box sx={{ display: 'flex', gap: 1 }}>
+                      <FormControl sx={{ minWidth: 120 }}>
+                        <InputLabel>Country</InputLabel>
+                        <Select
+                          value={formData.countryCode}
+                          label="Country"
+                          onChange={(e) => setFormData({...formData, countryCode: e.target.value})}
+                          sx={{ height: '56px' }}
+                        >
+                          {countryCodes.map((country) => (
+                            <MenuItem key={country.code} value={country.code}>
+                              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                <span>{country.flag}</span>
+                                <span>{country.code}</span>
+                                <span style={{ fontSize: '0.8rem', color: '#666' }}>
+                                  {country.country}
+                                </span>
+                              </Box>
+                            </MenuItem>
+                          ))}
+                        </Select>
+                      </FormControl>
+                      
+                      <TextField
+                        fullWidth
+                        label="Phone Number"
+                        name="phoneNumber"
+                        value={formData.phoneNumber}
+                        onChange={handleInputChange}
+                        required
+                        inputProps={{
+                          maxLength: 10,
+                          pattern: "^[0-9]{10}$"
+                        }}
+                        helperText="Enter 10-digit phone number"
+                        InputProps={{
+                          startAdornment: <Phone sx={{ mr: 1, color: 'text.secondary' }} />
+                        }}
+                      />
+                    </Box>
                   </Grid>
                   <Grid item xs={12}>
                     <TextField

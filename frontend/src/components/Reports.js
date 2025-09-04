@@ -36,8 +36,30 @@ const Reports = () => {
     priority: 'MEDIUM',
     description: '',
     address: '',
+    countryCode: '+91',
     phone_number: ''
   });
+
+  // Country codes for phone numbers
+  const countryCodes = [
+    { code: '+91', country: 'India', flag: '🇮🇳' },
+    { code: '+1', country: 'USA', flag: '🇺🇸' },
+    { code: '+44', country: 'UK', flag: '🇬🇧' },
+    { code: '+86', country: 'China', flag: '🇨🇳' },
+    { code: '+81', country: 'Japan', flag: '🇯🇵' },
+    { code: '+49', country: 'Germany', flag: '🇩🇪' },
+    { code: '+33', country: 'France', flag: '🇫🇷' },
+    { code: '+61', country: 'Australia', flag: '🇦🇺' },
+    { code: '+55', country: 'Brazil', flag: '🇧🇷' },
+    { code: '+7', country: 'Russia', flag: '🇷🇺' },
+    { code: '+971', country: 'UAE', flag: '🇦🇪' },
+    { code: '+966', country: 'Saudi Arabia', flag: '🇸🇦' },
+    { code: '+92', country: 'Pakistan', flag: '🇵🇰' },
+    { code: '+880', country: 'Bangladesh', flag: '🇧🇩' },
+    { code: '+94', country: 'Sri Lanka', flag: '🇱🇰' },
+    { code: '+977', country: 'Nepal', flag: '🇳🇵' },
+    { code: '+975', country: 'Bhutan', flag: '🇧🇹' },
+  ];
   
   // Notification states
   const [snackbar, setSnackbar] = useState({
@@ -279,6 +301,7 @@ const Reports = () => {
       priority: 'MEDIUM',
       description: '',
       address: '',
+      countryCode: '+91',
       phone_number: ''
     });
   };
@@ -290,12 +313,20 @@ const Reports = () => {
 
   const handleEditReport = (report) => {
     setSelectedReport(report);
+    
+    // Parse country code from existing phone number
+    const phoneNumber = report.phone_number || '';
+    const countryCodeMatch = phoneNumber.match(/^\+(\d{1,4})/);
+    const countryCode = countryCodeMatch ? `+${countryCodeMatch[1]}` : '+91';
+    const phoneNumberOnly = phoneNumber.replace(/^\+\d{1,4}/, '');
+    
     setNewReportForm({
       disaster_type: report.disaster_type,
       priority: report.priority,
       description: report.description,
       address: report.address,
-      phone_number: report.phone_number
+      countryCode: countryCode,
+      phone_number: phoneNumberOnly
     });
     setEditReportDialog(true);
   };
@@ -310,6 +341,7 @@ const Reports = () => {
       id: Date.now(), // Generate unique ID
       user: { username: 'current_user', first_name: 'Current', last_name: 'User' },
       ...newReportForm,
+      phone_number: `${newReportForm.countryCode}${newReportForm.phone_number}`,
       status: 'PENDING',
       created_at: new Date().toISOString(),
       ai_confidence: Math.random() * 0.3 + 0.7 // Random AI confidence between 0.7-1.0
@@ -359,7 +391,7 @@ const Reports = () => {
   const submitEditReport = () => {
     const updatedReports = reports.map(report => 
       report.id === selectedReport.id 
-        ? { ...report, ...newReportForm }
+        ? { ...report, ...newReportForm, phone_number: `${newReportForm.countryCode}${newReportForm.phone_number}` }
         : report
     );
     
@@ -1460,10 +1492,15 @@ const Reports = () => {
             <Grid item xs={12} md={6}>
               <TextField
                 fullWidth
-                label="Contact Phone Number"
+                label="Phone Number"
                 value={newReportForm.phone_number}
                 onChange={(e) => setNewReportForm({...newReportForm, phone_number: e.target.value})}
-                placeholder="+91-9876543210"
+                placeholder="9876543210"
+                inputProps={{
+                  maxLength: 10,
+                  pattern: "^[0-9]{10}$"
+                }}
+                helperText="Enter 10-digit phone number"
                 InputProps={{
                   startAdornment: <Phone sx={{ mr: 1, color: '#1976d2' }} />
                 }}
@@ -1989,10 +2026,15 @@ const Reports = () => {
             <Grid item xs={12} md={6}>
               <TextField
                 fullWidth
-                label="Contact Phone Number"
+                label="Phone Number"
                 value={newReportForm.phone_number}
                 onChange={(e) => setNewReportForm({...newReportForm, phone_number: e.target.value})}
-                placeholder="+91-9876543210"
+                placeholder="9876543210"
+                inputProps={{
+                  maxLength: 10,
+                  pattern: "^[0-9]{10}$"
+                }}
+                helperText="Enter 10-digit phone number"
                 InputProps={{
                   startAdornment: <Phone sx={{ mr: 1, color: '#1976d2' }} />
                 }}

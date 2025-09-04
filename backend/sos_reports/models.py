@@ -1,6 +1,7 @@
 from django.db import models
 from django.contrib.auth.models import User
 from django.utils import timezone
+from django.core.validators import RegexValidator
 
 class SOSReport(models.Model):
     PRIORITY_CHOICES = [
@@ -13,6 +14,7 @@ class SOSReport(models.Model):
     STATUS_CHOICES = [
         ('PENDING', 'Pending'),
         ('VERIFIED', 'Verified'),
+        ('REJECTED', 'Rejected'),
         ('IN_PROGRESS', 'In Progress'),
         ('RESOLVED', 'Resolved'),
         ('FALSE_ALARM', 'False Alarm'),
@@ -30,7 +32,15 @@ class SOSReport(models.Model):
     ]
     
     user = models.ForeignKey(User, on_delete=models.CASCADE, null=True, blank=True)
-    phone_number = models.CharField(max_length=15)
+    phone_number = models.CharField(
+        max_length=20,
+        validators=[
+            RegexValidator(
+                regex=r'^\+[1-9]\d{1,14}$',
+                message='Enter a valid international phone number (e.g., +919876543210)'
+            )
+        ]
+    )
     latitude = models.FloatField()
     longitude = models.FloatField()
     address = models.TextField()
@@ -40,6 +50,8 @@ class SOSReport(models.Model):
     status = models.CharField(max_length=15, choices=STATUS_CHOICES, default='PENDING')
     ai_verified = models.BooleanField(default=False)
     ai_confidence = models.FloatField(default=0.0)
+    verified_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='verified_reports')
+    verified_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(default=timezone.now)
     updated_at = models.DateTimeField(auto_now=True)
     is_demo = models.BooleanField(default=False, help_text='Whether this is a demo report')

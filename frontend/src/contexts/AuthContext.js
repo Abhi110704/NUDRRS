@@ -56,10 +56,11 @@ export const AuthProvider = ({ children }) => {
       return { success: true };
     } catch (error) {
       console.error('Login error:', error);
-      return { 
-        success: false, 
-        error: error.response?.data?.error || 'Login failed' 
-      };
+      const errorMessage = error.response?.data?.error || 
+                          error.response?.data?.message || 
+                          error.message || 
+                          'Login failed. Please check your credentials.';
+      throw new Error(errorMessage);
     }
   };
 
@@ -77,10 +78,25 @@ export const AuthProvider = ({ children }) => {
       return { success: true };
     } catch (error) {
       console.error('Registration error:', error);
-      return { 
-        success: false, 
-        error: error.response?.data || 'Registration failed' 
-      };
+      let errorMessage = 'Registration failed. Please try again.';
+      
+      if (error.response?.data) {
+        if (typeof error.response.data === 'string') {
+          errorMessage = error.response.data;
+        } else if (error.response.data.error) {
+          errorMessage = error.response.data.error;
+        } else if (error.response.data.username) {
+          errorMessage = `Username: ${error.response.data.username[0]}`;
+        } else if (error.response.data.email) {
+          errorMessage = `Email: ${error.response.data.email[0]}`;
+        } else if (error.response.data.password) {
+          errorMessage = `Password: ${error.response.data.password[0]}`;
+        } else {
+          errorMessage = JSON.stringify(error.response.data);
+        }
+      }
+      
+      throw new Error(errorMessage);
     }
   };
 
@@ -95,6 +111,11 @@ export const AuthProvider = ({ children }) => {
     setIsDemoMode(!isDemoMode);
   };
 
+  const isAdmin = user?.profile?.role === 'ADMIN';
+  const isManager = user?.profile?.role === 'MANAGER';
+  const isResponder = user?.profile?.role === 'RESPONDER';
+  const isAnalyst = user?.profile?.role === 'ANALYST';
+
   const value = {
     user,
     token,
@@ -104,7 +125,12 @@ export const AuthProvider = ({ children }) => {
     register,
     logout,
     toggleDemoMode,
-    isAuthenticated: !!token
+    isAuthenticated: !!token,
+    isAdmin,
+    isManager,
+    isResponder,
+    isAnalyst,
+    userRole: user?.profile?.role || 'VIEWER'
   };
 
   return (

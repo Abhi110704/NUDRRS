@@ -24,7 +24,7 @@ const Navbar = () => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [currentTime, setCurrentTime] = useState(new Date());
 
-  const { user, logout, isAuthenticated } = useAuth();
+  const { user, logout, isAuthenticated, isAdmin } = useAuth();
 
   useEffect(() => {
     const timer = setInterval(() => setCurrentTime(new Date()), 1000);
@@ -36,6 +36,7 @@ const Navbar = () => {
     { path: '/map', label: 'Live Map', icon: <Map />, color: '#f093fb' },
     { path: '/reports', label: 'Reports', icon: <ListIcon />, color: '#4facfe' },
     { path: '/analytics', label: 'Analytics', icon: <Assessment />, color: '#43e97b' },
+    ...(isAdmin ? [{ path: '/admin', label: 'Admin Panel', icon: <Security />, color: '#ff6b6b' }] : []),
   ];
 
   const handleProfileMenuOpen = (event) => {

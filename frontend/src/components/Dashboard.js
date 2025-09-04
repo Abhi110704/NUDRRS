@@ -16,8 +16,9 @@ import { useAuth } from '../contexts/AuthContext';
 const Dashboard = () => {
   const [stats, setStats] = useState(null);
   const [recentReports, setRecentReports] = useState([]);
+  const [userReports, setUserReports] = useState([]);
   const [loading, setLoading] = useState(true);
-  const { isDemoMode } = useAuth();
+  const { isDemoMode, user, isAdmin, isManager, userRole } = useAuth();
   const [lastUpdate, setLastUpdate] = useState(new Date()); // Track last update
   const navigate = useNavigate();
   const [updateStatus, setUpdateStatus] = useState('idle'); // Update status: idle, updating, success, error
@@ -86,6 +87,18 @@ const Dashboard = () => {
           
           setStats(transformedStats);
           setRecentReports(transformedReports);
+
+          // Fetch user-specific reports if user is logged in and not admin/manager
+          if (user && !isAdmin && !isManager) {
+            try {
+              const userReportsResponse = await axios.get(`http://localhost:8000/api/sos_reports/?user=${user.id}`);
+              setUserReports(userReportsResponse.data.results || userReportsResponse.data || []);
+            } catch (userReportsError) {
+              console.log('Could not fetch user-specific reports:', userReportsError);
+              setUserReports([]);
+            }
+          }
+
           setUpdateStatus('success');
           setLastUpdate(new Date());
           addLiveUpdate(`✅ Live data loaded: ${transformedStats.total_reports} reports`, 'success');
@@ -157,8 +170,23 @@ const Dashboard = () => {
         }
       ] : [];
 
+      // Demo user-specific reports
+      const demoUserReports = isDemoMode && user ? [
+        {
+          id: 4,
+          disaster_type: 'FLOOD',
+          priority: 'HIGH',
+          status: 'PENDING',
+          address: 'Your Location, City',
+          description: 'Your recent emergency report',
+          created_at: new Date(Date.now() - 1800000).toISOString(),
+          user: { first_name: user.first_name || 'Demo', last_name: user.last_name || 'User' }
+        }
+      ] : [];
+
       setStats(demoStats);
       setRecentReports(demoReports);
+      setUserReports(demoUserReports);
       setLoading(false);
     } catch (error) {
       console.error('Error fetching dashboard data:', error);
@@ -903,6 +931,91 @@ const Dashboard = () => {
           </Grid>
         </Grid>
       </Box>
+
+      {/* User Reports Section - Only show for regular users */}
+      {user && !isAdmin && !isManager && userReports.length > 0 && (
+        <Box sx={{ mb: 4 }}>
+          <Typography variant="h6" sx={{ 
+            fontWeight: 600, 
+            color: '#1a202c', 
+            mb: 3,
+            fontSize: '1.25rem'
+          }}>
+            📋 Your Reports
+          </Typography>
+          <Grid container spacing={3}>
+            {userReports.map((report) => (
+              <Grid item xs={12} md={6} key={report.id}>
+                <Card sx={{
+                  background: 'white',
+                  borderRadius: 2,
+                  border: '1px solid #e2e8f0',
+                  boxShadow: '0 1px 3px rgba(0, 0, 0, 0.1)',
+                  transition: 'all 0.2s ease',
+                  '&:hover': {
+                    transform: 'translateY(-2px)',
+                    boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)'
+                  }
+                }}>
+                  <CardContent sx={{ p: 3 }}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
+                      <Typography variant="h6" sx={{ fontSize: '1.5rem', mr: 1 }}>
+                        {getDisasterIcon(report.disaster_type)}
+                      </Typography>
+                      <Typography variant="h6" sx={{ 
+                        fontWeight: 600, 
+                        color: '#1a202c',
+                        flex: 1
+                      }}>
+                        {report.disaster_type}
+                      </Typography>
+                      <Chip
+                        label={report.status}
+                        size="small"
+                        sx={{
+                          backgroundColor: getStatusColor(report.status),
+                          color: 'white',
+                          fontWeight: 600
+                        }}
+                      />
+                    </Box>
+                    
+                    <Typography variant="body2" sx={{ 
+                      color: '#4a5568',
+                      mb: 1
+                    }}>
+                      📍 {report.address}
+                    </Typography>
+                    
+                    <Typography variant="body2" sx={{ 
+                      color: '#6b7280',
+                      mb: 2,
+                      fontStyle: 'italic'
+                    }}>
+                      "{report.description}"
+                    </Typography>
+                    
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <Chip
+                        label={report.priority}
+                        size="small"
+                        sx={{
+                          backgroundColor: getPriorityColor(report.priority),
+                          color: 'white',
+                          fontWeight: 600
+                        }}
+                      />
+                      <Typography variant="caption" sx={{ color: '#6b7280' }}>
+                        {new Date(report.created_at).toLocaleString()}
+                      </Typography>
+                    </Box>
+                  </CardContent>
+                </Card>
+              </Grid>
+            ))}
+          </Grid>
+        </Box>
+      )}
 
       {/* Emergency Alerts Section */}
       <Box sx={{ mb: 4 }}>

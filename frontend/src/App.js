@@ -10,6 +10,7 @@ import Analytics from './components/Analytics';
 import Navbar from './components/Navbar';
 import Login from './components/Login';
 import Profile from './components/Profile';
+import AdminPanel from './components/AdminPanel';
 
 // Enhanced dark/light theme for disaster management system
 const lightTheme = createTheme({
@@ -494,6 +495,7 @@ function AppContent({ toggleTheme, isDarkMode }) {
           <Route path="/reports" element={<ProtectedRoute><Reports /></ProtectedRoute>} />
           <Route path="/analytics" element={<ProtectedRoute><Analytics /></ProtectedRoute>} />
           <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
+          <Route path="/admin" element={<ProtectedRoute><AdminPanel /></ProtectedRoute>} />
           <Route path="*" element={<Navigate to="/" />} />
           </Routes>
         </div>
