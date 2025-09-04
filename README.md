@@ -6,26 +6,26 @@
 NUDRRS revolutionizes India's disaster response by combining crowdsourced reporting, AI verification, and smart resource allocation to save lives at scale.
 
 **Repository**: https://github.com/Abhi110704/NUDRRS.git  
-**Admin**: HackerXHacker | **Live Demo**: [Access Dashboard](http://localhost:8000)
+**Admin**: HackerXHacker
 
 ## 📱 **Application Screenshots**
 
-### **Dashboard & Home**
-![Dashboard](images/Home%20(1).png)
-![Dashboard Overview](images/Home%20(2).png)
-
 ### **Authentication**
-![Login Page](images/Login.png)
+![Login Page](https://raw.githubusercontent.com/Abhi110704/NUDRRS/refs/heads/main/Images/Login.png)
+
+### **Dashboard & Home**
+![Dashboard](https://raw.githubusercontent.com/Abhi110704/NUDRRS/refs/heads/main/Images/Home%20(1).png)
+![Dashboard Overview](https://raw.githubusercontent.com/Abhi110704/NUDRRS/refs/heads/main/Images/Home%20(2).png)
 
 ### **Reports Management**
-![Reports Interface](images/Report.png)
+![Reports Interface](https://raw.githubusercontent.com/Abhi110704/NUDRRS/refs/heads/main/Images/Report.png)
 
 ### **Live Mapping**
-![Live Map](images/Map.png)
+![Live Map](https://raw.githubusercontent.com/Abhi110704/NUDRRS/refs/heads/main/Images/Map.png)
 
 ### **Analytics Dashboard**
-![Analytics Overview](images/Analystics%20(1).png)
-![Analytics Details](images/Analystics%20(2).png)
+![Analytics Overview](https://raw.githubusercontent.com/Abhi110704/NUDRRS/refs/heads/main/Images/Analystics%20(1).png)
+![Analytics Details](https://raw.githubusercontent.com/Abhi110704/NUDRRS/refs/heads/main/Images/Analystics%20(2).png)
 
 ---
 
