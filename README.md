@@ -8,6 +8,25 @@ NUDRRS revolutionizes India's disaster response by combining crowdsourced report
 **Repository**: https://github.com/Abhi110704/NUDRRS.git  
 **Admin**: HackerXHacker | **Live Demo**: [Access Dashboard](http://localhost:8000)
 
+## 📱 **Application Screenshots**
+
+### **Dashboard & Home**
+![Dashboard](images/Home%20(1).png)
+![Dashboard Overview](images/Home%20(2).png)
+
+### **Authentication**
+![Login Page](images/Login.png)
+
+### **Reports Management**
+![Reports Interface](images/Report.png)
+
+### **Live Mapping**
+![Live Map](images/Map.png)
+
+### **Analytics Dashboard**
+![Analytics Overview](images/Analystics%20(1).png)
+![Analytics Details](images/Analystics%20(2).png)
+
 ---
 
 ## 🎯 **Key Features**
