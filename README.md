@@ -6,7 +6,7 @@
 NUDRRS revolutionizes India's disaster response by combining crowdsourced reporting, AI verification, and smart resource allocation to save lives at scale.
 
 **Repository**: https://github.com/Abhi110704/NUDRRS.git  
-**Admin**: HackerXHacker | **Live Demo**: [Access Dashboard](http://localhost:8000)
+**Admin**: HackerXHacker
 
 ## 📱 **Application Screenshots**
 
