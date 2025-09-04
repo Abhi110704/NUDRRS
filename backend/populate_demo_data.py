@@ -38,7 +38,7 @@ def create_demo_data():
     # Create demo organization if not exists
     demo_org, created = Organization.objects.get_or_create(
         name='Demo Emergency Response Team',
-        defaults={
+            defaults={
             'org_type': 'GOVERNMENT',
             'address': 'Demo Address, Demo City',
             'contact_person': 'Demo Contact',

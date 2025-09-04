@@ -125,14 +125,14 @@ const Navbar = () => {
             <Box>
               <Typography variant="h6" component="div" sx={{ 
                 fontWeight: 700, 
-                color: '#0f172a',
+                color: '#1a202c',
                 mb: 0,
                 fontSize: '1.25rem'
               }}>
-                NUDRRS
+                NUDRRS National Disaster Response
               </Typography>
               <Typography variant="caption" sx={{ 
-                color: '#64748b',
+                color: '#4a5568',
                 fontSize: '0.75rem',
                 fontWeight: 500
               }}>
@@ -182,9 +182,9 @@ const Navbar = () => {
                   sx={{
                     position: 'relative',
                     background: location.pathname === item.path 
-                      ? 'linear-gradient(135deg, #2563eb, #7c3aed)' 
+                      ? '#2563eb' 
                       : 'transparent',
-                    color: location.pathname === item.path ? 'white' : '#64748b',
+                    color: location.pathname === item.path ? 'white' : '#4a5568',
                     borderRadius: 2,
                     px: 2,
                     py: 1,
@@ -195,7 +195,7 @@ const Navbar = () => {
                     textTransform: 'none',
                     '&:hover': {
                       background: location.pathname === item.path 
-                        ? 'linear-gradient(135deg, #1d4ed8, #6d28d9)' 
+                        ? '#1d4ed8' 
                         : 'rgba(37, 99, 235, 0.1)',
                       color: location.pathname === item.path ? 'white' : '#2563eb',
                       transform: 'translateY(-1px)',

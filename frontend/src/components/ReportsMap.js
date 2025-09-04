@@ -2,14 +2,11 @@ import React, { useState, useEffect } from 'react';
 import { MapContainer, TileLayer, Marker, Popup, Circle } from 'react-leaflet';
 import { 
   Box, Paper, Typography, Chip, Button, Grid, Card, CardContent, 
-  AppBar, Toolbar, IconButton, Drawer, List, ListItem, ListItemIcon, 
-  ListItemText, Divider, Badge, Fab, Tooltip, Switch, FormControlLabel,
-  Slide, Zoom, Fade, Avatar, LinearProgress, CircularProgress, Menu, MenuItem
+  Switch, FormControlLabel, LinearProgress, CircularProgress
 } from '@mui/material';
 import { 
-  LocationOn, LocalHospital as Emergency, Warning, Refresh, FilterList, Menu as MenuIcon, 
-  Notifications, Settings, Fullscreen, MyLocation, Layers,
-  Timeline, Speed, Security, Visibility, VisibilityOff
+  LocationOn, LocalHospital as Emergency, Warning, Refresh, MyLocation,
+  Timeline, Speed
 } from '@mui/icons-material';
 import axios from 'axios';
 import 'leaflet/dist/leaflet.css';
@@ -27,7 +24,6 @@ const ReportsMap = () => {
   const [reports, setReports] = useState([]);
   const [loading, setLoading] = useState(true);
   const [center, setCenter] = useState([20.5937, 78.9629]); // India center
-  const [drawerOpen, setDrawerOpen] = useState(false);
   const [showCriticalOnly, setShowCriticalOnly] = useState(false);
   const [showActiveOnly, setShowActiveOnly] = useState(false);
   const [mapStyle, setMapStyle] = useState('standard');
@@ -35,7 +31,6 @@ const ReportsMap = () => {
   const [refreshing, setRefreshing] = useState(false);
   const [userLocation, setUserLocation] = useState(null);
   const [locationLoading, setLocationLoading] = useState(false);
-  const [notificationAnchor, setNotificationAnchor] = useState(null);
   const [liveUpdates, setLiveUpdates] = useState([]);
   const [lastUpdate, setLastUpdate] = useState(null);
   const [updateStatus, setUpdateStatus] = useState('idle');
@@ -115,13 +110,6 @@ const ReportsMap = () => {
     );
   };
 
-  const handleNotificationClick = (event) => {
-    setNotificationAnchor(event.currentTarget);
-  };
-
-  const handleNotificationClose = () => {
-    setNotificationAnchor(null);
-  };
 
   // Helper function to generate random coordinates within India
   const getRandomCoordinate = () => {
@@ -297,79 +285,418 @@ const ReportsMap = () => {
   };
 
   return (
-    <Box sx={{ height: '100vh', display: 'flex', flexDirection: 'column' }}>
-      {/* Map Control Buttons - Left Bottom */}
-      <Box sx={{ 
-        position: 'absolute', 
-        bottom: 16, 
-        left: 16, 
-        zIndex: 1000,
-        display: 'flex',
-        gap: 1
-      }}>
-        <Tooltip title="My Location">
-          <Fab
-            size="medium"
-            disabled={locationLoading}
-            sx={{ 
-              background: locationLoading 
-                ? 'rgba(102, 126, 234, 0.5)' 
-                : 'linear-gradient(45deg, #667eea, #764ba2)',
-              '&:hover': {
-                background: locationLoading 
-                  ? 'rgba(102, 126, 234, 0.5)' 
-                  : 'linear-gradient(45deg, #764ba2, #667eea)',
-                transform: locationLoading ? 'none' : 'scale(1.05)'
-              },
-              '&:disabled': {
-                color: 'rgba(255, 255, 255, 0.6)'
-              }
-            }}
-            onClick={getUserLocation}
-          >
-            {locationLoading ? (
-              <CircularProgress size={24} sx={{ color: 'white' }} />
-            ) : (
-              <MyLocation />
-            )}
-          </Fab>
-        </Tooltip>
-        
-        <Tooltip title="Refresh Data">
-          <Fab 
-            size="medium"
-            disabled={refreshing}
-            sx={{
-              background: 'rgba(255, 255, 255, 0.9)',
-              color: '#1976d2',
-              '&:hover': {
-                background: 'rgba(255, 255, 255, 1)',
-                transform: 'scale(1.05)'
-              }
-            }}
-            onClick={fetchReports}
-          >
-            <Refresh sx={{ animation: refreshing ? 'spin 1s linear infinite' : 'none' }} />
-          </Fab>
-        </Tooltip>
+    <Box sx={{ height: '100vh', display: 'flex', flexDirection: 'column', background: '#f8fafc' }}>
+      {/* Main Layout - Left Side Stats, Right Side Map */}
+      <Grid container spacing={0} sx={{ flex: 1, height: '100%' }}>
+        {/* Left Side - Critical Alerts and Stats */}
+        <Grid item xs={12} lg={3} sx={{ p: 1.5, display: 'flex', flexDirection: 'column' }}>
+          <Box sx={{ mb: 2 }}>
+            <Typography variant="h6" sx={{ 
+              fontWeight: 600, 
+              color: '#1a202c', 
+              mb: 1.5,
+              fontSize: '1.1rem'
+            }}>
+              🚨 Critical Alerts
+            </Typography>
+          </Box>
+          
+          {/* Compact Stats Grid */}
+          <Grid container spacing={1.5} sx={{ mb: 2 }}>
+            {/* Critical Alerts */}
+            <Grid item xs={6}>
+              <Card sx={{ 
+                background: 'white',
+                borderRadius: 1.5,
+                border: '1px solid #e2e8f0',
+                boxShadow: '0 1px 3px rgba(0, 0, 0, 0.1)',
+                transition: 'all 0.2s ease',
+                '&:hover': {
+                  transform: 'translateY(-1px)',
+                  boxShadow: '0 2px 8px rgba(0, 0, 0, 0.15)'
+                }
+              }}>
+                <CardContent sx={{ p: 2, textAlign: 'center' }}>
+                  <Box sx={{ 
+                    width: 32, 
+                    height: 32, 
+                    borderRadius: '50%', 
+                    background: '#fef2f2',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    mx: 'auto',
+                    mb: 1
+                  }}>
+                    <Emergency sx={{ fontSize: 16, color: '#ef4444' }} />
+                  </Box>
+                  <Typography variant="h4" sx={{ 
+                    fontWeight: 700, 
+                    color: '#ef4444',
+                    mb: 0.5,
+                    fontSize: '1.5rem'
+                  }}>
+                    {filteredReports.filter(r => r.priority === 'CRITICAL').length}
+                  </Typography>
+                  <Typography variant="caption" sx={{ 
+                    color: '#6b7280',
+                    fontSize: '0.75rem',
+                    fontWeight: 500
+                  }}>
+                    Critical
+                  </Typography>
+                </CardContent>
+              </Card>
+            </Grid>
 
-        <Tooltip title="Map Controls">
-          <Fab
-            size="medium"
-            sx={{
-              background: 'rgba(255, 255, 255, 0.9)',
-              color: '#1976d2',
-              '&:hover': {
-                background: 'rgba(255, 255, 255, 1)',
-                transform: 'scale(1.05)'
-              }
-            }}
-            onClick={() => setDrawerOpen(true)}
-          >
-            <MenuIcon />
-          </Fab>
-        </Tooltip>
-      </Box>
+            {/* High Priority */}
+            <Grid item xs={6}>
+              <Card sx={{ 
+                background: 'white',
+                borderRadius: 1.5,
+                border: '1px solid #e2e8f0',
+                boxShadow: '0 1px 3px rgba(0, 0, 0, 0.1)',
+                transition: 'all 0.2s ease',
+                '&:hover': {
+                  transform: 'translateY(-1px)',
+                  boxShadow: '0 2px 8px rgba(0, 0, 0, 0.15)'
+                }
+              }}>
+                <CardContent sx={{ p: 2, textAlign: 'center' }}>
+                  <Box sx={{ 
+                    width: 32, 
+                    height: 32, 
+                    borderRadius: '50%', 
+                    background: '#fef3c7',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    mx: 'auto',
+                    mb: 1
+                  }}>
+                    <Warning sx={{ fontSize: 16, color: '#f59e0b' }} />
+                  </Box>
+                  <Typography variant="h4" sx={{ 
+                    fontWeight: 700, 
+                    color: '#f59e0b',
+                    mb: 0.5,
+                    fontSize: '1.5rem'
+                  }}>
+                    {filteredReports.filter(r => r.priority === 'HIGH').length}
+                  </Typography>
+                  <Typography variant="caption" sx={{ 
+                    color: '#6b7280',
+                    fontSize: '0.75rem',
+                    fontWeight: 500
+                  }}>
+                    High Priority
+                  </Typography>
+                </CardContent>
+              </Card>
+            </Grid>
+
+            {/* Active Cases */}
+            <Grid item xs={6}>
+              <Card sx={{ 
+                background: 'white',
+                borderRadius: 1.5,
+                border: '1px solid #e2e8f0',
+                boxShadow: '0 1px 3px rgba(0, 0, 0, 0.1)',
+                transition: 'all 0.2s ease',
+                '&:hover': {
+                  transform: 'translateY(-1px)',
+                  boxShadow: '0 2px 8px rgba(0, 0, 0, 0.15)'
+                }
+              }}>
+                <CardContent sx={{ p: 2, textAlign: 'center' }}>
+                  <Box sx={{ 
+                    width: 32, 
+                    height: 32, 
+                    borderRadius: '50%', 
+                    background: '#eff6ff',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    mx: 'auto',
+                    mb: 1
+                  }}>
+                    <Timeline sx={{ fontSize: 16, color: '#2563eb' }} />
+                  </Box>
+                  <Typography variant="h4" sx={{ 
+                    fontWeight: 700, 
+                    color: '#2563eb',
+                    mb: 0.5,
+                    fontSize: '1.5rem'
+                  }}>
+                    {filteredReports.filter(r => ['PENDING', 'IN_PROGRESS', 'VERIFIED'].includes(r.status)).length}
+                  </Typography>
+                  <Typography variant="caption" sx={{ 
+                    color: '#6b7280',
+                    fontSize: '0.75rem',
+                    fontWeight: 500
+                  }}>
+                    Active
+                  </Typography>
+                </CardContent>
+              </Card>
+            </Grid>
+
+            {/* Resolution Rate */}
+            <Grid item xs={6}>
+              <Card sx={{ 
+                background: 'white',
+                borderRadius: 1.5,
+                border: '1px solid #e2e8f0',
+                boxShadow: '0 1px 3px rgba(0, 0, 0, 0.1)',
+                transition: 'all 0.2s ease',
+                '&:hover': {
+                  transform: 'translateY(-1px)',
+                  boxShadow: '0 2px 8px rgba(0, 0, 0, 0.15)'
+                }
+              }}>
+                <CardContent sx={{ p: 2, textAlign: 'center' }}>
+                  <Box sx={{ 
+                    width: 32, 
+                    height: 32, 
+                    borderRadius: '50%', 
+                    background: '#f0fdf4',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    mx: 'auto',
+                    mb: 1
+                  }}>
+                    <Speed sx={{ fontSize: 16, color: '#10b981' }} />
+                  </Box>
+                  <Typography variant="h4" sx={{ 
+                    fontWeight: 700, 
+                    color: '#10b981',
+                    mb: 0.5,
+                    fontSize: '1.5rem'
+                  }}>
+                    {Math.round((filteredReports.filter(r => r.status === 'RESOLVED').length / filteredReports.length) * 100) || 0}%
+                  </Typography>
+                  <Typography variant="caption" sx={{ 
+                    color: '#6b7280',
+                    fontSize: '0.75rem',
+                    fontWeight: 500
+                  }}>
+                    Resolved
+                  </Typography>
+                </CardContent>
+              </Card>
+            </Grid>
+          </Grid>
+
+          {/* Compact Map Controls */}
+          <Card sx={{ 
+            background: 'white',
+            borderRadius: 1.5,
+            border: '1px solid #e2e8f0',
+            boxShadow: '0 1px 3px rgba(0, 0, 0, 0.1)'
+          }}>
+            <CardContent sx={{ p: 2 }}>
+              <Typography variant="subtitle2" sx={{ 
+                fontWeight: 600, 
+                color: '#1a202c',
+                mb: 1.5,
+                fontSize: '0.9rem'
+              }}>
+                🎛️ Controls
+              </Typography>
+              
+              <Box sx={{ mb: 1.5 }}>
+                <FormControlLabel
+                  control={
+                    <Switch
+                      checked={showCriticalOnly}
+                      onChange={(e) => setShowCriticalOnly(e.target.checked)}
+                      color="error"
+                      size="small"
+                    />
+                  }
+                  label="Critical Only"
+                  sx={{ '& .MuiFormControlLabel-label': { fontSize: '0.8rem' } }}
+                />
+              </Box>
+              
+              <Box sx={{ mb: 1.5 }}>
+                <FormControlLabel
+                  control={
+                    <Switch
+                      checked={showActiveOnly}
+                      onChange={(e) => setShowActiveOnly(e.target.checked)}
+                      color="primary"
+                      size="small"
+                    />
+                  }
+                  label="Active Only"
+                  sx={{ '& .MuiFormControlLabel-label': { fontSize: '0.8rem' } }}
+                />
+              </Box>
+
+              <Box sx={{ mb: 1.5 }}>
+                <FormControlLabel
+                  control={
+                    <Switch
+                      checked={autoRefresh}
+                      onChange={(e) => setAutoRefresh(e.target.checked)}
+                      color="success"
+                      size="small"
+                    />
+                  }
+                  label="Auto Refresh"
+                  sx={{ '& .MuiFormControlLabel-label': { fontSize: '0.8rem' } }}
+                />
+              </Box>
+
+              <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap' }}>
+                <Button
+                  variant="outlined"
+                  size="small"
+                  onClick={getUserLocation}
+                  disabled={locationLoading}
+                  startIcon={locationLoading ? <CircularProgress size={12} /> : <MyLocation />}
+                  sx={{ fontSize: '0.75rem', minWidth: 'auto', px: 1 }}
+                >
+                  Location
+                </Button>
+                <Button
+                  variant="outlined"
+                  size="small"
+                  onClick={fetchReports}
+                  disabled={refreshing}
+                  startIcon={<Refresh />}
+                  sx={{ fontSize: '0.75rem', minWidth: 'auto', px: 1 }}
+                >
+                  Refresh
+                </Button>
+              </Box>
+            </CardContent>
+          </Card>
+        </Grid>
+
+        {/* Right Side - Map */}
+        <Grid item xs={12} lg={9} sx={{ p: 1.5, pl: 0 }}>
+          <Box sx={{ 
+            height: '100%',
+            borderRadius: 2,
+            overflow: 'hidden',
+            boxShadow: '0 4px 12px rgba(0, 0, 0, 0.1)',
+            position: 'relative'
+          }}>
+            <MapContainer
+              center={center}
+              zoom={5}
+              style={{ height: '100%', width: '100%' }}
+            >
+              <TileLayer
+                url={getMapTileUrl()}
+                attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+              />
+                
+              {filteredReports.map((report) => {
+                  const isCritical = report.priority === 'CRITICAL';
+                  const isActive = ['PENDING', 'VERIFIED', 'IN_PROGRESS'].includes(report.status);
+                  
+                  return (
+                    <React.Fragment key={report.id}>
+                      {/* Highlight circle for critical/high priority reports */}
+                      {(isCritical || report.priority === 'HIGH') && (
+                        <Circle
+                          center={[report.latitude, report.longitude]}
+                          radius={isCritical ? 8000 : 5000}
+                          pathOptions={{
+                            color: isCritical ? '#ff1744' : '#ff9800',
+                            fillColor: isCritical ? '#ff1744' : '#ff9800',
+                            fillOpacity: 0.1,
+                            weight: 2,
+                            dashArray: isCritical ? '5, 5' : null
+                          }}
+                        />
+                      )}
+                      
+                      <Marker
+                        position={[report.latitude, report.longitude]}
+                        icon={createCustomIcon(report.priority, report.status)}
+                      >
+                        <Popup>
+                          <Box sx={{ minWidth: 250 }}>
+                            <Typography variant="h6" gutterBottom sx={{ 
+                              color: isCritical ? '#d32f2f' : 'inherit',
+                              fontWeight: isCritical ? 'bold' : 'normal'
+                            }}>
+                              🚨 {report.disaster_type}
+                              {isCritical && ' ⚠️'}
+                            </Typography>
+                            
+                            <Box sx={{ mb: 1 }}>
+                              <Chip
+                                label={report.status}
+                                size="small"
+                                color={report.status === 'RESOLVED' ? 'success' : 'primary'}
+                                sx={{ mr: 1 }}
+                              />
+                              <Chip
+                                label={report.priority}
+                                size="small"
+                                color={report.priority === 'HIGH' || report.priority === 'CRITICAL' ? 'error' : 'warning'}
+                              />
+                              {isActive && (
+                                <Chip
+                                  label="🔴 LIVE"
+                                  size="small"
+                                  color="error"
+                                  sx={{ ml: 1 }}
+                                />
+                              )}
+                            </Box>
+                            
+                            <Typography variant="body2" gutterBottom>
+                              <LocationOn fontSize="small" sx={{ mr: 0.5, verticalAlign: 'middle' }} />
+                              {report.address}
+                            </Typography>
+                            
+                            <Typography variant="body2" sx={{ mb: 1, fontStyle: 'italic' }}>
+                              "{report.description}"
+                            </Typography>
+                            
+                            <Typography variant="caption" display="block" sx={{ color: 'text.secondary' }}>
+                              📅 Reported: {new Date(report.created_at).toLocaleString()}
+                            </Typography>
+                            
+                            {report.phone_number && (
+                              <Typography variant="caption" display="block" sx={{ color: 'primary.main' }}>
+                                📞 Contact: {report.phone_number}
+                              </Typography>
+                            )}
+                            
+                            <Box sx={{ mt: 1, display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+                              <Chip
+                                label={`🤖 AI: ${(report.ai_confidence * 100).toFixed(0)}%`}
+                                size="small"
+                                color={report.ai_confidence > 0.9 ? 'success' : 'warning'}
+                              />
+                              
+                              {isCritical && (
+                                <Chip
+                                  label="⚡ URGENT ACTION REQUIRED"
+                                  size="small"
+                                  color="error"
+                                  variant="filled"
+                                />
+                              )}
+                            </Box>
+                          </Box>
+                        </Popup>
+                      </Marker>
+                    </React.Fragment>
+                  );
+                })}
+            </MapContainer>
+          </Box>
+        </Grid>
+      </Grid>
 
       {/* Loading Indicator - Top Right */}
       {refreshing && (
@@ -387,533 +714,6 @@ const ReportsMap = () => {
         </Paper>
       )}
 
-      {/* Enhanced Stats Dashboard */}
-      <Paper 
-        sx={{ 
-          m: 2, 
-          p: 2, 
-          background: 'white',
-          color: '#0f172a',
-          borderRadius: 3,
-          boxShadow: '0 1px 3px rgba(0, 0, 0, 0.1)',
-          border: '1px solid rgba(0, 0, 0, 0.05)'
-        }}
-      >
-        <Grid container spacing={2}>
-          <Grid item xs={12} sm={6} md={3}>
-            <Card sx={{ 
-              background: 'rgba(255, 255, 255, 0.12)',
-              backdropFilter: 'blur(20px)',
-              borderRadius: 4,
-              border: '1px solid rgba(255, 255, 255, 0.25)',
-              boxShadow: '0 8px 32px rgba(244, 67, 54, 0.15)',
-              transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-              position: 'relative',
-              overflow: 'hidden',
-              height: 140,
-              '&::before': {
-                content: '""',
-                position: 'absolute',
-                top: 0,
-                left: 0,
-                right: 0,
-                height: '4px',
-                background: 'linear-gradient(90deg, #f44336, #d32f2f)',
-                borderRadius: '16px 16px 0 0'
-              },
-              '&:hover': {
-                transform: 'translateY(-4px)',
-                boxShadow: '0 16px 48px rgba(244, 67, 54, 0.25)',
-                border: '1px solid rgba(255, 255, 255, 0.35)'
-              }
-            }}>
-              <CardContent sx={{ 
-                p: 3, 
-                position: 'relative', 
-                zIndex: 2, 
-                height: '100%', 
-                display: 'flex', 
-                flexDirection: 'column', 
-                justifyContent: 'center',
-                textAlign: 'center'
-              }}>
-                <Box sx={{ 
-                  width: 48, 
-                  height: 48, 
-                  borderRadius: '50%', 
-                  background: 'linear-gradient(135deg, #f44336, #d32f2f)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  mb: 2,
-                  boxShadow: '0 6px 20px rgba(244, 67, 54, 0.4)',
-                  border: '2px solid rgba(255, 255, 255, 0.2)',
-                  mx: 'auto'
-                }}>
-                  <Emergency sx={{ fontSize: 24, color: 'white' }} />
-                </Box>
-                <Typography variant="h3" sx={{ 
-                  fontWeight: 800, 
-                  mb: 0.5,
-                  fontSize: '2rem',
-                  background: 'linear-gradient(135deg, #f44336, #d32f2f)',
-                  backgroundClip: 'text',
-                  WebkitBackgroundClip: 'text',
-                  WebkitTextFillColor: 'transparent',
-                  lineHeight: 1
-                }}>
-                  {filteredReports.filter(r => r.priority === 'CRITICAL').length}
-                </Typography>
-                <Typography variant="body1" sx={{ 
-                  color: '#374151',
-                  fontWeight: 600,
-                  letterSpacing: '0.5px',
-                  fontSize: '0.9rem'
-                }}>
-                  Critical Alerts
-                </Typography>
-              </CardContent>
-            </Card>
-          </Grid>
-          
-          <Grid item xs={12} sm={6} md={3}>
-            <Card sx={{ 
-              background: 'rgba(255, 255, 255, 0.12)',
-              backdropFilter: 'blur(20px)',
-              borderRadius: 4,
-              border: '1px solid rgba(255, 255, 255, 0.25)',
-              boxShadow: '0 8px 32px rgba(255, 152, 0, 0.15)',
-              transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-              position: 'relative',
-              overflow: 'hidden',
-              height: 140,
-              '&::before': {
-                content: '""',
-                position: 'absolute',
-                top: 0,
-                left: 0,
-                right: 0,
-                height: '4px',
-                background: 'linear-gradient(90deg, #ff9800, #f57c00)',
-                borderRadius: '16px 16px 0 0'
-              },
-              '&:hover': {
-                transform: 'translateY(-4px)',
-                boxShadow: '0 16px 48px rgba(255, 152, 0, 0.25)',
-                border: '1px solid rgba(255, 255, 255, 0.35)'
-              }
-            }}>
-              <CardContent sx={{ 
-                p: 3, 
-                position: 'relative', 
-                zIndex: 2, 
-                height: '100%', 
-                display: 'flex', 
-                flexDirection: 'column', 
-                justifyContent: 'center',
-                textAlign: 'center'
-              }}>
-                <Box sx={{ 
-                  width: 48, 
-                  height: 48, 
-                  borderRadius: '50%', 
-                  background: 'linear-gradient(135deg, #ff9800, #f57c00)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  mb: 2,
-                  boxShadow: '0 6px 20px rgba(255, 152, 0, 0.4)',
-                  border: '2px solid rgba(255, 255, 255, 0.2)',
-                  mx: 'auto'
-                }}>
-                  <Warning sx={{ fontSize: 24, color: 'white' }} />
-                </Box>
-                <Typography variant="h3" sx={{ 
-                  fontWeight: 800, 
-                  mb: 0.5,
-                  fontSize: '2rem',
-                  background: 'linear-gradient(135deg, #ff9800, #f57c00)',
-                  backgroundClip: 'text',
-                  WebkitBackgroundClip: 'text',
-                  WebkitTextFillColor: 'transparent',
-                  lineHeight: 1
-                }}>
-                  {filteredReports.filter(r => r.priority === 'HIGH').length}
-                </Typography>
-                <Typography variant="body1" sx={{ 
-                  color: '#374151',
-                  fontWeight: 600,
-                  letterSpacing: '0.5px',
-                  fontSize: '0.9rem'
-                }}>
-                  High Priority
-                </Typography>
-              </CardContent>
-            </Card>
-          </Grid>
-          
-          <Grid item xs={12} sm={6} md={3}>
-            <Card sx={{ 
-              background: 'rgba(255, 255, 255, 0.12)',
-              backdropFilter: 'blur(20px)',
-              borderRadius: 4,
-              border: '1px solid rgba(255, 255, 255, 0.25)',
-              boxShadow: '0 8px 32px rgba(33, 150, 243, 0.15)',
-              transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-              position: 'relative',
-              overflow: 'hidden',
-              height: 140,
-              '&::before': {
-                content: '""',
-                position: 'absolute',
-                top: 0,
-                left: 0,
-                right: 0,
-                height: '4px',
-                background: 'linear-gradient(90deg, #2563eb, #1d4ed8)',
-                borderRadius: '16px 16px 0 0'
-              },
-              '&:hover': {
-                transform: 'translateY(-4px)',
-                boxShadow: '0 16px 48px rgba(33, 150, 243, 0.25)',
-                border: '1px solid rgba(255, 255, 255, 0.35)'
-              }
-            }}>
-              <CardContent sx={{ 
-                p: 3, 
-                position: 'relative', 
-                zIndex: 2, 
-                height: '100%', 
-                display: 'flex', 
-                flexDirection: 'column', 
-                justifyContent: 'center',
-                textAlign: 'center'
-              }}>
-                <Box sx={{ 
-                  width: 48, 
-                  height: 48, 
-                  borderRadius: '50%', 
-                  background: 'linear-gradient(135deg, #2563eb, #1d4ed8)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  mb: 2,
-                  boxShadow: '0 6px 20px rgba(33, 150, 243, 0.4)',
-                  border: '2px solid rgba(255, 255, 255, 0.2)',
-                  mx: 'auto'
-                }}>
-                  <Timeline sx={{ fontSize: 24, color: 'white' }} />
-                </Box>
-                <Typography variant="h3" sx={{ 
-                  fontWeight: 800, 
-                  mb: 0.5,
-                  fontSize: '2rem',
-                  background: 'linear-gradient(135deg, #2563eb, #1d4ed8)',
-                  backgroundClip: 'text',
-                  WebkitBackgroundClip: 'text',
-                  WebkitTextFillColor: 'transparent',
-                  lineHeight: 1
-                }}>
-                  {filteredReports.filter(r => ['PENDING', 'IN_PROGRESS', 'VERIFIED'].includes(r.status)).length}
-                </Typography>
-                <Typography variant="body1" sx={{ 
-                  color: '#374151',
-                  fontWeight: 600,
-                  letterSpacing: '0.5px',
-                  fontSize: '0.9rem'
-                }}>
-                  Active Cases
-                </Typography>
-              </CardContent>
-            </Card>
-          </Grid>
-          
-          <Grid item xs={12} sm={6} md={3}>
-            <Card sx={{ 
-              background: 'rgba(255, 255, 255, 0.12)',
-              backdropFilter: 'blur(20px)',
-              borderRadius: 4,
-              border: '1px solid rgba(255, 255, 255, 0.25)',
-              boxShadow: '0 8px 32px rgba(76, 175, 80, 0.15)',
-              transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-              position: 'relative',
-              overflow: 'hidden',
-              height: 140,
-              '&::before': {
-                content: '""',
-                position: 'absolute',
-                top: 0,
-                left: 0,
-                right: 0,
-                height: '4px',
-                background: 'linear-gradient(90deg, #4caf50, #388e3c)',
-                borderRadius: '16px 16px 0 0'
-              },
-              '&:hover': {
-                transform: 'translateY(-4px)',
-                boxShadow: '0 16px 48px rgba(76, 175, 80, 0.25)',
-                border: '1px solid rgba(255, 255, 255, 0.35)'
-              }
-            }}>
-              <CardContent sx={{ 
-                p: 3, 
-                position: 'relative', 
-                zIndex: 2, 
-                height: '100%', 
-                display: 'flex', 
-                flexDirection: 'column', 
-                justifyContent: 'center',
-                textAlign: 'center'
-              }}>
-                <Box sx={{ 
-                  width: 48, 
-                  height: 48, 
-                  borderRadius: '50%', 
-                  background: 'linear-gradient(135deg, #4caf50, #388e3c)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  mb: 2,
-                  boxShadow: '0 6px 20px rgba(76, 175, 80, 0.4)',
-                  border: '2px solid rgba(255, 255, 255, 0.2)',
-                  mx: 'auto'
-                }}>
-                  <Speed sx={{ fontSize: 24, color: 'white' }} />
-                </Box>
-                <Typography variant="h3" sx={{ 
-                  fontWeight: 800, 
-                  mb: 0.5,
-                  fontSize: '2rem',
-                  background: 'linear-gradient(135deg, #4caf50, #388e3c)',
-                  backgroundClip: 'text',
-                  WebkitBackgroundClip: 'text',
-                  WebkitTextFillColor: 'transparent',
-                  lineHeight: 1
-                }}>
-                  {Math.round((filteredReports.filter(r => r.status === 'RESOLVED').length / filteredReports.length) * 100) || 0}%
-                </Typography>
-                <Typography variant="body1" sx={{ 
-                  color: '#374151',
-                  fontWeight: 600,
-                  letterSpacing: '0.5px',
-                  fontSize: '0.9rem'
-                }}>
-                  Resolution Rate
-                </Typography>
-              </CardContent>
-            </Card>
-          </Grid>
-        </Grid>
-      </Paper>
-
-      {/* Enhanced Map Container */}
-      <Paper sx={{ 
-        flex: 1, 
-        m: 2, 
-        mt: 0, 
-        borderRadius: 3, 
-        overflow: 'hidden',
-        boxShadow: '0 10px 30px rgba(0, 0, 0, 0.2)',
-        position: 'relative'
-      }}>
-        <MapContainer
-          center={center}
-          zoom={5}
-          style={{ height: '100%', width: '100%' }}
-        >
-          <TileLayer
-            url={getMapTileUrl()}
-            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-          />
-            
-          {filteredReports.map((report) => {
-              const isCritical = report.priority === 'CRITICAL';
-              const isActive = ['PENDING', 'VERIFIED', 'IN_PROGRESS'].includes(report.status);
-              
-              return (
-                <React.Fragment key={report.id}>
-                  {/* Highlight circle for critical/high priority reports */}
-                  {(isCritical || report.priority === 'HIGH') && (
-                    <Circle
-                      center={[report.latitude, report.longitude]}
-                      radius={isCritical ? 8000 : 5000}
-                      pathOptions={{
-                        color: isCritical ? '#ff1744' : '#ff9800',
-                        fillColor: isCritical ? '#ff1744' : '#ff9800',
-                        fillOpacity: 0.1,
-                        weight: 2,
-                        dashArray: isCritical ? '5, 5' : null
-                      }}
-                    />
-                  )}
-                  
-                  <Marker
-                    position={[report.latitude, report.longitude]}
-                    icon={createCustomIcon(report.priority, report.status)}
-                  >
-                    <Popup>
-                      <Box sx={{ minWidth: 250 }}>
-                        <Typography variant="h6" gutterBottom sx={{ 
-                          color: isCritical ? '#d32f2f' : 'inherit',
-                          fontWeight: isCritical ? 'bold' : 'normal'
-                        }}>
-                          🚨 {report.disaster_type}
-                          {isCritical && ' ⚠️'}
-                        </Typography>
-                        
-                        <Box sx={{ mb: 1 }}>
-                          <Chip
-                            label={report.status}
-                            size="small"
-                            color={report.status === 'RESOLVED' ? 'success' : 'primary'}
-                            sx={{ mr: 1 }}
-                          />
-                          <Chip
-                            label={report.priority}
-                            size="small"
-                            color={report.priority === 'HIGH' || report.priority === 'CRITICAL' ? 'error' : 'warning'}
-                          />
-                          {isActive && (
-                            <Chip
-                              label="🔴 LIVE"
-                              size="small"
-                              color="error"
-                              sx={{ ml: 1 }}
-                            />
-                          )}
-                        </Box>
-                        
-                        <Typography variant="body2" gutterBottom>
-                          <LocationOn fontSize="small" sx={{ mr: 0.5, verticalAlign: 'middle' }} />
-                          {report.address}
-                        </Typography>
-                        
-                        <Typography variant="body2" sx={{ mb: 1, fontStyle: 'italic' }}>
-                          "{report.description}"
-                        </Typography>
-                        
-                        <Typography variant="caption" display="block" sx={{ color: 'text.secondary' }}>
-                          📅 Reported: {new Date(report.created_at).toLocaleString()}
-                        </Typography>
-                        
-                        {report.phone_number && (
-                          <Typography variant="caption" display="block" sx={{ color: 'primary.main' }}>
-                            📞 Contact: {report.phone_number}
-                          </Typography>
-                        )}
-                        
-                        <Box sx={{ mt: 1, display: 'flex', gap: 1, flexWrap: 'wrap' }}>
-                          <Chip
-                            label={`🤖 AI: ${(report.ai_confidence * 100).toFixed(0)}%`}
-                            size="small"
-                            color={report.ai_confidence > 0.9 ? 'success' : 'warning'}
-                          />
-                          
-                          {isCritical && (
-                            <Chip
-                              label="⚡ URGENT ACTION REQUIRED"
-                              size="small"
-                              color="error"
-                              variant="filled"
-                            />
-                          )}
-                        </Box>
-                      </Box>
-                    </Popup>
-                  </Marker>
-                </React.Fragment>
-              );
-            })}
-        </MapContainer>
-        
-      </Paper>
-
-      {/* Control Drawer */}
-      <Drawer
-        anchor="left"
-        open={drawerOpen}
-        onClose={() => setDrawerOpen(false)}
-        sx={{
-          '& .MuiDrawer-paper': {
-            width: 300,
-            background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-            color: 'white'
-          }
-        }}
-      >
-        <Box sx={{ p: 2 }}>
-          <Typography variant="h6" sx={{ mb: 2, fontWeight: 'bold' }}>
-            🎛️ Map Controls
-          </Typography>
-          
-          <Divider sx={{ mb: 2, borderColor: 'rgba(255,255,255,0.2)' }} />
-          
-          <FormControlLabel
-            control={
-              <Switch
-                checked={showCriticalOnly}
-                onChange={(e) => setShowCriticalOnly(e.target.checked)}
-                color="error"
-              />
-            }
-            label="Show Critical Only"
-            sx={{ mb: 1 }}
-          />
-          
-          <FormControlLabel
-            control={
-              <Switch
-                checked={showActiveOnly}
-                onChange={(e) => setShowActiveOnly(e.target.checked)}
-                color="primary"
-              />
-            }
-            label="Show Active Only"
-            sx={{ mb: 2 }}
-          />
-          
-          <Divider sx={{ mb: 2, borderColor: 'rgba(255,255,255,0.2)' }} />
-          
-          <Typography variant="subtitle2" sx={{ mb: 1 }}>Map Style</Typography>
-          <List>
-            {[
-              { value: 'standard', label: 'Standard', icon: <Layers /> },
-              { value: 'satellite', label: 'Satellite', icon: <Security /> },
-              { value: 'dark', label: 'Dark Mode', icon: <Visibility /> }
-            ].map((style) => (
-              <ListItem
-                key={style.value}
-                button
-                selected={mapStyle === style.value}
-                onClick={() => setMapStyle(style.value)}
-                sx={{
-                  borderRadius: 1,
-                  mb: 1,
-                  bgcolor: mapStyle === style.value ? 'rgba(255,255,255,0.2)' : 'transparent'
-                }}
-              >
-                <ListItemIcon sx={{ color: 'white' }}>
-                  {style.icon}
-                </ListItemIcon>
-                <ListItemText primary={style.label} />
-              </ListItem>
-            ))}
-          </List>
-          
-          <Divider sx={{ mb: 2, borderColor: 'rgba(255,255,255,0.2)' }} />
-          
-          <FormControlLabel
-            control={
-              <Switch
-                checked={autoRefresh}
-                onChange={(e) => setAutoRefresh(e.target.checked)}
-                color="success"
-              />
-            }
-            label="Auto Refresh (10s)"
-          />
-        </Box>
-      </Drawer>
 
       {/* Enhanced Styles */}
       <style jsx global>{`
@@ -967,64 +767,6 @@ const ReportsMap = () => {
         }
       `}</style>
 
-      {/* Notification Menu */}
-      <Menu
-        anchorEl={notificationAnchor}
-        open={Boolean(notificationAnchor)}
-        onClose={handleNotificationClose}
-        TransitionComponent={Fade}
-        sx={{
-          '& .MuiPaper-root': {
-            background: 'rgba(255, 255, 255, 0.95)',
-            backdropFilter: 'blur(20px)',
-            borderRadius: 2,
-            border: '1px solid rgba(255, 255, 255, 0.2)',
-            mt: 1,
-            minWidth: 350
-          }
-        }}
-      >
-        <MenuItem onClick={handleNotificationClose}>
-          <Box sx={{ display: 'flex', flexDirection: 'column', width: '100%' }}>
-            <Typography variant="subtitle2" sx={{ fontWeight: 'bold', color: '#ff1744' }}>
-              🚨 Critical Emergency Alert
-            </Typography>
-            <Typography variant="body2" sx={{ color: 'text.secondary', mt: 0.5 }}>
-              {filteredReports.filter(r => r.priority === 'CRITICAL').length} critical reports require immediate attention
-            </Typography>
-          </Box>
-        </MenuItem>
-        <MenuItem onClick={handleNotificationClose}>
-          <Box sx={{ display: 'flex', flexDirection: 'column', width: '100%' }}>
-            <Typography variant="subtitle2" sx={{ fontWeight: 'bold', color: '#ff9800' }}>
-              ⚠️ High Priority Incidents
-            </Typography>
-            <Typography variant="body2" sx={{ color: 'text.secondary', mt: 0.5 }}>
-              {filteredReports.filter(r => r.priority === 'HIGH').length} high priority incidents in your area
-            </Typography>
-          </Box>
-        </MenuItem>
-        <MenuItem onClick={handleNotificationClose}>
-          <Box sx={{ display: 'flex', flexDirection: 'column', width: '100%' }}>
-            <Typography variant="subtitle2" sx={{ fontWeight: 'bold', color: '#2196f3' }}>
-              📍 Location Updates
-            </Typography>
-            <Typography variant="body2" sx={{ color: 'text.secondary', mt: 0.5 }}>
-              Real-time emergency reports updated every 10 seconds
-            </Typography>
-          </Box>
-        </MenuItem>
-        <MenuItem onClick={handleNotificationClose}>
-          <Box sx={{ display: 'flex', flexDirection: 'column', width: '100%' }}>
-            <Typography variant="subtitle2" sx={{ fontWeight: 'bold', color: '#4caf50' }}>
-              ✅ System Status
-            </Typography>
-            <Typography variant="body2" sx={{ color: 'text.secondary', mt: 0.5 }}>
-              Emergency response system operational. All services online.
-            </Typography>
-          </Box>
-        </MenuItem>
-      </Menu>
     </Box>
   );
 };

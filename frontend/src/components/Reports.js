@@ -393,7 +393,7 @@ const Reports = () => {
   return (
     <Box sx={{ 
       minHeight: '100vh',
-      background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+      background: '#f8fafc',
       p: 3,
       '@keyframes pulse': {
         '0%': { opacity: 1 },
@@ -401,33 +401,42 @@ const Reports = () => {
         '100%': { opacity: 1 }
       }
     }}>
-      {/* Enhanced Header */}
+      {/* Professional Header */}
       <Paper sx={{ 
-        p: 3, 
-        mb: 3, 
-        background: 'rgba(255, 255, 255, 0.1)',
-        backdropFilter: 'blur(20px)',
-        borderRadius: 3,
-        border: '1px solid rgba(255, 255, 255, 0.2)',
-        boxShadow: '0 8px 32px rgba(0, 0, 0, 0.1)',
-        position: 'relative',
-        overflow: 'visible'
+        p: 4, 
+        mb: 4, 
+        background: 'white',
+        borderRadius: 2,
+        border: '1px solid #e2e8f0',
+        boxShadow: '0 1px 3px rgba(0, 0, 0, 0.1)'
       }}>
         <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <Box sx={{ display: 'flex', alignItems: 'center' }}>
-            <Emergency sx={{ fontSize: 40, color: '#ff1744', mr: 2 }} />
+            <Box sx={{
+              width: 48,
+              height: 48,
+              borderRadius: 2,
+              background: '#fef2f2',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              mr: 3
+            }}>
+              <Emergency sx={{ fontSize: 24, color: '#ef4444' }} />
+            </Box>
             <Box>
               <Typography variant="h4" sx={{ 
-                fontWeight: 'bold', 
-                color: 'white',
-                textShadow: '2px 2px 4px rgba(0,0,0,0.3)',
-                mb: 1
+                fontWeight: 700, 
+                color: '#1a202c',
+                mb: 1,
+                fontSize: '1.75rem'
               }}>
                 Emergency Reports Command Center
               </Typography>
               <Typography variant="subtitle1" sx={{ 
-                color: 'rgba(255, 255, 255, 0.8)',
-                lineHeight: 1.4
+                color: '#4a5568',
+                lineHeight: 1.4,
+                fontWeight: 500
               }}>
                 Real-time disaster response management system
               </Typography>
@@ -439,20 +448,20 @@ const Reports = () => {
                     width: 8, 
                     height: 8, 
                     borderRadius: '50%', 
-                    background: updateStatus === 'updating' ? '#ff9800' : 
-                               updateStatus === 'success' ? '#4caf50' : 
-                               updateStatus === 'error' ? '#f44336' : '#9e9e9e',
+                    background: updateStatus === 'updating' ? '#f59e0b' : 
+                               updateStatus === 'success' ? '#10b981' : 
+                               updateStatus === 'error' ? '#ef4444' : '#6b7280',
                     animation: updateStatus === 'updating' ? 'pulse 1.5s infinite' : 'none'
                   }} />
                   <Typography variant="caption" sx={{ 
-                    color: 'rgba(255, 255, 255, 0.9)',
-                    fontWeight: 'bold'
+                    color: '#4a5568',
+                    fontWeight: 600
                   }}>
                     {updateStatus === 'updating' ? 'Updating...' :
                      updateStatus === 'success' ? 'Connected' :
                      updateStatus === 'error' ? 'Connection Error' : 'Idle'}
                   </Typography>
-                  <Typography variant="caption" sx={{ color: 'rgba(255, 255, 255, 0.7)' }}>
+                  <Typography variant="caption" sx={{ color: '#6b7280' }}>
                     • Last update: {lastUpdate.toLocaleTimeString()}
                   </Typography>
                 </Box>
@@ -462,40 +471,36 @@ const Reports = () => {
           
           <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
             <Card sx={{ 
-              background: 'rgba(255, 255, 255, 0.1)', 
-              backdropFilter: 'blur(10px)',
-              border: '1px solid rgba(255, 255, 255, 0.2)',
-              color: 'white',
+              background: 'white', 
+              border: '1px solid #e2e8f0',
               minWidth: 100,
               textAlign: 'center'
             }}>
               <CardContent sx={{ p: 2, '&:last-child': { pb: 2 } }}>
-                <Typography variant="h5" sx={{ fontWeight: 'bold' }}>
+                <Typography variant="h5" sx={{ fontWeight: 'bold', color: '#1a202c' }}>
                   {filteredReports.length}
                 </Typography>
-                <Typography variant="caption">Total Reports</Typography>
+                <Typography variant="caption" sx={{ color: '#4a5568' }}>Total Reports</Typography>
               </CardContent>
             </Card>
             
             <Card sx={{ 
-              background: 'rgba(255, 23, 68, 0.2)', 
-              backdropFilter: 'blur(10px)',
-              border: '1px solid rgba(255, 23, 68, 0.3)',
-              color: 'white',
+              background: 'white', 
+              border: '1px solid #e2e8f0',
               minWidth: 100,
               textAlign: 'center'
             }}>
               <CardContent sx={{ p: 2, '&:last-child': { pb: 2 } }}>
-                <Typography variant="h5" sx={{ fontWeight: 'bold' }}>
+                <Typography variant="h5" sx={{ fontWeight: 'bold', color: '#ef4444' }}>
                   {filteredReports.filter(r => r.priority === 'CRITICAL').length}
                 </Typography>
-                <Typography variant="caption">Critical</Typography>
+                <Typography variant="caption" sx={{ color: '#4a5568' }}>Critical</Typography>
               </CardContent>
             </Card>
             
             {/* Live Mode Toggle */}
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-              <Typography variant="body2" sx={{ color: 'white', fontWeight: 'bold' }}>
+              <Typography variant="body2" sx={{ color: '#4a5568', fontWeight: 600 }}>
                 {isLiveMode ? 'LIVE MODE' : 'DEMO MODE'}
               </Typography>
               <Button
@@ -507,16 +512,12 @@ const Reports = () => {
                   setTimeout(() => fetchReports(), 100);
                 }}
                 sx={{
-                  background: isLiveMode 
-                    ? 'linear-gradient(45deg, #4caf50, #66bb6a)' 
-                    : 'linear-gradient(45deg, #ff9800, #ffb74d)',
+                  background: isLiveMode ? '#10b981' : '#f59e0b',
                   color: 'white',
                   fontWeight: 'bold',
                   minWidth: 80,
                   '&:hover': {
-                    background: isLiveMode 
-                      ? 'linear-gradient(45deg, #66bb6a, #4caf50)' 
-                      : 'linear-gradient(45deg, #ffb74d, #ff9800)',
+                    background: isLiveMode ? '#059669' : '#d97706',
                     transform: 'translateY(-1px)'
                   }
                 }}
@@ -527,14 +528,14 @@ const Reports = () => {
             
             {/* User Profile Section */}
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-              <Typography variant="body2" sx={{ color: 'white', fontWeight: 'bold' }}>
+              <Typography variant="body2" sx={{ color: '#4a5568', fontWeight: 600 }}>
                 Welcome, Admin
               </Typography>
               <Avatar sx={{ 
-                bgcolor: '#ff1744', 
+                bgcolor: '#ef4444', 
                 width: 40, 
                 height: 40,
-                border: '2px solid rgba(255, 255, 255, 0.3)'
+                border: '2px solid #e2e8f0'
               }}>
                 A
               </Avatar>
@@ -622,15 +623,14 @@ const Reports = () => {
         </Paper>
       )}
 
-      {/* Enhanced Filters and Search */}
+      {/* Professional Filters and Search */}
       <Paper sx={{ 
         p: 3, 
-        mb: 3,
-        background: 'rgba(255, 255, 255, 0.95)',
-        backdropFilter: 'blur(10px)',
-        borderRadius: 3,
-        boxShadow: '0 8px 32px rgba(0, 0, 0, 0.1)',
-        border: '1px solid rgba(255, 255, 255, 0.2)'
+        mb: 4,
+        background: 'white',
+        borderRadius: 2,
+        boxShadow: '0 1px 3px rgba(0, 0, 0, 0.1)',
+        border: '1px solid #e2e8f0'
       }}>
         <Grid container spacing={3} alignItems="center">
           <Grid item xs={12} md={4}>
@@ -645,7 +645,7 @@ const Reports = () => {
               sx={{
                 '& .MuiOutlinedInput-root': {
                   borderRadius: 2,
-                  background: 'rgba(255, 255, 255, 0.8)'
+                  background: 'white'
                 }
               }}
             />
@@ -659,7 +659,7 @@ const Reports = () => {
                 onChange={(e) => setFilter(e.target.value)}
                 sx={{
                   borderRadius: 2,
-                  background: 'rgba(255, 255, 255, 0.8)'
+                  background: 'white'
                 }}
               >
                 <MenuItem value="ALL">🔍 All Reports</MenuItem>
@@ -679,13 +679,13 @@ const Reports = () => {
               onClick={handleNewReport}
               sx={{ 
                 height: '56px',
-                background: 'linear-gradient(45deg, #ff6b6b, #ee5a24)',
+                background: '#ef4444',
                 borderRadius: 2,
                 fontWeight: 'bold',
                 '&:hover': {
-                  background: 'linear-gradient(45deg, #ee5a24, #ff6b6b)',
+                  background: '#dc2626',
                   transform: 'translateY(-2px)',
-                  boxShadow: '0 8px 25px rgba(238, 90, 36, 0.3)'
+                  boxShadow: '0 4px 12px rgba(239, 68, 68, 0.3)'
                 }
               }}
             >
@@ -706,13 +706,13 @@ const Reports = () => {
                 sx={{
                   height: '56px',
                   width: '56px',
-                  background: 'linear-gradient(45deg, #9c27b0, #7b1fa2)',
+                  background: '#7c3aed',
                   color: 'white',
                   borderRadius: 2,
                   '&:hover': {
-                    background: 'linear-gradient(45deg, #7b1fa2, #9c27b0)',
+                    background: '#6d28d9',
                     transform: 'translateY(-2px)',
-                    boxShadow: '0 8px 25px rgba(156, 39, 176, 0.3)'
+                    boxShadow: '0 4px 12px rgba(124, 58, 237, 0.3)'
                   }
                 }}
               >
@@ -749,19 +749,17 @@ const Reports = () => {
             <Grid item xs={12} md={6} lg={4} key={report.id}>
               <Zoom in={true} timeout={300 + index * 100}>
                 <Card sx={{
-                  background: 'rgba(255, 255, 255, 0.98)',
-                  backdropFilter: 'blur(20px)',
-                  borderRadius: 4,
-                  boxShadow: '0 12px 40px rgba(0, 0, 0, 0.08)',
-                  border: '1px solid rgba(255, 255, 255, 0.3)',
-                  transition: 'all 0.4s cubic-bezier(0.4, 0, 0.2, 1)',
+                  background: 'white',
+                  borderRadius: 2,
+                  boxShadow: '0 1px 3px rgba(0, 0, 0, 0.1)',
+                  border: '1px solid #e2e8f0',
+                  transition: 'all 0.2s ease',
                   position: 'relative',
                   overflow: 'visible',
-                  animation: 'fadeInScale 0.6s ease-out',
                   '&:hover': { 
-                    transform: 'translateY(-12px) scale(1.02)',
-                    boxShadow: '0 24px 60px rgba(0, 0, 0, 0.15)',
-                    border: '1px solid rgba(102, 126, 234, 0.3)',
+                    transform: 'translateY(-4px)',
+                    boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)',
+                    border: '1px solid #2563eb',
                   },
                   '&::before': report.priority === 'CRITICAL' ? {
                     content: '""',
@@ -769,10 +767,9 @@ const Reports = () => {
                     top: 0,
                     left: 0,
                     right: 0,
-                    height: 6,
-                    background: 'linear-gradient(90deg, #ff1744, #d32f2f, #ff1744)',
-                    borderRadius: '16px 16px 0 0',
-                    animation: 'pulse 2s infinite'
+                    height: 4,
+                    background: '#ef4444',
+                    borderRadius: '8px 8px 0 0'
                   } : report.priority === 'HIGH' ? {
                     content: '""',
                     position: 'absolute',
@@ -780,20 +777,9 @@ const Reports = () => {
                     left: 0,
                     right: 0,
                     height: 4,
-                    background: 'linear-gradient(90deg, #ff9800, #ffb74d)',
-                    borderRadius: '16px 16px 0 0'
-                  } : {},
-                  '&::after': {
-                    content: '""',
-                    position: 'absolute',
-                    top: 0,
-                    left: 0,
-                    right: 0,
-                    bottom: 0,
-                    background: 'linear-gradient(135deg, rgba(102, 126, 234, 0.02), rgba(118, 75, 162, 0.02))',
-                    borderRadius: 4,
-                    pointerEvents: 'none'
-                  }
+                    background: '#f59e0b',
+                    borderRadius: '8px 8px 0 0'
+                  } : {}
                 }}>
                   <CardContent sx={{ p: 3 }}>
                     {/* Enhanced Header */}
@@ -1204,10 +1190,10 @@ const Reports = () => {
           position: 'fixed',
           bottom: 24,
           right: 24,
-          background: 'linear-gradient(45deg, #ff6b6b, #ee5a24)',
+          background: '#ef4444',
           '&:hover': {
-            background: 'linear-gradient(45deg, #ee5a24, #ff6b6b)',
-            transform: 'scale(1.1)'
+            background: '#dc2626',
+            transform: 'scale(1.05)'
           }
         }}
       >
