@@ -26,8 +26,26 @@ const Analytics = () => {
     try {
       // Try to fetch real data first, fallback to demo data
       try {
-        const response = await axios.get('http://127.0.0.1:8000/api/sos-reports/dashboard_stats/');
-        setStats(response.data);
+        const [statsResponse, reportsResponse] = await Promise.all([
+          axios.get('http://localhost:8000/api/sos_reports/dashboard_stats/'),
+          axios.get('http://localhost:8000/api/sos_reports/')
+        ]);
+        
+        const realStats = statsResponse.data;
+        const reportsData = reportsResponse.data.results || reportsResponse.data || [];
+        
+        // Transform the data to ensure proper structure
+        const transformedStats = {
+          total_reports: realStats.total_reports || reportsData.length,
+          pending_reports: realStats.pending_reports || 0,
+          active_reports: realStats.active_reports || 0,
+          resolved_reports: realStats.resolved_reports || 0,
+          by_disaster_type: realStats.by_disaster_type || {},
+          by_priority: realStats.by_priority || {}
+        };
+        
+        setStats(transformedStats);
+        console.log('✅ Real analytics data loaded:', transformedStats);
       } catch (apiError) {
         console.log('API not available, using demo data:', apiError.message);
         // Demo analytics data
@@ -37,11 +55,11 @@ const Analytics = () => {
           active_reports: 15,
           resolved_reports: 209,
           by_disaster_type: {
-            'Flood': 89,
-            'Earthquake': 45,
-            'Fire': 67,
-            'Landslide': 28,
-            'Cyclone': 18
+            'FLOOD': 89,
+            'EARTHQUAKE': 45,
+            'FIRE': 67,
+            'LANDSLIDE': 28,
+            'CYCLONE': 18
           },
           by_priority: {
             'LOW': 98,

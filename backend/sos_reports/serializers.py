@@ -23,7 +23,7 @@ class SOSReportSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'user', 'phone_number', 'latitude', 'longitude', 'address', 'disaster_type',
             'description', 'priority', 'status', 'ai_verified', 'ai_confidence',
-            'created_at', 'updated_at', 'media', 'updates'
+            'created_at', 'updated_at', 'media', 'updates', 'is_demo'
         ]
         read_only_fields = ['ai_verified', 'ai_confidence', 'created_at', 'updated_at']
 
@@ -31,5 +31,5 @@ class SOSReportCreateSerializer(serializers.ModelSerializer):
     class Meta:
         model = SOSReport
         fields = [
-            'phone_number', 'latitude', 'longitude', 'address', 'disaster_type', 'description'
+            'phone_number', 'latitude', 'longitude', 'address', 'disaster_type', 'description', 'is_demo'
         ]

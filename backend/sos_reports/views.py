@@ -2,7 +2,7 @@ from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.permissions import AllowAny
-from django.db.models import Q
+from django.db.models import Q, Count
 from .models import SOSReport, ReportMedia, ReportUpdate
 from .serializers import SOSReportSerializer, SOSReportCreateSerializer, ReportMediaSerializer
 from ai_services.services import AIVerificationService
@@ -24,6 +24,11 @@ class SOSReportViewSet(viewsets.ModelViewSet):
         if self.action == 'create':
             return SOSReportCreateSerializer
         return SOSReportSerializer
+    
+    def get_queryset(self):
+        # Filter by demo mode if specified
+        is_demo = self.request.query_params.get('is_demo', 'false').lower() == 'true'
+        return SOSReport.objects.filter(is_demo=is_demo)
     
     def create(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)
@@ -63,6 +68,7 @@ class SOSReportViewSet(viewsets.ModelViewSet):
         lat = request.query_params.get('lat')
         lng = request.query_params.get('lng')
         radius = request.query_params.get('radius', 10)  # km
+        is_demo = request.query_params.get('is_demo', 'false').lower() == 'true'
         
         if not lat or not lng:
             return Response({'error': 'lat and lng parameters required'}, 
@@ -80,12 +86,48 @@ class SOSReportViewSet(viewsets.ModelViewSet):
         reports = SOSReport.objects.filter(
             latitude__range=(lat - lat_range, lat + lat_range),
             longitude__range=(lng - lng_range, lng + lng_range),
-            status__in=['PENDING', 'VERIFIED', 'IN_PROGRESS']
+            status__in=['PENDING', 'VERIFIED', 'IN_PROGRESS'],
+            is_demo=is_demo
         )
         
         serializer = self.get_serializer(reports, many=True)
         return Response(serializer.data)
     
+    @action(detail=False, methods=['get'])
+    def dashboard_stats(self, request):
+        """Get dashboard statistics for reports"""
+        is_demo = request.query_params.get('is_demo', 'false').lower() == 'true'
+        queryset = SOSReport.objects.filter(is_demo=is_demo)
+        
+        # Calculate statistics
+        total_reports = queryset.count()
+        pending_reports = queryset.filter(status='PENDING').count()
+        active_reports = queryset.filter(status__in=['VERIFIED', 'IN_PROGRESS']).count()
+        resolved_reports = queryset.filter(status='RESOLVED').count()
+        
+        # Disaster type breakdown
+        disaster_types = queryset.values('disaster_type').annotate(
+            count=Count('disaster_type')
+        ).order_by('-count')
+        by_disaster_type = {item['disaster_type']: item['count'] for item in disaster_types}
+        
+        # Priority breakdown
+        priorities = queryset.values('priority').annotate(
+            count=Count('priority')
+        ).order_by('-count')
+        by_priority = {item['priority']: item['count'] for item in priorities}
+        
+        stats = {
+            'total_reports': total_reports,
+            'pending_reports': pending_reports,
+            'active_reports': active_reports,
+            'resolved_reports': resolved_reports,
+            'by_disaster_type': by_disaster_type,
+            'by_priority': by_priority
+        }
+        
+        return Response(stats)
+
     @action(detail=True, methods=['post'])
     def update_status(self, request, pk=None):
         report = self.get_object()
@@ -112,23 +154,26 @@ class SOSReportViewSet(viewsets.ModelViewSet):
     
     @action(detail=False, methods=['get'])
     def dashboard_stats(self, request):
+        # Use the filtered queryset from get_queryset
+        reports = self.get_queryset()
+        
         stats = {
-            'total_reports': SOSReport.objects.count(),
-            'pending_reports': SOSReport.objects.filter(status='PENDING').count(),
-            'active_reports': SOSReport.objects.filter(status__in=['VERIFIED', 'IN_PROGRESS']).count(),
-            'resolved_reports': SOSReport.objects.filter(status='RESOLVED').count(),
+            'total_reports': reports.count(),
+            'pending_reports': reports.filter(status='PENDING').count(),
+            'active_reports': reports.filter(status__in=['VERIFIED', 'IN_PROGRESS']).count(),
+            'resolved_reports': reports.filter(status='RESOLVED').count(),
             'by_disaster_type': {},
             'by_priority': {}
         }
         
         # Disaster type breakdown
         for disaster_type, _ in SOSReport.DISASTER_TYPES:
-            count = SOSReport.objects.filter(disaster_type=disaster_type).count()
+            count = reports.filter(disaster_type=disaster_type).count()
             stats['by_disaster_type'][disaster_type] = count
         
         # Priority breakdown
         for priority, _ in SOSReport.PRIORITY_CHOICES:
-            count = SOSReport.objects.filter(priority=priority).count()
+            count = reports.filter(priority=priority).count()
             stats['by_priority'][priority] = count
         
         return Response(stats)

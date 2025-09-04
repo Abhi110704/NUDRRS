@@ -1,83 +1,46 @@
-import cv2
-import torch
-from ultralytics import YOLO
-from transformers import pipeline
-import numpy as np
-from PIL import Image
 import os
 from django.conf import settings
+from PIL import Image
+import random
 
 class AIVerificationService:
     def __init__(self):
-        self.yolo_model = None
-        self.text_classifier = None
-        self.load_models()
-    
-    def load_models(self):
-        try:
-            # Load YOLO model for object detection
-            model_path = getattr(settings, 'YOLO_MODEL_PATH', 'yolov8n.pt')
-            self.yolo_model = YOLO(model_path)
-            
-            # Load text classification model
-            self.text_classifier = pipeline(
-                "text-classification",
-                model="distilbert-base-uncased-finetuned-sst-2-english"
-            )
-        except Exception as e:
-            print(f"Error loading AI models: {e}")
+        self.emergency_keywords = [
+            'help', 'emergency', 'urgent', 'fire', 'flood', 'earthquake',
+            'accident', 'injured', 'trapped', 'rescue', 'danger', 'critical',
+            'sos', 'disaster', 'emergency', 'help needed', 'urgent assistance'
+        ]
     
     def verify_image(self, image_path):
-        """Verify if image contains emergency-related content"""
+        """Mock image verification service (will be replaced with real AI later)"""
         try:
-            if not self.yolo_model:
-                return self.mock_verification_result()
+            # For now, return a mock verification result
+            # In production, this will use YOLO or other AI models
             
-            # Load and process image
-            image = cv2.imread(image_path)
-            if image is None:
-                return {"error": "Could not load image"}
+            # Simulate AI processing delay
+            import time
+            time.sleep(0.1)
             
-            # Run YOLO detection
-            results = self.yolo_model(image)
+            # Mock emergency detection based on image size/format
+            try:
+                with Image.open(image_path) as img:
+                    width, height = img.size
+                    # Simple heuristic: larger images might be more serious
+                    is_emergency = width > 800 or height > 600
+            except:
+                is_emergency = random.choice([True, False])
             
-            # Analyze detected objects
-            emergency_objects = [
-                'person', 'car', 'truck', 'bus', 'motorcycle', 'bicycle',
-                'fire hydrant', 'stop sign', 'traffic light'
-            ]
-            
-            detected_objects = []
-            confidence_scores = []
-            
-            for result in results:
-                boxes = result.boxes
-                if boxes is not None:
-                    for box in boxes:
-                        class_id = int(box.cls[0])
-                        confidence = float(box.conf[0])
-                        class_name = self.yolo_model.names[class_id]
-                        
-                        detected_objects.append(class_name)
-                        confidence_scores.append(confidence)
-            
-            # Determine if it's an emergency
-            is_emergency = any(obj in emergency_objects for obj in detected_objects)
-            avg_confidence = np.mean(confidence_scores) if confidence_scores else 0.0
-            
-            # Determine priority based on detected objects
-            priority = 'LOW'
-            if 'fire hydrant' in detected_objects or 'truck' in detected_objects:
-                priority = 'HIGH'
-            elif 'person' in detected_objects and len(detected_objects) > 2:
-                priority = 'MEDIUM'
+            # Mock confidence and priority
+            confidence = random.uniform(0.7, 0.95)
+            priority = random.choice(['LOW', 'MEDIUM', 'HIGH'])
             
             return {
                 'is_emergency': is_emergency,
-                'confidence': avg_confidence,
-                'detected_objects': detected_objects,
+                'confidence': round(confidence, 2),
+                'detected_objects': ['person', 'vehicle'] if is_emergency else ['building'],
                 'suggested_priority': priority,
-                'analysis_complete': True
+                'analysis_complete': True,
+                'note': 'Mock AI service - replace with real AI in production'
             }
             
         except Exception as e:
@@ -85,44 +48,31 @@ class AIVerificationService:
             return self.mock_verification_result()
     
     def classify_text(self, text):
-        """Classify emergency text description"""
+        """Classify emergency text description using keyword matching"""
         try:
-            if not self.text_classifier:
-                return self.mock_text_classification()
-            
-            # Basic emergency keywords
-            emergency_keywords = [
-                'help', 'emergency', 'urgent', 'fire', 'flood', 'earthquake',
-                'accident', 'injured', 'trapped', 'rescue', 'danger', 'critical'
-            ]
-            
             text_lower = text.lower()
-            emergency_score = sum(1 for keyword in emergency_keywords if keyword in text_lower)
+            emergency_score = sum(1 for keyword in self.emergency_keywords if keyword in text_lower)
             
-            # Use transformer for sentiment analysis
-            sentiment = self.text_classifier(text)[0]
-            
-            # Determine urgency
-            is_urgent = emergency_score > 0 or sentiment['label'] == 'NEGATIVE'
-            confidence = max(emergency_score * 0.2, sentiment['score'])
-            
-            # Classify disaster type
-            disaster_type = 'OTHER'
-            if 'flood' in text_lower or 'water' in text_lower:
-                disaster_type = 'FLOOD'
-            elif 'fire' in text_lower or 'burn' in text_lower:
-                disaster_type = 'FIRE'
-            elif 'earthquake' in text_lower or 'shake' in text_lower:
-                disaster_type = 'EARTHQUAKE'
-            elif 'medical' in text_lower or 'injured' in text_lower:
-                disaster_type = 'MEDICAL'
+            # Determine emergency level based on keyword count
+            if emergency_score >= 3:
+                emergency_level = 'CRITICAL'
+                priority = 'HIGH'
+            elif emergency_score >= 2:
+                emergency_level = 'HIGH'
+                priority = 'MEDIUM'
+            elif emergency_score >= 1:
+                emergency_level = 'MEDIUM'
+                priority = 'LOW'
+            else:
+                emergency_level = 'LOW'
+                priority = 'LOW'
             
             return {
-                'is_urgent': is_urgent,
-                'confidence': confidence,
-                'suggested_disaster_type': disaster_type,
-                'emergency_keywords_found': emergency_score,
-                'sentiment': sentiment
+                'emergency_level': emergency_level,
+                'priority': priority,
+                'confidence': min(0.9, 0.5 + (emergency_score * 0.1)),
+                'keywords_found': [kw for kw in self.emergency_keywords if kw in text_lower],
+                'analysis_complete': True
             }
             
         except Exception as e:
@@ -130,23 +80,65 @@ class AIVerificationService:
             return self.mock_text_classification()
     
     def mock_verification_result(self):
-        """Mock verification for demo purposes"""
+        """Fallback mock result"""
         return {
             'is_emergency': True,
-            'confidence': 0.85,
-            'detected_objects': ['person', 'car'],
+            'confidence': 0.8,
+            'detected_objects': ['person'],
             'suggested_priority': 'MEDIUM',
             'analysis_complete': True,
-            'mock_data': True
+            'note': 'Mock service - AI models not loaded'
         }
     
     def mock_text_classification(self):
-        """Mock text classification for demo purposes"""
+        """Fallback mock text classification"""
         return {
-            'is_urgent': True,
-            'confidence': 0.75,
-            'suggested_disaster_type': 'OTHER',
-            'emergency_keywords_found': 2,
-            'sentiment': {'label': 'NEGATIVE', 'score': 0.8},
-            'mock_data': True
+            'emergency_level': 'MEDIUM',
+            'priority': 'MEDIUM',
+            'confidence': 0.7,
+            'keywords_found': ['emergency'],
+            'analysis_complete': True,
+            'note': 'Mock service - AI models not loaded'
         }
+    
+    def predict_disaster_risk(self, location_data):
+        """Mock disaster risk prediction (will use real ML models later)"""
+        try:
+            # Mock risk assessment based on location
+            risk_factors = {
+                'flood_risk': random.uniform(0.1, 0.9),
+                'earthquake_risk': random.uniform(0.05, 0.8),
+                'fire_risk': random.uniform(0.1, 0.7),
+                'cyclone_risk': random.uniform(0.05, 0.6)
+            }
+            
+            # Determine overall risk level
+            max_risk = max(risk_factors.values())
+            if max_risk > 0.7:
+                overall_risk = 'HIGH'
+            elif max_risk > 0.4:
+                overall_risk = 'MEDIUM'
+            else:
+                overall_risk = 'LOW'
+            
+            return {
+                'overall_risk': overall_risk,
+                'risk_factors': risk_factors,
+                'recommendations': [
+                    'Monitor weather updates',
+                    'Prepare emergency kit',
+                    'Know evacuation routes'
+                ],
+                'prediction_confidence': random.uniform(0.6, 0.9),
+                'note': 'Mock prediction service - replace with real ML models in production'
+            }
+            
+        except Exception as e:
+            print(f"Error in disaster risk prediction: {e}")
+            return {
+                'overall_risk': 'UNKNOWN',
+                'risk_factors': {},
+                'recommendations': ['Service temporarily unavailable'],
+                'prediction_confidence': 0.0,
+                'error': str(e)
+            }

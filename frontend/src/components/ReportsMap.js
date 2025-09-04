@@ -36,12 +36,34 @@ const ReportsMap = () => {
   const [userLocation, setUserLocation] = useState(null);
   const [locationLoading, setLocationLoading] = useState(false);
   const [notificationAnchor, setNotificationAnchor] = useState(null);
+  const [liveUpdates, setLiveUpdates] = useState([]);
+  const [lastUpdate, setLastUpdate] = useState(null);
+  const [updateStatus, setUpdateStatus] = useState('idle');
 
   useEffect(() => {
     fetchReports();
     const interval = setInterval(fetchReports, 10000); // Refresh every 10 seconds
     return () => clearInterval(interval);
   }, []);
+
+  const addLiveUpdate = (message, type = 'info') => {
+    const update = {
+      id: Date.now(),
+      message,
+      type,
+      timestamp: new Date(),
+      isNew: true
+    };
+    
+    setLiveUpdates(prev => [update, ...prev.slice(0, 9)]); // Keep last 10 updates
+    
+    // Remove isNew flag after 3 seconds
+    setTimeout(() => {
+      setLiveUpdates(prev => 
+        prev.map(u => u.id === update.id ? { ...u, isNew: false } : u)
+      );
+    }, 3000);
+  };
 
   const getUserLocation = () => {
     setLocationLoading(true);
@@ -101,16 +123,45 @@ const ReportsMap = () => {
     setNotificationAnchor(null);
   };
 
+  // Helper function to generate random coordinates within India
+  const getRandomCoordinate = () => {
+    const lat = 20.5937 + (Math.random() - 0.5) * 20; // ±10 degrees from center
+    const lng = 78.9629 + (Math.random() - 0.5) * 30; // ±15 degrees from center
+    return { lat, lng };
+  };
+
   const fetchReports = async () => {
     setRefreshing(true);
     try {
       // Try real API first, fallback to demo data
       try {
-        const response = await axios.get('http://127.0.0.1:8000/api/sos-reports/');
-        setReports(response.data.results || response.data);
+        const response = await axios.get('http://localhost:8000/api/sos_reports/');
+        const reportsData = response.data.results || response.data || [];
+        
+        // Transform the data to include coordinates if not present
+        const transformedReports = reportsData.map(report => ({
+          ...report,
+          latitude: report.latitude || (report.properties?.latitude) || getRandomCoordinate().lat,
+          longitude: report.longitude || (report.properties?.longitude) || getRandomCoordinate().lng,
+          disaster_type: report.disaster_type || report.properties?.disaster_type,
+          status: report.status || report.properties?.status,
+          priority: report.priority || report.properties?.priority,
+          address: report.address || report.properties?.address,
+          description: report.description || report.properties?.description,
+          user: report.user || { first_name: 'Demo', last_name: 'User' },
+          ai_confidence: report.ai_confidence || 0.85
+        }));
+        
+        setReports(transformedReports);
+        setUpdateStatus('success');
+        setLastUpdate(new Date());
+        console.log('✅ Live data loaded:', transformedReports.length, 'reports');
+        addLiveUpdate(`✅ Live map data loaded: ${transformedReports.length} reports`, 'success');
       } catch (apiError) {
-        console.log('API not available, using demo map data');
-        // Demo reports with geographic coordinates for India
+        setUpdateStatus('error');
+        setLastUpdate(new Date());
+        console.log('🔄 API not available, using enhanced demo map data');
+        // Enhanced demo reports with geographic coordinates for India
         const demoReports = [
           {
             id: 1,
@@ -118,7 +169,8 @@ const ReportsMap = () => {
             disaster_type: 'FLOOD', priority: 'CRITICAL', status: 'PENDING',
             description: 'Severe flooding in residential areas, immediate evacuation needed',
             address: 'Yamuna Bank, New Delhi', phone_number: '+91-9876543210',
-            created_at: new Date().toISOString(), ai_confidence: 0.95
+            created_at: new Date().toISOString(), ai_confidence: 0.95,
+            user: { first_name: 'Rajesh', last_name: 'Kumar' }
           },
           {
             id: 2,
@@ -126,7 +178,8 @@ const ReportsMap = () => {
             disaster_type: 'FIRE', priority: 'HIGH', status: 'IN_PROGRESS',
             description: 'High-rise building fire, fire department on site',
             address: 'Bandra West, Mumbai', phone_number: '+91-9876543211',
-            created_at: new Date(Date.now() - 3600000).toISOString(), ai_confidence: 0.92
+            created_at: new Date(Date.now() - 3600000).toISOString(), ai_confidence: 0.92,
+            user: { first_name: 'Priya', last_name: 'Sharma' }
           },
           {
             id: 3,
@@ -134,7 +187,8 @@ const ReportsMap = () => {
             disaster_type: 'CYCLONE', priority: 'CRITICAL', status: 'VERIFIED',
             description: 'Cyclone approaching coastal areas, evacuation in progress',
             address: 'Marina Beach, Chennai', phone_number: '+91-9876543212',
-            created_at: new Date(Date.now() - 7200000).toISOString(), ai_confidence: 0.98
+            created_at: new Date(Date.now() - 7200000).toISOString(), ai_confidence: 0.98,
+            user: { first_name: 'Arjun', last_name: 'Patel' }
           },
           {
             id: 4,
@@ -142,7 +196,8 @@ const ReportsMap = () => {
             disaster_type: 'EARTHQUAKE', priority: 'MEDIUM', status: 'RESOLVED',
             description: 'Minor earthquake reported, structural assessment completed',
             address: 'Park Street, Kolkata', phone_number: '+91-9876543213',
-            created_at: new Date(Date.now() - 14400000).toISOString(), ai_confidence: 0.87
+            created_at: new Date(Date.now() - 14400000).toISOString(), ai_confidence: 0.87,
+            user: { first_name: 'Suresh', last_name: 'Singh' }
           },
           {
             id: 5,
@@ -178,10 +233,14 @@ const ReportsMap = () => {
           }
         ];
         setReports(demoReports);
+        addLiveUpdate('🎭 Using demo map data', 'info');
       }
       setLoading(false);
     } catch (error) {
       console.error('Error fetching reports:', error);
+      setUpdateStatus('error');
+      setLastUpdate(new Date());
+      addLiveUpdate('❌ Error loading map data', 'error');
       setLoading(false);
     } finally {
       setRefreshing(false);
@@ -333,85 +392,314 @@ const ReportsMap = () => {
         sx={{ 
           m: 2, 
           p: 2, 
-          background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-          color: 'white',
+          background: 'white',
+          color: '#0f172a',
           borderRadius: 3,
-          boxShadow: '0 10px 30px rgba(0, 0, 0, 0.2)'
+          boxShadow: '0 1px 3px rgba(0, 0, 0, 0.1)',
+          border: '1px solid rgba(0, 0, 0, 0.05)'
         }}
       >
         <Grid container spacing={2}>
           <Grid item xs={12} sm={6} md={3}>
             <Card sx={{ 
-              background: 'rgba(255, 255, 255, 0.1)', 
-              backdropFilter: 'blur(10px)',
-              border: '1px solid rgba(255, 255, 255, 0.2)',
-              borderRadius: 2,
-              transition: 'transform 0.3s ease',
-              '&:hover': { transform: 'translateY(-5px)' }
+              background: 'rgba(255, 255, 255, 0.12)',
+              backdropFilter: 'blur(20px)',
+              borderRadius: 4,
+              border: '1px solid rgba(255, 255, 255, 0.25)',
+              boxShadow: '0 8px 32px rgba(244, 67, 54, 0.15)',
+              transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+              position: 'relative',
+              overflow: 'hidden',
+              height: 140,
+              '&::before': {
+                content: '""',
+                position: 'absolute',
+                top: 0,
+                left: 0,
+                right: 0,
+                height: '4px',
+                background: 'linear-gradient(90deg, #f44336, #d32f2f)',
+                borderRadius: '16px 16px 0 0'
+              },
+              '&:hover': {
+                transform: 'translateY(-4px)',
+                boxShadow: '0 16px 48px rgba(244, 67, 54, 0.25)',
+                border: '1px solid rgba(255, 255, 255, 0.35)'
+              }
             }}>
-              <CardContent sx={{ textAlign: 'center', color: 'white' }}>
-                <Emergency sx={{ fontSize: 40, color: '#ff1744', mb: 1 }} />
-                <Typography variant="h4" sx={{ fontWeight: 'bold', color: '#ff1744' }}>
+              <CardContent sx={{ 
+                p: 3, 
+                position: 'relative', 
+                zIndex: 2, 
+                height: '100%', 
+                display: 'flex', 
+                flexDirection: 'column', 
+                justifyContent: 'center',
+                textAlign: 'center'
+              }}>
+                <Box sx={{ 
+                  width: 48, 
+                  height: 48, 
+                  borderRadius: '50%', 
+                  background: 'linear-gradient(135deg, #f44336, #d32f2f)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  mb: 2,
+                  boxShadow: '0 6px 20px rgba(244, 67, 54, 0.4)',
+                  border: '2px solid rgba(255, 255, 255, 0.2)',
+                  mx: 'auto'
+                }}>
+                  <Emergency sx={{ fontSize: 24, color: 'white' }} />
+                </Box>
+                <Typography variant="h3" sx={{ 
+                  fontWeight: 800, 
+                  mb: 0.5,
+                  fontSize: '2rem',
+                  background: 'linear-gradient(135deg, #f44336, #d32f2f)',
+                  backgroundClip: 'text',
+                  WebkitBackgroundClip: 'text',
+                  WebkitTextFillColor: 'transparent',
+                  lineHeight: 1
+                }}>
                   {filteredReports.filter(r => r.priority === 'CRITICAL').length}
                 </Typography>
-                <Typography variant="body2">Critical Alerts</Typography>
+                <Typography variant="body1" sx={{ 
+                  color: '#374151',
+                  fontWeight: 600,
+                  letterSpacing: '0.5px',
+                  fontSize: '0.9rem'
+                }}>
+                  Critical Alerts
+                </Typography>
               </CardContent>
             </Card>
           </Grid>
           
           <Grid item xs={12} sm={6} md={3}>
             <Card sx={{ 
-              background: 'rgba(255, 255, 255, 0.1)', 
-              backdropFilter: 'blur(10px)',
-              border: '1px solid rgba(255, 255, 255, 0.2)',
-              borderRadius: 2,
-              transition: 'transform 0.3s ease',
-              '&:hover': { transform: 'translateY(-5px)' }
+              background: 'rgba(255, 255, 255, 0.12)',
+              backdropFilter: 'blur(20px)',
+              borderRadius: 4,
+              border: '1px solid rgba(255, 255, 255, 0.25)',
+              boxShadow: '0 8px 32px rgba(255, 152, 0, 0.15)',
+              transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+              position: 'relative',
+              overflow: 'hidden',
+              height: 140,
+              '&::before': {
+                content: '""',
+                position: 'absolute',
+                top: 0,
+                left: 0,
+                right: 0,
+                height: '4px',
+                background: 'linear-gradient(90deg, #ff9800, #f57c00)',
+                borderRadius: '16px 16px 0 0'
+              },
+              '&:hover': {
+                transform: 'translateY(-4px)',
+                boxShadow: '0 16px 48px rgba(255, 152, 0, 0.25)',
+                border: '1px solid rgba(255, 255, 255, 0.35)'
+              }
             }}>
-              <CardContent sx={{ textAlign: 'center', color: 'white' }}>
-                <Warning sx={{ fontSize: 40, color: '#ff9800', mb: 1 }} />
-                <Typography variant="h4" sx={{ fontWeight: 'bold', color: '#ff9800' }}>
+              <CardContent sx={{ 
+                p: 3, 
+                position: 'relative', 
+                zIndex: 2, 
+                height: '100%', 
+                display: 'flex', 
+                flexDirection: 'column', 
+                justifyContent: 'center',
+                textAlign: 'center'
+              }}>
+                <Box sx={{ 
+                  width: 48, 
+                  height: 48, 
+                  borderRadius: '50%', 
+                  background: 'linear-gradient(135deg, #ff9800, #f57c00)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  mb: 2,
+                  boxShadow: '0 6px 20px rgba(255, 152, 0, 0.4)',
+                  border: '2px solid rgba(255, 255, 255, 0.2)',
+                  mx: 'auto'
+                }}>
+                  <Warning sx={{ fontSize: 24, color: 'white' }} />
+                </Box>
+                <Typography variant="h3" sx={{ 
+                  fontWeight: 800, 
+                  mb: 0.5,
+                  fontSize: '2rem',
+                  background: 'linear-gradient(135deg, #ff9800, #f57c00)',
+                  backgroundClip: 'text',
+                  WebkitBackgroundClip: 'text',
+                  WebkitTextFillColor: 'transparent',
+                  lineHeight: 1
+                }}>
                   {filteredReports.filter(r => r.priority === 'HIGH').length}
                 </Typography>
-                <Typography variant="body2">High Priority</Typography>
+                <Typography variant="body1" sx={{ 
+                  color: '#374151',
+                  fontWeight: 600,
+                  letterSpacing: '0.5px',
+                  fontSize: '0.9rem'
+                }}>
+                  High Priority
+                </Typography>
               </CardContent>
             </Card>
           </Grid>
           
           <Grid item xs={12} sm={6} md={3}>
             <Card sx={{ 
-              background: 'rgba(255, 255, 255, 0.1)', 
-              backdropFilter: 'blur(10px)',
-              border: '1px solid rgba(255, 255, 255, 0.2)',
-              borderRadius: 2,
-              transition: 'transform 0.3s ease',
-              '&:hover': { transform: 'translateY(-5px)' }
+              background: 'rgba(255, 255, 255, 0.12)',
+              backdropFilter: 'blur(20px)',
+              borderRadius: 4,
+              border: '1px solid rgba(255, 255, 255, 0.25)',
+              boxShadow: '0 8px 32px rgba(33, 150, 243, 0.15)',
+              transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+              position: 'relative',
+              overflow: 'hidden',
+              height: 140,
+              '&::before': {
+                content: '""',
+                position: 'absolute',
+                top: 0,
+                left: 0,
+                right: 0,
+                height: '4px',
+                background: 'linear-gradient(90deg, #2563eb, #1d4ed8)',
+                borderRadius: '16px 16px 0 0'
+              },
+              '&:hover': {
+                transform: 'translateY(-4px)',
+                boxShadow: '0 16px 48px rgba(33, 150, 243, 0.25)',
+                border: '1px solid rgba(255, 255, 255, 0.35)'
+              }
             }}>
-              <CardContent sx={{ textAlign: 'center', color: 'white' }}>
-                <Timeline sx={{ fontSize: 40, color: '#2196f3', mb: 1 }} />
-                <Typography variant="h4" sx={{ fontWeight: 'bold', color: '#2196f3' }}>
+              <CardContent sx={{ 
+                p: 3, 
+                position: 'relative', 
+                zIndex: 2, 
+                height: '100%', 
+                display: 'flex', 
+                flexDirection: 'column', 
+                justifyContent: 'center',
+                textAlign: 'center'
+              }}>
+                <Box sx={{ 
+                  width: 48, 
+                  height: 48, 
+                  borderRadius: '50%', 
+                  background: 'linear-gradient(135deg, #2563eb, #1d4ed8)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  mb: 2,
+                  boxShadow: '0 6px 20px rgba(33, 150, 243, 0.4)',
+                  border: '2px solid rgba(255, 255, 255, 0.2)',
+                  mx: 'auto'
+                }}>
+                  <Timeline sx={{ fontSize: 24, color: 'white' }} />
+                </Box>
+                <Typography variant="h3" sx={{ 
+                  fontWeight: 800, 
+                  mb: 0.5,
+                  fontSize: '2rem',
+                  background: 'linear-gradient(135deg, #2563eb, #1d4ed8)',
+                  backgroundClip: 'text',
+                  WebkitBackgroundClip: 'text',
+                  WebkitTextFillColor: 'transparent',
+                  lineHeight: 1
+                }}>
                   {filteredReports.filter(r => ['PENDING', 'IN_PROGRESS', 'VERIFIED'].includes(r.status)).length}
                 </Typography>
-                <Typography variant="body2">Active Cases</Typography>
+                <Typography variant="body1" sx={{ 
+                  color: '#374151',
+                  fontWeight: 600,
+                  letterSpacing: '0.5px',
+                  fontSize: '0.9rem'
+                }}>
+                  Active Cases
+                </Typography>
               </CardContent>
             </Card>
           </Grid>
           
           <Grid item xs={12} sm={6} md={3}>
             <Card sx={{ 
-              background: 'rgba(255, 255, 255, 0.1)', 
-              backdropFilter: 'blur(10px)',
-              border: '1px solid rgba(255, 255, 255, 0.2)',
-              borderRadius: 2,
-              transition: 'transform 0.3s ease',
-              '&:hover': { transform: 'translateY(-5px)' }
+              background: 'rgba(255, 255, 255, 0.12)',
+              backdropFilter: 'blur(20px)',
+              borderRadius: 4,
+              border: '1px solid rgba(255, 255, 255, 0.25)',
+              boxShadow: '0 8px 32px rgba(76, 175, 80, 0.15)',
+              transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+              position: 'relative',
+              overflow: 'hidden',
+              height: 140,
+              '&::before': {
+                content: '""',
+                position: 'absolute',
+                top: 0,
+                left: 0,
+                right: 0,
+                height: '4px',
+                background: 'linear-gradient(90deg, #4caf50, #388e3c)',
+                borderRadius: '16px 16px 0 0'
+              },
+              '&:hover': {
+                transform: 'translateY(-4px)',
+                boxShadow: '0 16px 48px rgba(76, 175, 80, 0.25)',
+                border: '1px solid rgba(255, 255, 255, 0.35)'
+              }
             }}>
-              <CardContent sx={{ textAlign: 'center', color: 'white' }}>
-                <Speed sx={{ fontSize: 40, color: '#4caf50', mb: 1 }} />
-                <Typography variant="h4" sx={{ fontWeight: 'bold', color: '#4caf50' }}>
+              <CardContent sx={{ 
+                p: 3, 
+                position: 'relative', 
+                zIndex: 2, 
+                height: '100%', 
+                display: 'flex', 
+                flexDirection: 'column', 
+                justifyContent: 'center',
+                textAlign: 'center'
+              }}>
+                <Box sx={{ 
+                  width: 48, 
+                  height: 48, 
+                  borderRadius: '50%', 
+                  background: 'linear-gradient(135deg, #4caf50, #388e3c)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  mb: 2,
+                  boxShadow: '0 6px 20px rgba(76, 175, 80, 0.4)',
+                  border: '2px solid rgba(255, 255, 255, 0.2)',
+                  mx: 'auto'
+                }}>
+                  <Speed sx={{ fontSize: 24, color: 'white' }} />
+                </Box>
+                <Typography variant="h3" sx={{ 
+                  fontWeight: 800, 
+                  mb: 0.5,
+                  fontSize: '2rem',
+                  background: 'linear-gradient(135deg, #4caf50, #388e3c)',
+                  backgroundClip: 'text',
+                  WebkitBackgroundClip: 'text',
+                  WebkitTextFillColor: 'transparent',
+                  lineHeight: 1
+                }}>
                   {Math.round((filteredReports.filter(r => r.status === 'RESOLVED').length / filteredReports.length) * 100) || 0}%
                 </Typography>
-                <Typography variant="body2">Resolution Rate</Typography>
+                <Typography variant="body1" sx={{ 
+                  color: '#374151',
+                  fontWeight: 600,
+                  letterSpacing: '0.5px',
+                  fontSize: '0.9rem'
+                }}>
+                  Resolution Rate
+                </Typography>
               </CardContent>
             </Card>
           </Grid>

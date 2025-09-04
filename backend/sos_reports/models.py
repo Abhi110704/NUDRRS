@@ -42,6 +42,7 @@ class SOSReport(models.Model):
     ai_confidence = models.FloatField(default=0.0)
     created_at = models.DateTimeField(default=timezone.now)
     updated_at = models.DateTimeField(auto_now=True)
+    is_demo = models.BooleanField(default=False, help_text='Whether this is a demo report')
     
     class Meta:
         ordering = ['-created_at']
