@@ -12,12 +12,15 @@ import math
 class SOSReportViewSet(viewsets.ModelViewSet):
     queryset = SOSReport.objects.all()
     serializer_class = SOSReportSerializer
+    permission_classes = [AllowAny]  # Allow public access for dashboard data
     
     def get_permissions(self):
-        if self.action == 'create':
+        if self.action in ['create', 'list', 'retrieve', 'dashboard_stats', 'nearby']:
             permission_classes = [AllowAny]
+        elif self.action in ['update', 'partial_update', 'destroy']:
+            permission_classes = [AllowAny]  # Allow updates for now, can be restricted later
         else:
-            permission_classes = self.permission_classes
+            permission_classes = [AllowAny]
         return [permission() for permission in permission_classes]
     
     def get_serializer_class(self):
@@ -29,11 +32,11 @@ class SOSReportViewSet(viewsets.ModelViewSet):
         queryset = SOSReport.objects.all()
         
         # Filter by demo mode if specified
-        is_demo = self.request.query_params.get('is_demo', 'false').lower() == 'true'
-        if is_demo:
-            queryset = queryset.filter(is_demo=True)
-        else:
-            queryset = queryset.filter(is_demo=False)
+        is_demo_param = self.request.query_params.get('is_demo')
+        if is_demo_param is not None:
+            is_demo = is_demo_param.lower() == 'true'
+            queryset = queryset.filter(is_demo=is_demo)
+        # If no is_demo parameter is provided, show all reports (both demo and real)
         
         # Filter by user if specified and user is not admin
         user_id = self.request.query_params.get('user')
@@ -48,8 +51,26 @@ class SOSReportViewSet(viewsets.ModelViewSet):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         
-        # Create the report
-        report = serializer.save(user=request.user if request.user.is_authenticated else None)
+        # Get or create a default anonymous user for unauthenticated reports
+        from django.contrib.auth.models import User
+        if request.user.is_authenticated:
+            user = request.user
+        else:
+            # Create or get anonymous user
+            user, created = User.objects.get_or_create(
+                username='anonymous_user',
+                defaults={
+                    'first_name': 'Anonymous',
+                    'last_name': 'User',
+                    'email': 'anonymous@nudrrs.com'
+                }
+            )
+        
+        # Create the report - ensure it's marked as a real report (not demo)
+        report = serializer.save(
+            user=user,
+            is_demo=False  # Always mark new reports as real reports
+        )
         
         # Process uploaded media files
         files = request.FILES.getlist('files')
@@ -107,40 +128,6 @@ class SOSReportViewSet(viewsets.ModelViewSet):
         serializer = self.get_serializer(reports, many=True)
         return Response(serializer.data)
     
-    @action(detail=False, methods=['get'])
-    def dashboard_stats(self, request):
-        """Get dashboard statistics for reports"""
-        is_demo = request.query_params.get('is_demo', 'false').lower() == 'true'
-        queryset = SOSReport.objects.filter(is_demo=is_demo)
-        
-        # Calculate statistics
-        total_reports = queryset.count()
-        pending_reports = queryset.filter(status='PENDING').count()
-        active_reports = queryset.filter(status__in=['VERIFIED', 'IN_PROGRESS']).count()
-        resolved_reports = queryset.filter(status='RESOLVED').count()
-        
-        # Disaster type breakdown
-        disaster_types = queryset.values('disaster_type').annotate(
-            count=Count('disaster_type')
-        ).order_by('-count')
-        by_disaster_type = {item['disaster_type']: item['count'] for item in disaster_types}
-        
-        # Priority breakdown
-        priorities = queryset.values('priority').annotate(
-            count=Count('priority')
-        ).order_by('-count')
-        by_priority = {item['priority']: item['count'] for item in priorities}
-        
-        stats = {
-            'total_reports': total_reports,
-            'pending_reports': pending_reports,
-            'active_reports': active_reports,
-            'resolved_reports': resolved_reports,
-            'by_disaster_type': by_disaster_type,
-            'by_priority': by_priority
-        }
-        
-        return Response(stats)
 
     @action(detail=True, methods=['post'])
     def update_status(self, request, pk=None):

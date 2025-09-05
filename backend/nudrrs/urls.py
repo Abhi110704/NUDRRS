@@ -3,13 +3,16 @@ from django.urls import path, include
 from django.conf import settings
 from django.conf.urls.static import static
 from . import views
+from sos_reports.admin import emergency_dashboard_view
 
 urlpatterns = [
     path('', views.api_overview, name='api_overview'),
+    path('api/', views.api_overview, name='api_root'),
+    path('admin/emergency-dashboard/', emergency_dashboard_view, name='emergency_dashboard'),
     path('admin/', admin.site.urls),
     path('health/', views.health_check, name='health_check'),
     path('api/auth/', include('authentication.urls')),
-    path('api/reports/', include('sos_reports.urls')),
+    path('api/sos_reports/', include('sos_reports.urls')),
     path('api/ai/', include('ai_services.urls')),
     path('api/notifications/', include('notifications.urls')),
     path('api/resources/', include('resources.urls')),

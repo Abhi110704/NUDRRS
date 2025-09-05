@@ -61,8 +61,8 @@ const Dashboard = () => {
         // Try to fetch real data from backend
       try {
         const [statsResponse, reportsResponse] = await Promise.all([
-            axios.get(`http://localhost:8000/api/sos_reports/dashboard_stats/`),
-            axios.get(`http://localhost:8000/api/sos_reports/?limit=5`)
+            axios.get(`http://localhost:8000/api/sos_reports/sos_reports/dashboard_stats/`),
+            axios.get(`http://localhost:8000/api/sos_reports/sos_reports/?limit=5`)
           ]);
           
           // Transform the data to ensure proper structure

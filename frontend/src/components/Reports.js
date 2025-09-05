@@ -11,14 +11,32 @@ import {
   LocationOn, Phone, Schedule, Security, Speed, Warning, CheckCircle, Close
 } from '@mui/icons-material';
 import axios from 'axios';
+import { useAuth } from '../contexts/AuthContext';
 
 const Reports = () => {
+  const { user, isAdmin } = useAuth();
+  
+  // Get or create current user session for demo purposes
+  const getCurrentUser = () => {
+    let currentUser = localStorage.getItem('nudrrs_current_user');
+    if (!currentUser) {
+      currentUser = {
+        id: Date.now(),
+        username: 'current_user',
+        first_name: 'Current',
+        last_name: 'User'
+      };
+      localStorage.setItem('nudrrs_current_user', JSON.stringify(currentUser));
+    } else {
+      currentUser = JSON.parse(currentUser);
+    }
+    return currentUser;
+  };
   const [reports, setReports] = useState([]);
   const [filteredReports, setFilteredReports] = useState([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState('ALL');
   const [searchTerm, setSearchTerm] = useState('');
-  const [isLiveMode, setIsLiveMode] = useState(false); // Add live mode state
   const [lastUpdate, setLastUpdate] = useState(new Date()); // Track last update
   const [updateStatus, setUpdateStatus] = useState('idle'); // Update status: idle, updating, success, error
   const [liveUpdates, setLiveUpdates] = useState([]); // Store live updates
@@ -40,25 +58,44 @@ const Reports = () => {
     phone_number: ''
   });
 
+  // Location autocomplete states
+  const [locationSuggestions, setLocationSuggestions] = useState([]);
+  const [showLocationSuggestions, setShowLocationSuggestions] = useState(false);
+  const [locationLoading, setLocationLoading] = useState(false);
+
+  // Close suggestions when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (showLocationSuggestions && !event.target.closest('.location-autocomplete')) {
+        setShowLocationSuggestions(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [showLocationSuggestions]);
+
   // Country codes for phone numbers
   const countryCodes = [
-    { code: '+91', country: 'India', flag: '🇮🇳' },
-    { code: '+1', country: 'USA', flag: '🇺🇸' },
-    { code: '+44', country: 'UK', flag: '🇬🇧' },
-    { code: '+86', country: 'China', flag: '🇨🇳' },
-    { code: '+81', country: 'Japan', flag: '🇯🇵' },
-    { code: '+49', country: 'Germany', flag: '🇩🇪' },
-    { code: '+33', country: 'France', flag: '🇫🇷' },
-    { code: '+61', country: 'Australia', flag: '🇦🇺' },
-    { code: '+55', country: 'Brazil', flag: '🇧🇷' },
-    { code: '+7', country: 'Russia', flag: '🇷🇺' },
-    { code: '+971', country: 'UAE', flag: '🇦🇪' },
-    { code: '+966', country: 'Saudi Arabia', flag: '🇸🇦' },
-    { code: '+92', country: 'Pakistan', flag: '🇵🇰' },
-    { code: '+880', country: 'Bangladesh', flag: '🇧🇩' },
-    { code: '+94', country: 'Sri Lanka', flag: '🇱🇰' },
-    { code: '+977', country: 'Nepal', flag: '🇳🇵' },
-    { code: '+975', country: 'Bhutan', flag: '🇧🇹' },
+    { code: '+91', country: 'India', flag: '🇮🇳', display: 'India (+91)' },
+    { code: '+1', country: 'USA', flag: '🇺🇸', display: 'United States (+1)' },
+    { code: '+44', country: 'UK', flag: '🇬🇧', display: 'United Kingdom (+44)' },
+    { code: '+86', country: 'China', flag: '🇨🇳', display: 'China (+86)' },
+    { code: '+81', country: 'Japan', flag: '🇯🇵', display: 'Japan (+81)' },
+    { code: '+49', country: 'Germany', flag: '🇩🇪', display: 'Germany (+49)' },
+    { code: '+33', country: 'France', flag: '🇫🇷', display: 'France (+33)' },
+    { code: '+61', country: 'Australia', flag: '🇦🇺', display: 'Australia (+61)' },
+    { code: '+55', country: 'Brazil', flag: '🇧🇷', display: 'Brazil (+55)' },
+    { code: '+7', country: 'Russia', flag: '🇷🇺', display: 'Russia (+7)' },
+    { code: '+971', country: 'UAE', flag: '🇦🇪', display: 'UAE (+971)' },
+    { code: '+966', country: 'Saudi Arabia', flag: '🇸🇦', display: 'Saudi Arabia (+966)' },
+    { code: '+92', country: 'Pakistan', flag: '🇵🇰', display: 'Pakistan (+92)' },
+    { code: '+880', country: 'Bangladesh', flag: '🇧🇩', display: 'Bangladesh (+880)' },
+    { code: '+94', country: 'Sri Lanka', flag: '🇱🇰', display: 'Sri Lanka (+94)' },
+    { code: '+977', country: 'Nepal', flag: '🇳🇵', display: 'Nepal (+977)' },
+    { code: '+975', country: 'Bhutan', flag: '🇧🇹', display: 'Bhutan (+975)' },
   ];
   
   // Notification states
@@ -73,14 +110,10 @@ const Reports = () => {
   }, []);
 
   useEffect(() => {
-    if (isLiveMode) {
-      addLiveUpdate('Live mode activated - connecting to backend', 'success');
-      const cleanup = startLiveUpdates();
-      return cleanup;
-    } else {
-      addLiveUpdate('Demo mode activated - using local data', 'info');
-    }
-  }, [isLiveMode]);
+    addLiveUpdate('Live mode activated - connecting to backend', 'success');
+    const cleanup = startLiveUpdates();
+    return cleanup;
+  }, []);
 
   useEffect(() => {
     filterReports();
@@ -108,15 +141,13 @@ const Reports = () => {
 
   // Auto-refresh function for live mode
   const startLiveUpdates = () => {
-    if (isLiveMode) {
-      const interval = setInterval(() => {
-        fetchReports();
-        setLastUpdate(new Date());
-        addLiveUpdate('Data refreshed from backend', 'success');
-      }, 30000); // Refresh every 30 seconds
-      
-      return () => clearInterval(interval);
-    }
+    const interval = setInterval(() => {
+      fetchReports();
+      setLastUpdate(new Date());
+      addLiveUpdate('Data refreshed from backend', 'success');
+    }, 30000); // Refresh every 30 seconds
+    
+    return () => clearInterval(interval);
   };
 
   // Helper function to get demo reports
@@ -201,47 +232,38 @@ const Reports = () => {
     try {
       let currentReports = [];
       
-      if (isLiveMode) {
-        setUpdateStatus('updating');
-        // Try to fetch live data from backend
-        try {
-          const response = await axios.get('http://localhost:8000/api/sos_reports/');
-          const reportsData = response.data.results || response.data || [];
-          
-          // Transform the data to ensure proper structure
-          currentReports = reportsData.map(report => ({
-            ...report,
-            disaster_type: report.disaster_type || report.properties?.disaster_type,
-            status: report.status || report.properties?.status,
-            priority: report.priority || report.properties?.priority,
-            address: report.address || report.properties?.address,
-            description: report.description || report.properties?.description,
-            user: report.user || { first_name: 'Demo', last_name: 'User' },
-            ai_confidence: report.ai_confidence || 0.85
-          }));
-          
-          console.log('✅ Live data loaded from backend:', currentReports);
-          setUpdateStatus('success');
-          addLiveUpdate(`✅ Live data loaded: ${currentReports.length} reports`, 'success');
-        } catch (apiError) {
-          console.log('Backend not available, falling back to demo data');
-          setUpdateStatus('error');
-          addLiveUpdate('⚠️ Backend connection failed - using demo data', 'error');
-          // Fallback to demo data if backend is not available
-          currentReports = getDemoReports();
-        }
-      } else {
-        // Demo mode - load from localStorage or use default demo data
-        const savedReports = localStorage.getItem('nudrrs_reports');
+      setUpdateStatus('updating');
+      // Try to fetch live data from backend
+      try {
+        const response = await axios.get('http://localhost:8000/api/sos_reports/sos_reports/');
+        const reportsData = response.data.results || response.data || [];
         
-        if (savedReports) {
-          currentReports = JSON.parse(savedReports);
-          addLiveUpdate(`Loaded ${currentReports.length} reports from local storage`, 'info');
-        } else {
-          currentReports = getDemoReports();
-          addLiveUpdate('Using default demo data', 'info');
-        }
-        setUpdateStatus('idle');
+        // Transform the data to ensure proper structure
+        currentReports = reportsData.map(report => ({
+          ...report,
+          disaster_type: report.disaster_type || report.properties?.disaster_type,
+          status: report.status || report.properties?.status,
+          priority: report.priority || report.properties?.priority,
+          address: report.address || report.properties?.address,
+          description: report.description || report.properties?.description,
+          user: report.user ? {
+            id: report.user.id,
+            first_name: report.user.first_name || 'Anonymous',
+            last_name: report.user.last_name || 'User',
+            username: report.user.username || 'anonymous'
+          } : { id: null, first_name: 'Anonymous', last_name: 'User', username: 'anonymous' },
+          ai_confidence: report.ai_confidence || 0.85
+        }));
+        
+        console.log('✅ Live data loaded from backend:', currentReports);
+        setUpdateStatus('success');
+        addLiveUpdate(`✅ Live data loaded: ${currentReports.length} reports`, 'success');
+      } catch (apiError) {
+        console.log('Backend not available, falling back to demo data');
+        setUpdateStatus('error');
+        addLiveUpdate('⚠️ Backend connection failed - using demo data', 'error');
+        // Fallback to demo data if backend is not available
+        currentReports = getDemoReports();
       }
 
       setReports(currentReports);
@@ -293,6 +315,48 @@ const Reports = () => {
     return colors[priority] || 'default';
   };
 
+  // Location autocomplete function
+  const handleLocationSearch = async (query) => {
+    if (query.length < 3) {
+      setLocationSuggestions([]);
+      setShowLocationSuggestions(false);
+      return;
+    }
+
+    setLocationLoading(true);
+    try {
+      // Using a free geocoding service (you can replace with your preferred service)
+      const response = await fetch(
+        `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=5&countrycodes=in`
+      );
+      const data = await response.json();
+      
+      const suggestions = data.map(item => ({
+        display_name: item.display_name,
+        lat: parseFloat(item.lat),
+        lon: parseFloat(item.lon),
+        address: item.display_name.split(',')[0] + ', ' + item.display_name.split(',')[1]
+      }));
+      
+      setLocationSuggestions(suggestions);
+      setShowLocationSuggestions(true);
+    } catch (error) {
+      console.error('Location search error:', error);
+      setLocationSuggestions([]);
+    } finally {
+      setLocationLoading(false);
+    }
+  };
+
+  const handleLocationSelect = (suggestion) => {
+    setNewReportForm({
+      ...newReportForm,
+      address: suggestion.display_name
+    });
+    setShowLocationSuggestions(false);
+    setLocationSuggestions([]);
+  };
+
   // Handler functions
   const handleNewReport = () => {
     setNewReportDialog(true);
@@ -304,6 +368,8 @@ const Reports = () => {
       countryCode: '+91',
       phone_number: ''
     });
+    setLocationSuggestions([]);
+    setShowLocationSuggestions(false);
   };
 
   const handleViewReport = (report) => {
@@ -337,75 +403,142 @@ const Reports = () => {
   };
 
   const submitNewReport = async () => {
+    // Get user's current location or use default coordinates
+    let latitude = 28.6139; // Default to Delhi coordinates
+    let longitude = 77.2090;
+    
+    if (navigator.geolocation) {
+      try {
+        const position = await new Promise((resolve, reject) => {
+          navigator.geolocation.getCurrentPosition(resolve, reject, {
+            timeout: 5000,
+            enableHighAccuracy: false
+          });
+        });
+        latitude = position.coords.latitude;
+        longitude = position.coords.longitude;
+      } catch (error) {
+        console.log('Could not get location, using default coordinates');
+      }
+    }
+
+    const currentUser = getCurrentUser();
     const newReport = {
       id: Date.now(), // Generate unique ID
-      user: { username: 'current_user', first_name: 'Current', last_name: 'User' },
+      user: currentUser,
       ...newReportForm,
       phone_number: `${newReportForm.countryCode}${newReportForm.phone_number}`,
+      latitude: latitude,
+      longitude: longitude,
       status: 'PENDING',
       created_at: new Date().toISOString(),
       ai_confidence: Math.random() * 0.3 + 0.7 // Random AI confidence between 0.7-1.0
     };
 
-    if (isLiveMode) {
-      // In live mode, try to send to backend first
-      try {
-        const response = await axios.post('http://localhost:8000/api/sos_reports/', newReport);
-        console.log('✅ Report sent to backend:', response.data);
-        // Refresh data from backend
-        await fetchReports();
-        setSnackbar({
-          open: true,
-          message: '✅ Emergency report sent to backend successfully!',
-          severity: 'success'
-        });
-        addLiveUpdate('✅ New report added to backend', 'success');
-      } catch (error) {
-        console.error('Backend error, saving locally:', error);
-        // Fallback to local storage
-        const updatedReports = [newReport, ...reports];
-        setReports(updatedReports);
-        localStorage.setItem('nudrrs_reports', JSON.stringify(updatedReports));
-        setSnackbar({
-          open: true,
-          message: '⚠️ Report saved locally (backend unavailable)',
-          severity: 'warning'
-        });
-        addLiveUpdate('⚠️ Report saved locally - backend unavailable', 'warning');
-      }
-    } else {
-      // Demo mode - save to local storage
+    // Try to send to backend first
+    try {
+      const backendReport = {
+        phone_number: newReport.phone_number,
+        latitude: newReport.latitude,
+        longitude: newReport.longitude,
+        address: newReport.address,
+        disaster_type: newReport.disaster_type,
+        description: newReport.description,
+        priority: newReport.priority || 'MEDIUM' // Include priority field
+      };
+      
+      const response = await axios.post('http://localhost:8000/api/sos_reports/', backendReport);
+      console.log('✅ Report sent to backend:', response.data);
+      // Refresh data from backend
+      await fetchReports();
+      setSnackbar({
+        open: true,
+        message: '✅ Emergency report sent to backend successfully!',
+        severity: 'success'
+      });
+      addLiveUpdate('✅ New report added to backend', 'success');
+    } catch (error) {
+      console.error('Backend error, saving locally:', error);
+      // Fallback to local storage
       const updatedReports = [newReport, ...reports];
       setReports(updatedReports);
       localStorage.setItem('nudrrs_reports', JSON.stringify(updatedReports));
       setSnackbar({
         open: true,
-        message: 'Emergency report created successfully!',
-        severity: 'success'
+        message: '⚠️ Report saved locally (backend unavailable)',
+        severity: 'warning'
       });
+      addLiveUpdate('⚠️ Report saved locally - backend unavailable', 'warning');
     }
     
     setNewReportDialog(false);
   };
 
-  const submitEditReport = () => {
-    const updatedReports = reports.map(report => 
-      report.id === selectedReport.id 
-        ? { ...report, ...newReportForm, phone_number: `${newReportForm.countryCode}${newReportForm.phone_number}` }
-        : report
-    );
-    
-    setReports(updatedReports);
-    
-    // Save to localStorage for persistence
-    localStorage.setItem('nudrrs_reports', JSON.stringify(updatedReports));
-    
-    setEditReportDialog(false);
-    setSnackbar({
-      open: true,
-      message: 'Report updated successfully!',
-      severity: 'success'
-    });
+  const submitEditReport = async () => {
+    try {
+      // Try to update via backend API first
+      try {
+        const updatedReportData = {
+          phone_number: `${newReportForm.countryCode}${newReportForm.phone_number}`,
+          latitude: selectedReport.latitude,
+          longitude: selectedReport.longitude,
+          address: newReportForm.address,
+          disaster_type: newReportForm.disaster_type,
+          description: newReportForm.description,
+          priority: newReportForm.priority
+        };
+
+        await axios.put(`http://localhost:8000/api/sos_reports/sos_reports/${selectedReport.id}/`, updatedReportData);
+        
+        // Update local state
+        const updatedReports = reports.map(report => 
+          report.id === selectedReport.id 
+            ? { ...report, ...newReportForm, phone_number: `${newReportForm.countryCode}${newReportForm.phone_number}` }
+            : report
+        );
+        
+        setReports(updatedReports);
+        
+        setEditReportDialog(false);
+        setSnackbar({
+          open: true,
+          message: 'Report updated successfully!',
+          severity: 'success'
+        });
+        
+        // Refresh the reports list to get updated data
+        fetchReports();
+        
+      } catch (apiError) {
+        console.log('Backend update failed, updating locally:', apiError.message);
+        
+        // Fallback to local update
+        const updatedReports = reports.map(report => 
+          report.id === selectedReport.id 
+            ? { ...report, ...newReportForm, phone_number: `${newReportForm.countryCode}${newReportForm.phone_number}` }
+            : report
+        );
+        
+        setReports(updatedReports);
+        
+        // Save to localStorage for persistence
+        localStorage.setItem('nudrrs_reports', JSON.stringify(updatedReports));
+        
+        setEditReportDialog(false);
+        setSnackbar({
+          open: true,
+          message: 'Report updated locally!',
+          severity: 'warning'
+        });
+      }
+    } catch (error) {
+      console.error('Error updating report:', error);
+      setSnackbar({
+        open: true,
+        message: 'Failed to update report',
+        severity: 'error'
+      });
+    }
   };
 
   const confirmDeleteReport = () => {
@@ -433,10 +566,10 @@ const Reports = () => {
         '100%': { opacity: 1 }
       }
     }}>
-      {/* Professional Header */}
+      {/* Compact Header */}
       <Paper sx={{ 
-        p: 4, 
-        mb: 4, 
+        p: 2, 
+        mb: 3, 
         background: 'white',
         borderRadius: 2,
         border: '1px solid #e2e8f0',
@@ -445,215 +578,80 @@ const Reports = () => {
         <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <Box sx={{ display: 'flex', alignItems: 'center' }}>
             <Box sx={{
-              width: 48,
-              height: 48,
+              width: 40,
+              height: 40,
               borderRadius: 2,
               background: '#fef2f2',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              mr: 3
+              mr: 2
             }}>
-              <Emergency sx={{ fontSize: 24, color: '#ef4444' }} />
+              <Emergency sx={{ fontSize: 20, color: '#ef4444' }} />
             </Box>
             <Box>
-              <Typography variant="h4" sx={{ 
-                fontWeight: 700, 
+              <Typography variant="h5" sx={{ 
+                fontWeight: 600, 
                 color: '#1a202c',
-                mb: 1,
-                fontSize: '1.75rem'
+                mb: 0.5,
+                fontSize: '1.25rem'
               }}>
-                Emergency Reports Command Center
+                Emergency Reports
               </Typography>
-              <Typography variant="subtitle1" sx={{ 
-                color: '#4a5568',
-                lineHeight: 1.4,
-                fontWeight: 500
-              }}>
-                Real-time disaster response management system
-              </Typography>
-              
-              {/* Live Update Status */}
-              {isLiveMode && (
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 1 }}>
-                  <Box sx={{ 
-                    width: 8, 
-                    height: 8, 
-                    borderRadius: '50%', 
-                    background: updateStatus === 'updating' ? '#f59e0b' : 
-                               updateStatus === 'success' ? '#10b981' : 
-                               updateStatus === 'error' ? '#ef4444' : '#6b7280',
-                    animation: updateStatus === 'updating' ? 'pulse 1.5s infinite' : 'none'
-                  }} />
-                  <Typography variant="caption" sx={{ 
-                    color: '#4a5568',
-                    fontWeight: 600
-                  }}>
-                    {updateStatus === 'updating' ? 'Updating...' :
-                     updateStatus === 'success' ? 'Connected' :
-                     updateStatus === 'error' ? 'Connection Error' : 'Idle'}
-                  </Typography>
-                  <Typography variant="caption" sx={{ color: '#6b7280' }}>
-                    • Last update: {lastUpdate.toLocaleTimeString()}
-                  </Typography>
-                </Box>
-              )}
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                <Box sx={{ 
+                  width: 6, 
+                  height: 6, 
+                  borderRadius: '50%', 
+                  background: updateStatus === 'updating' ? '#f59e0b' : 
+                             updateStatus === 'success' ? '#10b981' : 
+                             updateStatus === 'error' ? '#ef4444' : '#6b7280',
+                  animation: updateStatus === 'updating' ? 'pulse 1.5s infinite' : 'none'
+                }} />
+                <Typography variant="caption" sx={{ 
+                  color: '#6b7280',
+                  fontWeight: 500
+                }}>
+                  {updateStatus === 'updating' ? 'Updating...' :
+                   updateStatus === 'success' ? 'Live' :
+                   updateStatus === 'error' ? 'Offline' : 'Idle'} • {lastUpdate.toLocaleTimeString()}
+                </Typography>
+              </Box>
             </Box>
           </Box>
           
           <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
-            <Card sx={{ 
-              background: 'white', 
-              border: '1px solid #e2e8f0',
-              minWidth: 100,
-              textAlign: 'center'
-            }}>
-              <CardContent sx={{ p: 2, '&:last-child': { pb: 2 } }}>
-                <Typography variant="h5" sx={{ fontWeight: 'bold', color: '#1a202c' }}>
-                  {filteredReports.length}
-                </Typography>
-                <Typography variant="caption" sx={{ color: '#4a5568' }}>Total Reports</Typography>
-              </CardContent>
-            </Card>
-            
-            <Card sx={{ 
-              background: 'white', 
-              border: '1px solid #e2e8f0',
-              minWidth: 100,
-              textAlign: 'center'
-            }}>
-              <CardContent sx={{ p: 2, '&:last-child': { pb: 2 } }}>
-                <Typography variant="h5" sx={{ fontWeight: 'bold', color: '#ef4444' }}>
-                  {filteredReports.filter(r => r.priority === 'CRITICAL').length}
-                </Typography>
-                <Typography variant="caption" sx={{ color: '#4a5568' }}>Critical</Typography>
-              </CardContent>
-            </Card>
-            
-            {/* Live Mode Toggle */}
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-              <Typography variant="body2" sx={{ color: '#4a5568', fontWeight: 600 }}>
-                {isLiveMode ? 'LIVE MODE' : 'DEMO MODE'}
+            <Box sx={{ textAlign: 'center' }}>
+              <Typography variant="h6" sx={{ fontWeight: 'bold', color: '#1a202c' }}>
+                {filteredReports.length}
               </Typography>
-              <Button
-                variant="contained"
-                size="small"
-                onClick={() => {
-                  setIsLiveMode(!isLiveMode);
-                  // Refresh data when switching modes
-                  setTimeout(() => fetchReports(), 100);
-                }}
-                sx={{
-                  background: isLiveMode ? '#10b981' : '#f59e0b',
-                  color: 'white',
-                  fontWeight: 'bold',
-                  minWidth: 80,
-                  '&:hover': {
-                    background: isLiveMode ? '#059669' : '#d97706',
-                    transform: 'translateY(-1px)'
-                  }
-                }}
-              >
-                {isLiveMode ? '🟢 LIVE' : '🟡 DEMO'}
-              </Button>
+              <Typography variant="caption" sx={{ color: '#6b7280' }}>Total</Typography>
             </Box>
             
-            {/* User Profile Section */}
+            <Box sx={{ textAlign: 'center' }}>
+              <Typography variant="h6" sx={{ fontWeight: 'bold', color: '#ef4444' }}>
+                {filteredReports.filter(r => r.priority === 'CRITICAL').length}
+              </Typography>
+              <Typography variant="caption" sx={{ color: '#6b7280' }}>Critical</Typography>
+            </Box>
+            
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-              <Typography variant="body2" sx={{ color: '#4a5568', fontWeight: 600 }}>
-                Welcome, Admin
+              <Typography variant="body2" sx={{ color: '#6b7280', fontWeight: 500 }}>
+                {isAdmin ? 'Admin' : 'User'}
               </Typography>
               <Avatar sx={{ 
-                bgcolor: '#ef4444', 
-                width: 40, 
-                height: 40,
-                border: '2px solid #e2e8f0'
+                bgcolor: isAdmin ? '#ef4444' : '#6b7280', 
+                width: 32, 
+                height: 32,
+                fontSize: '0.875rem'
               }}>
-                A
+                {isAdmin ? 'A' : 'U'}
               </Avatar>
             </Box>
           </Box>
         </Box>
       </Paper>
 
-      {/* Live Updates Panel */}
-      {isLiveMode && (
-        <Paper sx={{ 
-          p: 2, 
-          mb: 3,
-          background: 'rgba(76, 175, 80, 0.1)',
-          backdropFilter: 'blur(10px)',
-          borderRadius: 3,
-          border: '1px solid rgba(76, 175, 80, 0.3)',
-          boxShadow: '0 4px 20px rgba(76, 175, 80, 0.2)'
-        }}>
-          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
-            <Typography variant="h6" sx={{ 
-              color: '#4caf50', 
-              fontWeight: 'bold',
-              display: 'flex',
-              alignItems: 'center',
-              gap: 1
-            }}>
-              🟢 Live Updates
-              <Box sx={{ 
-                width: 6, 
-                height: 6, 
-                borderRadius: '50%', 
-                background: '#4caf50',
-                animation: 'pulse 1.5s infinite'
-              }} />
-            </Typography>
-            <Typography variant="caption" sx={{ color: '#4caf50' }}>
-              Auto-refresh every 30 seconds
-            </Typography>
-          </Box>
-          
-          <Box sx={{ maxHeight: 120, overflowY: 'auto' }}>
-            {liveUpdates.length > 0 ? (
-              liveUpdates.map((update) => (
-                <Box
-                  key={update.id}
-                  sx={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 1,
-                    p: 1,
-                    mb: 1,
-                    background: update.isNew ? 'rgba(76, 175, 80, 0.2)' : 'transparent',
-                    borderRadius: 2,
-                    border: update.isNew ? '1px solid rgba(76, 175, 80, 0.4)' : 'none',
-                    transition: 'all 0.3s ease'
-                  }}
-                >
-                  <Box sx={{ 
-                    width: 6, 
-                    height: 6, 
-                    borderRadius: '50%', 
-                    background: update.type === 'success' ? '#4caf50' : 
-                               update.type === 'error' ? '#f44336' : 
-                               update.type === 'warning' ? '#ff9800' : '#2196f3'
-                  }} />
-                  <Typography variant="body2" sx={{ 
-                    color: '#4caf50',
-                    flexGrow: 1,
-                    fontWeight: update.isNew ? 'bold' : 'normal'
-                  }}>
-                    {update.message}
-                  </Typography>
-                  <Typography variant="caption" sx={{ color: '#4caf50', opacity: 0.8 }}>
-                    {update.timestamp.toLocaleTimeString()}
-                  </Typography>
-                </Box>
-              ))
-            ) : (
-              <Typography variant="body2" sx={{ color: '#4caf50', textAlign: 'center', py: 2 }}>
-                Waiting for updates...
-              </Typography>
-            )}
-          </Box>
-        </Paper>
-      )}
 
       {/* Professional Filters and Search */}
       <Paper sx={{ 
@@ -1148,49 +1146,54 @@ const Reports = () => {
                           </IconButton>
                         </Tooltip>
                         
-                        <Tooltip title="Edit Report" arrow>
-                          <IconButton 
-                            size="small"
-                            onClick={() => handleEditReport(report)}
-                            sx={{ 
-                              background: 'linear-gradient(45deg, #ff9800, #ffb74d)',
-                              color: 'white',
-                              width: 36,
-                              height: 36,
-                              boxShadow: '0 4px 12px rgba(255, 152, 0, 0.3)',
-                              '&:hover': { 
-                                background: 'linear-gradient(45deg, #ffb74d, #ff9800)',
-                                transform: 'scale(1.15) translateY(-2px)',
-                                boxShadow: '0 6px 20px rgba(255, 152, 0, 0.4)'
-                              },
-                              transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)'
-                            }}
-                          >
-                            <Edit fontSize="small" />
-                          </IconButton>
-                        </Tooltip>
+                        {/* Edit button - only visible to report creator or admin */}
+                        {(isAdmin || (report.user && report.user.id === getCurrentUser().id)) && (
+                          <Tooltip title="Edit Report" arrow>
+                            <IconButton 
+                              size="small"
+                              onClick={() => handleEditReport(report)}
+                              sx={{ 
+                                background: 'linear-gradient(45deg, #ff9800, #ffb74d)',
+                                color: 'white',
+                                width: 36,
+                                height: 36,
+                                boxShadow: '0 4px 12px rgba(255, 152, 0, 0.3)',
+                                '&:hover': { 
+                                  background: 'linear-gradient(45deg, #ffb74d, #ff9800)',
+                                  transform: 'scale(1.15) translateY(-2px)',
+                                  boxShadow: '0 6px 20px rgba(255, 152, 0, 0.4)'
+                                },
+                                transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)'
+                              }}
+                            >
+                              <Edit fontSize="small" />
+                            </IconButton>
+                          </Tooltip>
+                        )}
                         
-                        <Tooltip title="Delete Report" arrow>
-                          <IconButton 
-                            size="small"
-                            onClick={() => handleDeleteReport(report)}
-                            sx={{ 
-                              background: 'linear-gradient(45deg, #f44336, #ef5350)',
-                              color: 'white',
-                              width: 36,
-                              height: 36,
-                              boxShadow: '0 4px 12px rgba(244, 67, 54, 0.3)',
-                              '&:hover': { 
-                                background: 'linear-gradient(45deg, #ef5350, #f44336)',
-                                transform: 'scale(1.15) translateY(-2px)',
-                                boxShadow: '0 6px 20px rgba(244, 67, 54, 0.4)'
-                              },
-                              transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)'
-                            }}
-                          >
-                            <Delete fontSize="small" />
-                          </IconButton>
-                        </Tooltip>
+                        {isAdmin && (
+                          <Tooltip title="Delete Report (Admin Only)" arrow>
+                            <IconButton 
+                              size="small"
+                              onClick={() => handleDeleteReport(report)}
+                              sx={{ 
+                                background: 'linear-gradient(45deg, #f44336, #ef5350)',
+                                color: 'white',
+                                width: 36,
+                                height: 36,
+                                boxShadow: '0 4px 12px rgba(244, 67, 54, 0.3)',
+                                '&:hover': { 
+                                  background: 'linear-gradient(45deg, #ef5350, #f44336)',
+                                  transform: 'scale(1.15) translateY(-2px)',
+                                  boxShadow: '0 6px 20px rgba(244, 67, 54, 0.4)'
+                                },
+                                transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)'
+                              }}
+                            >
+                              <Delete fontSize="small" />
+                            </IconButton>
+                          </Tooltip>
+                        )}
                       </Box>
                       
                       <Chip
@@ -1232,544 +1235,335 @@ const Reports = () => {
         <Add />
       </Fab>
 
-      {/* Enhanced New Emergency Report Dialog */}
+      {/* Compact New Emergency Report Dialog */}
       <Dialog 
         open={newReportDialog} 
         onClose={() => setNewReportDialog(false)}
-        maxWidth="md"
+        maxWidth="sm"
         fullWidth
         PaperProps={{
           sx: {
-            borderRadius: 6,
-            background: 'rgba(255, 255, 255, 0.98)',
-            backdropFilter: 'blur(30px)',
-            border: '1px solid rgba(255, 255, 255, 0.3)',
-            boxShadow: '0 25px 80px rgba(0, 0, 0, 0.12)',
-            overflow: 'hidden'
+            borderRadius: 2,
+            background: 'white',
+            boxShadow: '0 4px 20px rgba(0, 0, 0, 0.1)'
           }
         }}
       >
         <DialogTitle sx={{ 
-          background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-          color: 'white',
+          background: '#f8fafc',
+          borderBottom: '1px solid #e2e8f0',
+          p: 2,
           display: 'flex',
           justifyContent: 'space-between',
-          alignItems: 'center',
-          p: 4,
-          position: 'relative',
-          '&::after': {
-            content: '""',
-            position: 'absolute',
-            bottom: 0,
-            left: 0,
-            right: 0,
-            height: '1px',
-            background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.3), transparent)'
-          }
+          alignItems: 'center'
         }}>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 3 }}>
-            <Box sx={{
-              width: 60,
-              height: 60,
-              borderRadius: '50%',
-              background: 'rgba(255,255,255,0.15)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              fontSize: '1.8rem',
-              boxShadow: '0 8px 24px rgba(0,0,0,0.1)',
-              border: '2px solid rgba(255,255,255,0.2)'
-            }}>
-              🚨
-            </Box>
-            <Box>
-              <Typography variant="h4" sx={{ 
-                fontWeight: 700,
-                letterSpacing: '-0.5px',
-                mb: 0.5
-              }}>
-                New Emergency Report
-              </Typography>
-              <Typography variant="body1" sx={{ 
-                opacity: 0.9,
-                fontWeight: 500,
-                fontSize: '1rem'
-              }}>
-                Report a new emergency situation
-              </Typography>
-            </Box>
-          </Box>
+          <Typography variant="h6" sx={{ fontWeight: 600, color: '#1a202c' }}>
+            🚨 New Emergency Report
+          </Typography>
           <IconButton 
             onClick={() => setNewReportDialog(false)} 
-            sx={{ 
-              color: 'white',
-              background: 'rgba(255,255,255,0.1)',
-              width: 48,
-              height: 48,
-              borderRadius: '50%',
-              border: '1px solid rgba(255,255,255,0.2)',
-              '&:hover': {
-                background: 'rgba(255,255,255,0.2)',
-                transform: 'scale(1.05)'
-              },
-              transition: 'all 0.2s ease'
-            }}
+            size="small"
+            sx={{ color: '#6b7280' }}
           >
-            <Close sx={{ fontSize: 24 }} />
+            <Close />
           </IconButton>
         </DialogTitle>
-        <DialogContent sx={{ 
-          p: 6, 
-          pt: 8,
-          background: 'linear-gradient(135deg, rgba(248, 250, 252, 0.98), rgba(255, 255, 255, 0.98))',
-          position: 'relative'
-        }}>
-          <Grid container spacing={3}>
-            <Grid item xs={12} md={6}>
-              <FormControl fullWidth>
-                <InputLabel sx={{ fontWeight: 600, color: '#1a202c' }}>Disaster Type</InputLabel>
+        <DialogContent sx={{ p: 3, pt: 4 }}>
+          <Grid container spacing={2}>
+            <Grid item xs={12} sm={6} sx={{ mt: 1 }}>
+              <FormControl fullWidth size="small">
+                <InputLabel>Disaster Type</InputLabel>
                 <Select
                   value={newReportForm.disaster_type}
                   label="Disaster Type"
                   onChange={(e) => setNewReportForm({...newReportForm, disaster_type: e.target.value})}
-                  sx={{
-                    borderRadius: 2,
-                    backgroundColor: 'rgba(255, 255, 255, 0.9)',
-                    minHeight: 56,
-                    '& .MuiOutlinedInput-notchedOutline': {
-                      borderWidth: 2,
-                      borderColor: '#e2e8f0'
-                    },
-                    '&:hover .MuiOutlinedInput-notchedOutline': {
-                      borderColor: '#1976d2'
-                    },
-                    '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
-                      borderColor: '#1976d2',
-                      borderWidth: 2
-                    },
-                    '& .MuiSelect-select': {
-                      color: '#1a202c',
-                      fontWeight: 500,
-                      padding: '16px 14px',
-                      display: 'flex',
-                      alignItems: 'center',
-                      minHeight: 'auto',
-                      lineHeight: 1.5
-                    },
-                    '& .MuiSelect-icon': {
-                      color: '#1976d2'
-                    }
+                  renderValue={(value) => {
+                    const options = {
+                      'FLOOD': '🌊 Flood',
+                      'FIRE': '🔥 Fire', 
+                      'EARTHQUAKE': '🌋 Earthquake',
+                      'LANDSLIDE': '🏔️ Landslide',
+                      'CYCLONE': '🌀 Cyclone',
+                      'MEDICAL': '🏥 Medical',
+                      'OTHER': '🚨 Other'
+                    };
+                    return options[value] || value;
                   }}
                 >
-                  <MenuItem value="FLOOD" sx={{ color: '#1a202c', fontWeight: 500, py: 1.5, minHeight: 'auto' }}>🌊 Flood</MenuItem>
-                  <MenuItem value="FIRE" sx={{ color: '#1a202c', fontWeight: 500, py: 1.5, minHeight: 'auto' }}>🔥 Fire</MenuItem>
-                  <MenuItem value="EARTHQUAKE" sx={{ color: '#1a202c', fontWeight: 500, py: 1.5, minHeight: 'auto' }}>🌋 Earthquake</MenuItem>
-                  <MenuItem value="LANDSLIDE" sx={{ color: '#1a202c', fontWeight: 500, py: 1.5, minHeight: 'auto' }}>🏔️ Landslide</MenuItem>
-                  <MenuItem value="CYCLONE" sx={{ color: '#1a202c', fontWeight: 500, py: 1.5, minHeight: 'auto' }}>🌀 Cyclone</MenuItem>
-                  <MenuItem value="MEDICAL" sx={{ color: '#1a202c', fontWeight: 500, py: 1.5, minHeight: 'auto' }}>🏥 Medical Emergency</MenuItem>
-                  <MenuItem value="OTHER" sx={{ color: '#1a202c', fontWeight: 500, py: 1.5, minHeight: 'auto' }}>🚨 Other</MenuItem>
+                  <MenuItem value="FLOOD">🌊 Flood</MenuItem>
+                  <MenuItem value="FIRE">🔥 Fire</MenuItem>
+                  <MenuItem value="EARTHQUAKE">🌋 Earthquake</MenuItem>
+                  <MenuItem value="LANDSLIDE">🏔️ Landslide</MenuItem>
+                  <MenuItem value="CYCLONE">🌀 Cyclone</MenuItem>
+                  <MenuItem value="MEDICAL">🏥 Medical</MenuItem>
+                  <MenuItem value="OTHER">🚨 Other</MenuItem>
                 </Select>
               </FormControl>
             </Grid>
-            <Grid item xs={12} md={6}>
-              <FormControl fullWidth>
-                <InputLabel sx={{ fontWeight: 600, color: '#1a202c' }}>Priority Level</InputLabel>
+            <Grid item xs={12} sm={6} sx={{ mt: 1 }}>
+              <FormControl fullWidth size="small">
+                <InputLabel>Priority</InputLabel>
                 <Select
                   value={newReportForm.priority}
-                  label="Priority Level"
+                  label="Priority"
                   onChange={(e) => setNewReportForm({...newReportForm, priority: e.target.value})}
-                  sx={{
-                    borderRadius: 2,
-                    backgroundColor: 'rgba(255, 255, 255, 0.9)',
-                    minHeight: 56,
-                    '& .MuiOutlinedInput-notchedOutline': {
-                      borderWidth: 2,
-                      borderColor: '#e2e8f0'
-                    },
-                    '&:hover .MuiOutlinedInput-notchedOutline': {
-                      borderColor: '#1976d2'
-                    },
-                    '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
-                      borderColor: '#1976d2',
-                      borderWidth: 2
-                    },
-                    '& .MuiSelect-select': {
-                      color: '#1a202c',
-                      fontWeight: 500,
-                      padding: '16px 14px',
-                      display: 'flex',
-                      alignItems: 'center',
-                      minHeight: 'auto',
-                      lineHeight: 1.5
-                    },
-                    '& .MuiSelect-icon': {
-                      color: '#1976d2'
-                    }
+                  renderValue={(value) => {
+                    const options = {
+                      'LOW': '🟢 Low',
+                      'MEDIUM': '🟡 Medium',
+                      'HIGH': '🔴 High',
+                      'CRITICAL': '🚨 Critical'
+                    };
+                    return options[value] || value;
                   }}
                 >
-                  <MenuItem value="LOW" sx={{ color: '#1a202c', fontWeight: 500, py: 1.5, minHeight: 'auto' }}>🟢 Low</MenuItem>
-                  <MenuItem value="MEDIUM" sx={{ color: '#1a202c', fontWeight: 500, py: 1.5, minHeight: 'auto' }}>🟡 Medium</MenuItem>
-                  <MenuItem value="HIGH" sx={{ color: '#1a202c', fontWeight: 500, py: 1.5, minHeight: 'auto' }}>🔴 High</MenuItem>
-                  <MenuItem value="CRITICAL" sx={{ color: '#1a202c', fontWeight: 500, py: 1.5, minHeight: 'auto' }}>🚨 Critical</MenuItem>
+                  <MenuItem value="LOW">🟢 Low</MenuItem>
+                  <MenuItem value="MEDIUM">🟡 Medium</MenuItem>
+                  <MenuItem value="HIGH">🔴 High</MenuItem>
+                  <MenuItem value="CRITICAL">🚨 Critical</MenuItem>
                 </Select>
               </FormControl>
             </Grid>
             <Grid item xs={12}>
-              <TextField
-                fullWidth
-                label="Location/Address"
-                value={newReportForm.address}
-                onChange={(e) => setNewReportForm({...newReportForm, address: e.target.value})}
-                placeholder="Enter the exact location of the emergency"
-                InputProps={{
-                  startAdornment: <LocationOn sx={{ mr: 1, color: '#1976d2' }} />
-                }}
-                sx={{
-                  '& .MuiOutlinedInput-root': {
-                    borderRadius: 2,
-                    backgroundColor: 'rgba(255, 255, 255, 0.9)',
-                    minHeight: 56,
-                    '& .MuiOutlinedInput-notchedOutline': {
-                      borderWidth: 2,
-                      borderColor: '#e2e8f0'
-                    },
-                    '&:hover .MuiOutlinedInput-notchedOutline': {
-                      borderColor: '#1976d2'
-                    },
-                    '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
-                      borderColor: '#1976d2',
-                      borderWidth: 2
-                    },
-                    '& .MuiOutlinedInput-input': {
-                      padding: '16px 14px',
-                      lineHeight: 1.5
-                    }
-                  },
-                  '& .MuiInputLabel-root': {
-                    color: '#1a202c',
-                    fontWeight: 600
-                  }
-                }}
-              />
+              <div className="location-autocomplete" style={{ position: 'relative' }}>
+                <TextField
+                  fullWidth
+                  size="small"
+                  label="Location"
+                  value={newReportForm.address}
+                  onChange={(e) => {
+                    setNewReportForm({...newReportForm, address: e.target.value});
+                    handleLocationSearch(e.target.value);
+                  }}
+                  placeholder="Start typing to search locations..."
+                  InputProps={{
+                    startAdornment: <LocationOn sx={{ mr: 1, color: '#6b7280', fontSize: 18 }} />
+                  }}
+                />
+                {showLocationSuggestions && locationSuggestions.length > 0 && (
+                  <div style={{
+                    position: 'absolute',
+                    top: '100%',
+                    left: 0,
+                    right: 0,
+                    backgroundColor: 'white',
+                    border: '1px solid #ddd',
+                    borderRadius: '4px',
+                    boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+                    zIndex: 1000,
+                    maxHeight: '200px',
+                    overflowY: 'auto'
+                  }}>
+                    {locationSuggestions.map((suggestion, index) => (
+                      <div
+                        key={index}
+                        onClick={() => handleLocationSelect(suggestion)}
+                        style={{
+                          padding: '12px 16px',
+                          cursor: 'pointer',
+                          borderBottom: index < locationSuggestions.length - 1 ? '1px solid #eee' : 'none',
+                          '&:hover': { backgroundColor: '#f5f5f5' }
+                        }}
+                        onMouseEnter={(e) => e.target.style.backgroundColor = '#f5f5f5'}
+                        onMouseLeave={(e) => e.target.style.backgroundColor = 'white'}
+                      >
+                        <div style={{ fontWeight: 'bold', color: '#333', fontSize: '14px' }}>
+                          📍 {suggestion.address}
+                        </div>
+                        <div style={{ color: '#666', fontSize: '12px', marginTop: '2px' }}>
+                          {suggestion.display_name}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {locationLoading && (
+                  <div style={{
+                    position: 'absolute',
+                    top: '100%',
+                    left: 0,
+                    right: 0,
+                    backgroundColor: 'white',
+                    border: '1px solid #ddd',
+                    borderRadius: '4px',
+                    padding: '12px 16px',
+                    textAlign: 'center',
+                    color: '#666'
+                  }}>
+                    🔍 Searching locations...
+                  </div>
+                )}
+              </div>
             </Grid>
             <Grid item xs={12}>
               <TextField
                 fullWidth
+                size="small"
                 label="Description"
                 multiline
-                rows={4}
+                rows={3}
                 value={newReportForm.description}
                 onChange={(e) => setNewReportForm({...newReportForm, description: e.target.value})}
-                placeholder="Describe the emergency situation in detail"
-                sx={{
-                  '& .MuiOutlinedInput-root': {
-                    borderRadius: 2,
-                    backgroundColor: 'rgba(255, 255, 255, 0.9)',
-                    minHeight: 56,
-                    '& .MuiOutlinedInput-notchedOutline': {
-                      borderWidth: 2,
-                      borderColor: '#e2e8f0'
-                    },
-                    '&:hover .MuiOutlinedInput-notchedOutline': {
-                      borderColor: '#1976d2'
-                    },
-                    '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
-                      borderColor: '#1976d2',
-                      borderWidth: 2
-                    },
-                    '& .MuiOutlinedInput-input': {
-                      padding: '16px 14px',
-                      lineHeight: 1.5
-                    }
-                  },
-                  '& .MuiInputLabel-root': {
-                    color: '#1a202c',
-                    fontWeight: 600
-                  }
-                }}
+                placeholder="Describe the emergency situation"
               />
             </Grid>
-            <Grid item xs={12} md={6}>
+            <Grid item xs={4}>
+              <FormControl fullWidth size="small">
+                <InputLabel>Country</InputLabel>
+                <Select
+                  value={newReportForm.countryCode}
+                  label="Country"
+                  onChange={(e) => setNewReportForm({...newReportForm, countryCode: e.target.value})}
+                  renderValue={(value) => {
+                    const country = countryCodes.find(c => c.code === value);
+                    return country ? country.display : value;
+                  }}
+                >
+                  {countryCodes.map((country) => (
+                    <MenuItem key={country.code} value={country.code}>
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                        <span>{country.flag}</span>
+                        <span>{country.display}</span>
+                      </Box>
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+            </Grid>
+            <Grid item xs={8}>
               <TextField
                 fullWidth
+                size="small"
                 label="Phone Number"
                 value={newReportForm.phone_number}
                 onChange={(e) => setNewReportForm({...newReportForm, phone_number: e.target.value})}
                 placeholder="9876543210"
-                inputProps={{
-                  maxLength: 10,
-                  pattern: "^[0-9]{10}$"
-                }}
-                helperText="Enter 10-digit phone number"
+                inputProps={{ maxLength: 10 }}
                 InputProps={{
-                  startAdornment: <Phone sx={{ mr: 1, color: '#1976d2' }} />
-                }}
-                sx={{
-                  '& .MuiOutlinedInput-root': {
-                    borderRadius: 2,
-                    backgroundColor: 'rgba(255, 255, 255, 0.9)',
-                    minHeight: 56,
-                    '& .MuiOutlinedInput-notchedOutline': {
-                      borderWidth: 2,
-                      borderColor: '#e2e8f0'
-                    },
-                    '&:hover .MuiOutlinedInput-notchedOutline': {
-                      borderColor: '#1976d2'
-                    },
-                    '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
-                      borderColor: '#1976d2',
-                      borderWidth: 2
-                    },
-                    '& .MuiOutlinedInput-input': {
-                      padding: '16px 14px',
-                      lineHeight: 1.5
-                    }
-                  },
-                  '& .MuiInputLabel-root': {
-                    color: '#1a202c',
-                    fontWeight: 600
-                  }
+                  startAdornment: <Phone sx={{ mr: 1, color: '#6b7280', fontSize: 18 }} />
                 }}
               />
             </Grid>
           </Grid>
         </DialogContent>
-        <DialogActions sx={{ p: 4, gap: 2 }}>
+        <DialogActions sx={{ p: 2, gap: 1 }}>
           <Button 
             onClick={() => setNewReportDialog(false)} 
             variant="outlined"
-            size="large"
-            sx={{
-              borderRadius: 2,
-              borderWidth: 2,
-              fontWeight: 'bold',
-              px: 4
-            }}
+            size="small"
           >
             Cancel
           </Button>
           <Button 
             onClick={submitNewReport}
             variant="contained"
-            size="large"
+            size="small"
             disabled={!newReportForm.disaster_type || !newReportForm.description || !newReportForm.address}
             sx={{
-              background: 'linear-gradient(135deg, #dc004e 0%, #ad1457 100%)',
-              borderRadius: 2,
-              fontWeight: 'bold',
-              px: 4,
-              '&:hover': {
-                background: 'linear-gradient(135deg, #ad1457 0%, #dc004e 100%)',
-                transform: 'translateY(-2px)',
-                boxShadow: '0 8px 25px rgba(220, 0, 78, 0.3)'
-              },
-              '&:disabled': {
-                background: 'rgba(0,0,0,0.12)',
-                color: 'rgba(0,0,0,0.26)'
-              }
+              background: '#ef4444',
+              '&:hover': { background: '#dc2626' }
             }}
           >
-            Submit Emergency Report
+            Submit Report
           </Button>
         </DialogActions>
       </Dialog>
 
-      {/* Enhanced View Report Dialog */}
+      {/* Compact View Report Dialog */}
       <Dialog 
         open={viewReportDialog} 
         onClose={() => setViewReportDialog(false)}
-        maxWidth="md"
+        maxWidth="sm"
         fullWidth
         PaperProps={{
           sx: {
-            borderRadius: 4,
-            boxShadow: '0 24px 60px rgba(0,0,0,0.2)',
-            background: 'linear-gradient(135deg, rgba(255,255,255,0.95), rgba(248,250,252,0.95))',
-            backdropFilter: 'blur(20px)',
-            border: '1px solid rgba(255,255,255,0.2)'
+            borderRadius: 2,
+            background: 'white',
+            boxShadow: '0 4px 20px rgba(0, 0, 0, 0.1)'
           }
         }}
       >
         <DialogTitle sx={{ 
-          background: 'linear-gradient(135deg, #1976d2 0%, #1565c0 100%)',
-          color: 'white',
+          background: '#f8fafc',
+          borderBottom: '1px solid #e2e8f0',
+          p: 2,
           display: 'flex',
           justifyContent: 'space-between',
-          alignItems: 'center',
-          p: 3,
-          borderRadius: '16px 16px 0 0'
+          alignItems: 'center'
         }}>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-            <Box sx={{
-              width: 48,
-              height: 48,
-              borderRadius: '50%',
-              background: 'rgba(255,255,255,0.2)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              fontSize: '1.5rem'
-            }}>
-              📋
-            </Box>
-            <Box>
-              <Typography variant="h5" sx={{ fontWeight: 'bold' }}>
-                Emergency Report Details
-              </Typography>
-              <Typography variant="body2" sx={{ opacity: 0.9 }}>
-                View report information
-              </Typography>
-            </Box>
-          </Box>
+          <Typography variant="h6" sx={{ fontWeight: 600, color: '#1a202c' }}>
+            📋 Report Details
+          </Typography>
           <IconButton 
             onClick={() => setViewReportDialog(false)} 
-            sx={{ 
-              color: 'white',
-              background: 'rgba(255,255,255,0.1)',
-              '&:hover': {
-                background: 'rgba(255,255,255,0.2)'
-              }
-            }}
+            size="small"
+            sx={{ color: '#6b7280' }}
           >
             <Close />
           </IconButton>
         </DialogTitle>
-        <DialogContent sx={{ p: 4, background: 'rgba(248, 250, 252, 0.95)' }}>
+        <DialogContent sx={{ p: 3 }}>
           {selectedReport && (
-            <Grid container spacing={3}>
-              <Grid item xs={12} md={6}>
-                <Box sx={{ 
-                  p: 3, 
-                  background: 'rgba(255, 255, 255, 0.8)', 
-                  borderRadius: 3,
-                  border: '1px solid rgba(0,0,0,0.05)',
-                  boxShadow: '0 4px 20px rgba(0,0,0,0.08)'
-                }}>
-                  <Typography variant="h6" gutterBottom sx={{ fontWeight: 'bold', color: '#1a202c' }}>Report ID</Typography>
-                  <Typography variant="body1" sx={{ mb: 3, color: '#4a5568', fontWeight: 500 }}>#{selectedReport.id}</Typography>
-                  
-                  <Typography variant="h6" gutterBottom sx={{ fontWeight: 'bold', color: '#1a202c' }}>Disaster Type</Typography>
-                  <Chip 
-                    label={selectedReport.disaster_type} 
-                    sx={{ 
-                      mb: 3,
-                      background: 'linear-gradient(135deg, #1976d2, #1565c0)',
-                      color: 'white',
-                      fontWeight: 'bold',
-                      boxShadow: '0 4px 12px rgba(25, 118, 210, 0.3)'
-                    }} 
-                  />
-                  
-                  <Typography variant="h6" gutterBottom sx={{ fontWeight: 'bold', color: '#1a202c' }}>Priority</Typography>
-                  <Chip 
-                    label={selectedReport.priority} 
-                    sx={{ 
-                      mb: 3,
-                      background: getPriorityColor(selectedReport.priority) === '#f44336' ? 'linear-gradient(135deg, #f44336, #d32f2f)' :
-                                 getPriorityColor(selectedReport.priority) === '#ff9800' ? 'linear-gradient(135deg, #ff9800, #f57c00)' :
-                                 'linear-gradient(135deg, #4caf50, #388e3c)',
-                      color: 'white',
-                      fontWeight: 'bold',
-                      boxShadow: '0 4px 12px rgba(0,0,0,0.2)'
-                    }}
-                  />
-                  
-                  <Typography variant="h6" gutterBottom sx={{ fontWeight: 'bold', color: '#1a202c' }}>Status</Typography>
-                  <Chip 
-                    label={selectedReport.status} 
-                    sx={{ 
-                      mb: 2,
-                      background: getStatusColor(selectedReport.status) === '#ff9800' ? 'linear-gradient(135deg, #ff9800, #f57c00)' :
-                                 getStatusColor(selectedReport.status) === '#2196f3' ? 'linear-gradient(135deg, #2196f3, #1976d2)' :
-                                 'linear-gradient(135deg, #4caf50, #388e3c)',
-                      color: 'white',
-                      fontWeight: 'bold',
-                      boxShadow: '0 4px 12px rgba(0,0,0,0.2)'
-                    }}
-                  />
-                </Box>
-              </Grid>
-              <Grid item xs={12} md={6}>
-                <Box sx={{ 
-                  p: 3, 
-                  background: 'rgba(255, 255, 255, 0.8)', 
-                  borderRadius: 3,
-                  border: '1px solid rgba(0,0,0,0.05)',
-                  boxShadow: '0 4px 20px rgba(0,0,0,0.08)'
-                }}>
-                  <Typography variant="h6" gutterBottom sx={{ fontWeight: 'bold', color: '#1a202c' }}>Location</Typography>
-                  <Typography variant="body1" sx={{ mb: 3, color: '#4a5568', fontWeight: 500, display: 'flex', alignItems: 'center' }}>
-                    <LocationOn sx={{ mr: 1, color: '#1976d2' }} />
-                    {selectedReport.address}
-                  </Typography>
-                  
-                  <Typography variant="h6" gutterBottom sx={{ fontWeight: 'bold', color: '#1a202c' }}>Reporter</Typography>
-                  <Typography variant="body1" sx={{ mb: 3, color: '#4a5568', fontWeight: 500 }}>
-                    {selectedReport.user.first_name} {selectedReport.user.last_name}
-                  </Typography>
-                  
-                  <Typography variant="h6" gutterBottom sx={{ fontWeight: 'bold', color: '#1a202c' }}>Contact</Typography>
-                  <Typography variant="body1" sx={{ mb: 3, color: '#4a5568', fontWeight: 500, display: 'flex', alignItems: 'center' }}>
-                    <Phone sx={{ mr: 1, color: '#1976d2' }} />
-                    {selectedReport.phone_number}
-                  </Typography>
-                  
-                  <Typography variant="h6" gutterBottom sx={{ fontWeight: 'bold', color: '#1a202c' }}>AI Confidence</Typography>
-                  <Typography variant="body1" sx={{ mb: 2, color: '#4a5568', fontWeight: 500 }}>
-                    {(selectedReport.ai_confidence * 100).toFixed(0)}%
-                  </Typography>
-                </Box>
-              </Grid>
-              <Grid item xs={12}>
-                <Box sx={{ 
-                  p: 3, 
-                  background: 'rgba(255, 255, 255, 0.8)', 
-                  borderRadius: 3,
-                  border: '1px solid rgba(0,0,0,0.05)',
-                  boxShadow: '0 4px 20px rgba(0,0,0,0.08)'
-                }}>
-                  <Typography variant="h6" gutterBottom sx={{ fontWeight: 'bold', color: '#1a202c' }}>Description</Typography>
-                  <Typography variant="body1" sx={{ 
-                    p: 3, 
-                    background: 'rgba(248, 250, 252, 0.8)', 
-                    borderRadius: 2,
-                    fontStyle: 'italic',
-                    color: '#4a5568',
-                    lineHeight: 1.6,
-                    border: '1px solid rgba(0,0,0,0.05)'
-                  }}>
-                    "{selectedReport.description}"
-                  </Typography>
-                </Box>
-              </Grid>
-              <Grid item xs={12}>
-                <Box sx={{ 
-                  p: 3, 
-                  background: 'rgba(255, 255, 255, 0.8)', 
-                  borderRadius: 3,
-                  border: '1px solid rgba(0,0,0,0.05)',
-                  boxShadow: '0 4px 20px rgba(0,0,0,0.08)'
-                }}>
-                  <Typography variant="h6" gutterBottom sx={{ fontWeight: 'bold', color: '#1a202c' }}>Timestamp</Typography>
-                  <Typography variant="body1" sx={{ color: '#4a5568', fontWeight: 500 }}>
-                    {new Date(selectedReport.created_at).toLocaleString()}
-                  </Typography>
-                </Box>
-              </Grid>
-            </Grid>
+            <Box>
+              <Box sx={{ display: 'flex', gap: 1, mb: 2 }}>
+                <Chip 
+                  label={selectedReport.disaster_type} 
+                  size="small"
+                  color="primary"
+                />
+                <Chip 
+                  label={selectedReport.priority} 
+                  size="small"
+                  color={getPriorityColor(selectedReport.priority)}
+                />
+                <Chip 
+                  label={selectedReport.status} 
+                  size="small"
+                  color={getStatusColor(selectedReport.status)}
+                />
+              </Box>
+              
+              <Typography variant="body2" sx={{ mb: 1, color: '#6b7280' }}>
+                <strong>Location:</strong> {selectedReport.address}
+              </Typography>
+              
+              <Typography variant="body2" sx={{ mb: 1, color: '#6b7280' }}>
+                <strong>Reporter:</strong> {selectedReport.user.first_name} {selectedReport.user.last_name}
+              </Typography>
+              
+              <Typography variant="body2" sx={{ mb: 1, color: '#6b7280' }}>
+                <strong>Contact:</strong> {selectedReport.phone_number}
+              </Typography>
+              
+              <Typography variant="body2" sx={{ mb: 2, color: '#6b7280' }}>
+                <strong>AI Confidence:</strong> {(selectedReport.ai_confidence * 100).toFixed(0)}%
+              </Typography>
+              
+              <Typography variant="body2" sx={{ mb: 1, color: '#6b7280' }}>
+                <strong>Description:</strong>
+              </Typography>
+              <Typography variant="body2" sx={{ 
+                p: 2, 
+                background: '#f8fafc', 
+                borderRadius: 1,
+                fontStyle: 'italic',
+                color: '#4a5568',
+                border: '1px solid #e2e8f0'
+              }}>
+                "{selectedReport.description}"
+              </Typography>
+              
+              <Typography variant="caption" sx={{ color: '#9ca3af', mt: 2, display: 'block' }}>
+                Reported: {new Date(selectedReport.created_at).toLocaleString()}
+              </Typography>
+            </Box>
           )}
         </DialogContent>
-        <DialogActions sx={{ p: 4, gap: 2 }}>
+        <DialogActions sx={{ p: 2, gap: 1 }}>
           <Button 
             onClick={() => setViewReportDialog(false)} 
             variant="outlined"
-            size="large"
-            sx={{
-              borderRadius: 2,
-              borderWidth: 2,
-              fontWeight: 'bold',
-              px: 4
-            }}
+            size="small"
           >
             Close
           </Button>
@@ -1779,328 +1573,244 @@ const Reports = () => {
               handleEditReport(selectedReport);
             }}
             variant="contained"
-            size="large"
+            size="small"
             sx={{
-              background: 'linear-gradient(135deg, #ff9800 0%, #f57c00 100%)',
-              borderRadius: 2,
-              fontWeight: 'bold',
-              px: 4,
-              '&:hover': {
-                background: 'linear-gradient(135deg, #f57c00 0%, #ff9800 100%)',
-                transform: 'translateY(-2px)',
-                boxShadow: '0 8px 25px rgba(255, 152, 0, 0.3)'
-              }
+              background: '#f59e0b',
+              '&:hover': { background: '#d97706' }
             }}
           >
-            Edit Report
+            Edit
           </Button>
         </DialogActions>
       </Dialog>
 
-      {/* Enhanced Edit Report Dialog */}
+      {/* Compact Edit Report Dialog */}
       <Dialog 
         open={editReportDialog} 
         onClose={() => setEditReportDialog(false)}
-        maxWidth="md"
+        maxWidth="sm"
         fullWidth
         PaperProps={{
           sx: {
-            borderRadius: 4,
-            boxShadow: '0 24px 60px rgba(0,0,0,0.2)',
-            background: 'linear-gradient(135deg, rgba(255,255,255,0.95), rgba(248,250,252,0.95))',
-            backdropFilter: 'blur(20px)',
-            border: '1px solid rgba(255,255,255,0.2)'
+            borderRadius: 2,
+            background: 'white',
+            boxShadow: '0 4px 20px rgba(0, 0, 0, 0.1)'
           }
         }}
       >
         <DialogTitle sx={{ 
-          background: 'linear-gradient(135deg, #ff9800 0%, #f57c00 100%)',
-          color: 'white',
+          background: '#f8fafc',
+          borderBottom: '1px solid #e2e8f0',
+          p: 2,
           display: 'flex',
           justifyContent: 'space-between',
-          alignItems: 'center',
-          p: 3,
-          borderRadius: '16px 16px 0 0'
+          alignItems: 'center'
         }}>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-            <Box sx={{
-              width: 48,
-              height: 48,
-              borderRadius: '50%',
-              background: 'rgba(255,255,255,0.2)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              fontSize: '1.5rem'
-            }}>
-              ✏️
-            </Box>
-            <Box>
-              <Typography variant="h5" sx={{ fontWeight: 'bold' }}>
-                Edit Emergency Report
-              </Typography>
-              <Typography variant="body2" sx={{ opacity: 0.9 }}>
-                Update report information
-              </Typography>
-            </Box>
-          </Box>
+          <Typography variant="h6" sx={{ fontWeight: 600, color: '#1a202c' }}>
+            ✏️ Edit Report
+          </Typography>
           <IconButton 
             onClick={() => setEditReportDialog(false)} 
-            sx={{ 
-              color: 'white',
-              background: 'rgba(255,255,255,0.1)',
-              '&:hover': {
-                background: 'rgba(255,255,255,0.2)'
-              }
-            }}
+            size="small"
+            sx={{ color: '#6b7280' }}
           >
             <Close />
           </IconButton>
         </DialogTitle>
-        <DialogContent sx={{ p: 4, background: 'rgba(248, 250, 252, 0.95)' }}>
-          <Grid container spacing={3}>
-            <Grid item xs={12} md={6}>
-              <FormControl fullWidth>
-                <InputLabel sx={{ fontWeight: 600, color: '#1a202c' }}>Disaster Type</InputLabel>
+        <DialogContent sx={{ p: 3, pt: 4 }}>
+          <Grid container spacing={2}>
+            <Grid item xs={12} sm={6} sx={{ mt: 1 }}>
+              <FormControl fullWidth size="small">
+                <InputLabel>Disaster Type</InputLabel>
                 <Select
                   value={newReportForm.disaster_type}
                   label="Disaster Type"
                   onChange={(e) => setNewReportForm({...newReportForm, disaster_type: e.target.value})}
-                  sx={{
-                    borderRadius: 2,
-                    backgroundColor: 'rgba(255, 255, 255, 0.9)',
-                    minHeight: 56,
-                    '& .MuiOutlinedInput-notchedOutline': {
-                      borderWidth: 2,
-                      borderColor: '#e2e8f0'
-                    },
-                    '&:hover .MuiOutlinedInput-notchedOutline': {
-                      borderColor: '#1976d2'
-                    },
-                    '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
-                      borderColor: '#1976d2',
-                      borderWidth: 2
-                    },
-                    '& .MuiSelect-select': {
-                      color: '#1a202c',
-                      fontWeight: 500,
-                      padding: '16px 14px',
-                      display: 'flex',
-                      alignItems: 'center',
-                      minHeight: 'auto',
-                      lineHeight: 1.5
-                    },
-                    '& .MuiSelect-icon': {
-                      color: '#1976d2'
-                    }
+                  renderValue={(value) => {
+                    const options = {
+                      'FLOOD': '🌊 Flood',
+                      'FIRE': '🔥 Fire', 
+                      'EARTHQUAKE': '🌋 Earthquake',
+                      'LANDSLIDE': '🏔️ Landslide',
+                      'CYCLONE': '🌀 Cyclone',
+                      'MEDICAL': '🏥 Medical',
+                      'OTHER': '🚨 Other'
+                    };
+                    return options[value] || value;
                   }}
                 >
-                  <MenuItem value="FLOOD" sx={{ color: '#1a202c', fontWeight: 500, py: 1.5, minHeight: 'auto' }}>🌊 Flood</MenuItem>
-                  <MenuItem value="FIRE" sx={{ color: '#1a202c', fontWeight: 500, py: 1.5, minHeight: 'auto' }}>🔥 Fire</MenuItem>
-                  <MenuItem value="EARTHQUAKE" sx={{ color: '#1a202c', fontWeight: 500, py: 1.5, minHeight: 'auto' }}>🌋 Earthquake</MenuItem>
-                  <MenuItem value="LANDSLIDE" sx={{ color: '#1a202c', fontWeight: 500, py: 1.5, minHeight: 'auto' }}>🏔️ Landslide</MenuItem>
-                  <MenuItem value="CYCLONE" sx={{ color: '#1a202c', fontWeight: 500, py: 1.5, minHeight: 'auto' }}>🌀 Cyclone</MenuItem>
-                  <MenuItem value="MEDICAL" sx={{ color: '#1a202c', fontWeight: 500, py: 1.5, minHeight: 'auto' }}>🏥 Medical Emergency</MenuItem>
-                  <MenuItem value="OTHER" sx={{ color: '#1a202c', fontWeight: 500, py: 1.5, minHeight: 'auto' }}>🚨 Other</MenuItem>
+                  <MenuItem value="FLOOD">🌊 Flood</MenuItem>
+                  <MenuItem value="FIRE">🔥 Fire</MenuItem>
+                  <MenuItem value="EARTHQUAKE">🌋 Earthquake</MenuItem>
+                  <MenuItem value="LANDSLIDE">🏔️ Landslide</MenuItem>
+                  <MenuItem value="CYCLONE">🌀 Cyclone</MenuItem>
+                  <MenuItem value="MEDICAL">🏥 Medical</MenuItem>
+                  <MenuItem value="OTHER">🚨 Other</MenuItem>
                 </Select>
               </FormControl>
             </Grid>
-            <Grid item xs={12} md={6}>
-              <FormControl fullWidth>
-                <InputLabel sx={{ fontWeight: 600, color: '#1a202c' }}>Priority Level</InputLabel>
+            <Grid item xs={12} sm={6} sx={{ mt: 1 }}>
+              <FormControl fullWidth size="small">
+                <InputLabel>Priority</InputLabel>
                 <Select
                   value={newReportForm.priority}
-                  label="Priority Level"
+                  label="Priority"
                   onChange={(e) => setNewReportForm({...newReportForm, priority: e.target.value})}
-                  sx={{
-                    borderRadius: 2,
-                    backgroundColor: 'rgba(255, 255, 255, 0.9)',
-                    minHeight: 56,
-                    '& .MuiOutlinedInput-notchedOutline': {
-                      borderWidth: 2,
-                      borderColor: '#e2e8f0'
-                    },
-                    '&:hover .MuiOutlinedInput-notchedOutline': {
-                      borderColor: '#1976d2'
-                    },
-                    '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
-                      borderColor: '#1976d2',
-                      borderWidth: 2
-                    },
-                    '& .MuiSelect-select': {
-                      color: '#1a202c',
-                      fontWeight: 500,
-                      padding: '16px 14px',
-                      display: 'flex',
-                      alignItems: 'center',
-                      minHeight: 'auto',
-                      lineHeight: 1.5
-                    },
-                    '& .MuiSelect-icon': {
-                      color: '#1976d2'
-                    }
+                  renderValue={(value) => {
+                    const options = {
+                      'LOW': '🟢 Low',
+                      'MEDIUM': '🟡 Medium',
+                      'HIGH': '🔴 High',
+                      'CRITICAL': '🚨 Critical'
+                    };
+                    return options[value] || value;
                   }}
                 >
-                  <MenuItem value="LOW" sx={{ color: '#1a202c', fontWeight: 500, py: 1.5, minHeight: 'auto' }}>🟢 Low</MenuItem>
-                  <MenuItem value="MEDIUM" sx={{ color: '#1a202c', fontWeight: 500, py: 1.5, minHeight: 'auto' }}>🟡 Medium</MenuItem>
-                  <MenuItem value="HIGH" sx={{ color: '#1a202c', fontWeight: 500, py: 1.5, minHeight: 'auto' }}>🔴 High</MenuItem>
-                  <MenuItem value="CRITICAL" sx={{ color: '#1a202c', fontWeight: 500, py: 1.5, minHeight: 'auto' }}>🚨 Critical</MenuItem>
+                  <MenuItem value="LOW">🟢 Low</MenuItem>
+                  <MenuItem value="MEDIUM">🟡 Medium</MenuItem>
+                  <MenuItem value="HIGH">🔴 High</MenuItem>
+                  <MenuItem value="CRITICAL">🚨 Critical</MenuItem>
                 </Select>
               </FormControl>
             </Grid>
             <Grid item xs={12}>
-              <TextField
-                fullWidth
-                label="Location/Address"
-                value={newReportForm.address}
-                onChange={(e) => setNewReportForm({...newReportForm, address: e.target.value})}
-                placeholder="Enter the exact location of the emergency"
-                InputProps={{
-                  startAdornment: <LocationOn sx={{ mr: 1, color: '#1976d2' }} />
-                }}
-                sx={{
-                  '& .MuiOutlinedInput-root': {
-                    borderRadius: 2,
-                    backgroundColor: 'rgba(255, 255, 255, 0.9)',
-                    minHeight: 56,
-                    '& .MuiOutlinedInput-notchedOutline': {
-                      borderWidth: 2,
-                      borderColor: '#e2e8f0'
-                    },
-                    '&:hover .MuiOutlinedInput-notchedOutline': {
-                      borderColor: '#1976d2'
-                    },
-                    '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
-                      borderColor: '#1976d2',
-                      borderWidth: 2
-                    },
-                    '& .MuiOutlinedInput-input': {
-                      padding: '16px 14px',
-                      lineHeight: 1.5
-                    }
-                  },
-                  '& .MuiInputLabel-root': {
-                    color: '#1a202c',
-                    fontWeight: 600
-                  }
-                }}
-              />
+              <div className="location-autocomplete" style={{ position: 'relative' }}>
+                <TextField
+                  fullWidth
+                  size="small"
+                  label="Location"
+                  value={newReportForm.address}
+                  onChange={(e) => {
+                    setNewReportForm({...newReportForm, address: e.target.value});
+                    handleLocationSearch(e.target.value);
+                  }}
+                  placeholder="Start typing to search locations..."
+                  InputProps={{
+                    startAdornment: <LocationOn sx={{ mr: 1, color: '#6b7280', fontSize: 18 }} />
+                  }}
+                />
+                {showLocationSuggestions && locationSuggestions.length > 0 && (
+                  <div style={{
+                    position: 'absolute',
+                    top: '100%',
+                    left: 0,
+                    right: 0,
+                    backgroundColor: 'white',
+                    border: '1px solid #ddd',
+                    borderRadius: '4px',
+                    boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+                    zIndex: 1000,
+                    maxHeight: '200px',
+                    overflowY: 'auto'
+                  }}>
+                    {locationSuggestions.map((suggestion, index) => (
+                      <div
+                        key={index}
+                        onClick={() => handleLocationSelect(suggestion)}
+                        style={{
+                          padding: '12px 16px',
+                          cursor: 'pointer',
+                          borderBottom: index < locationSuggestions.length - 1 ? '1px solid #eee' : 'none',
+                          '&:hover': { backgroundColor: '#f5f5f5' }
+                        }}
+                        onMouseEnter={(e) => e.target.style.backgroundColor = '#f5f5f5'}
+                        onMouseLeave={(e) => e.target.style.backgroundColor = 'white'}
+                      >
+                        <div style={{ fontWeight: 'bold', color: '#333', fontSize: '14px' }}>
+                          📍 {suggestion.address}
+                        </div>
+                        <div style={{ color: '#666', fontSize: '12px', marginTop: '2px' }}>
+                          {suggestion.display_name}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {locationLoading && (
+                  <div style={{
+                    position: 'absolute',
+                    top: '100%',
+                    left: 0,
+                    right: 0,
+                    backgroundColor: 'white',
+                    border: '1px solid #ddd',
+                    borderRadius: '4px',
+                    padding: '12px 16px',
+                    textAlign: 'center',
+                    color: '#666'
+                  }}>
+                    🔍 Searching locations...
+                  </div>
+                )}
+              </div>
             </Grid>
             <Grid item xs={12}>
               <TextField
                 fullWidth
+                size="small"
                 label="Description"
                 multiline
-                rows={4}
+                rows={3}
                 value={newReportForm.description}
                 onChange={(e) => setNewReportForm({...newReportForm, description: e.target.value})}
-                placeholder="Describe the emergency situation in detail"
-                sx={{
-                  '& .MuiOutlinedInput-root': {
-                    borderRadius: 2,
-                    backgroundColor: 'rgba(255, 255, 255, 0.9)',
-                    minHeight: 56,
-                    '& .MuiOutlinedInput-notchedOutline': {
-                      borderWidth: 2,
-                      borderColor: '#e2e8f0'
-                    },
-                    '&:hover .MuiOutlinedInput-notchedOutline': {
-                      borderColor: '#1976d2'
-                    },
-                    '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
-                      borderColor: '#1976d2',
-                      borderWidth: 2
-                    },
-                    '& .MuiOutlinedInput-input': {
-                      padding: '16px 14px',
-                      lineHeight: 1.5
-                    }
-                  },
-                  '& .MuiInputLabel-root': {
-                    color: '#1a202c',
-                    fontWeight: 600
-                  }
-                }}
+                placeholder="Describe the emergency situation"
               />
             </Grid>
-            <Grid item xs={12} md={6}>
+            <Grid item xs={4}>
+              <FormControl fullWidth size="small">
+                <InputLabel>Country</InputLabel>
+                <Select
+                  value={newReportForm.countryCode}
+                  label="Country"
+                  onChange={(e) => setNewReportForm({...newReportForm, countryCode: e.target.value})}
+                  renderValue={(value) => {
+                    const country = countryCodes.find(c => c.code === value);
+                    return country ? country.display : value;
+                  }}
+                >
+                  {countryCodes.map((country) => (
+                    <MenuItem key={country.code} value={country.code}>
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                        <span>{country.flag}</span>
+                        <span>{country.display}</span>
+                      </Box>
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+            </Grid>
+            <Grid item xs={8}>
               <TextField
                 fullWidth
+                size="small"
                 label="Phone Number"
                 value={newReportForm.phone_number}
                 onChange={(e) => setNewReportForm({...newReportForm, phone_number: e.target.value})}
                 placeholder="9876543210"
-                inputProps={{
-                  maxLength: 10,
-                  pattern: "^[0-9]{10}$"
-                }}
-                helperText="Enter 10-digit phone number"
+                inputProps={{ maxLength: 10 }}
                 InputProps={{
-                  startAdornment: <Phone sx={{ mr: 1, color: '#1976d2' }} />
-                }}
-                sx={{
-                  '& .MuiOutlinedInput-root': {
-                    borderRadius: 2,
-                    backgroundColor: 'rgba(255, 255, 255, 0.9)',
-                    minHeight: 56,
-                    '& .MuiOutlinedInput-notchedOutline': {
-                      borderWidth: 2,
-                      borderColor: '#e2e8f0'
-                    },
-                    '&:hover .MuiOutlinedInput-notchedOutline': {
-                      borderColor: '#1976d2'
-                    },
-                    '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
-                      borderColor: '#1976d2',
-                      borderWidth: 2
-                    },
-                    '& .MuiOutlinedInput-input': {
-                      padding: '16px 14px',
-                      lineHeight: 1.5
-                    }
-                  },
-                  '& .MuiInputLabel-root': {
-                    color: '#1a202c',
-                    fontWeight: 600
-                  }
+                  startAdornment: <Phone sx={{ mr: 1, color: '#6b7280', fontSize: 18 }} />
                 }}
               />
             </Grid>
           </Grid>
         </DialogContent>
-        <DialogActions sx={{ p: 4, gap: 2 }}>
+        <DialogActions sx={{ p: 2, gap: 1 }}>
           <Button 
             onClick={() => setEditReportDialog(false)} 
             variant="outlined"
-            size="large"
-            sx={{
-              borderRadius: 2,
-              borderWidth: 2,
-              fontWeight: 'bold',
-              px: 4
-            }}
+            size="small"
           >
             Cancel
           </Button>
           <Button 
             onClick={submitEditReport}
             variant="contained"
-            size="large"
+            size="small"
             disabled={!newReportForm.disaster_type || !newReportForm.description || !newReportForm.address}
             sx={{
-              background: 'linear-gradient(135deg, #ff9800 0%, #f57c00 100%)',
-              borderRadius: 2,
-              fontWeight: 'bold',
-              px: 4,
-              '&:hover': {
-                background: 'linear-gradient(135deg, #f57c00 0%, #ff9800 100%)',
-                transform: 'translateY(-2px)',
-                boxShadow: '0 8px 25px rgba(255, 152, 0, 0.3)'
-              },
-              '&:disabled': {
-                background: 'rgba(0,0,0,0.12)',
-                color: 'rgba(0,0,0,0.26)'
-              }
+              background: '#f59e0b',
+              '&:hover': { background: '#d97706' }
             }}
           >
             Update Report

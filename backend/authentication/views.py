@@ -22,17 +22,8 @@ class RegisterView(generics.CreateAPIView):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         
-        # Create user
+        # Create user (this also creates the UserProfile via UserSerializer)
         user = serializer.save()
-        
-        # Create user profile
-        profile_data = request.data.get('profile', {})
-        UserProfile.objects.create(
-            user=user,
-            role=profile_data.get('role', 'VIEWER'),
-            phone_number=profile_data.get('phone_number', ''),
-            organization_id=profile_data.get('organization_id')
-        )
         
         # Generate token
         token, created = Token.objects.get_or_create(user=user)

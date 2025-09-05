@@ -57,6 +57,7 @@ class UserSerializer(serializers.ModelSerializer):
         # Create user profile
         UserProfile.objects.create(
             user=user,
+            role='VIEWER',  # Default role for new users
             phone_number=phone_number,
             organization=organization
         )

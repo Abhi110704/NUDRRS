@@ -27,25 +27,50 @@ const Analytics = () => {
       // Try to fetch real data first, fallback to demo data
       try {
         const [statsResponse, reportsResponse] = await Promise.all([
-          axios.get('http://localhost:8000/api/sos_reports/dashboard_stats/'),
-          axios.get('http://localhost:8000/api/sos_reports/')
+          axios.get('http://localhost:8000/api/sos_reports/sos_reports/dashboard_stats/'),
+          axios.get('http://localhost:8000/api/sos_reports/sos_reports/')
         ]);
         
         const realStats = statsResponse.data;
         const reportsData = reportsResponse.data.results || reportsResponse.data || [];
         
-        // Transform the data to ensure proper structure
+        // Transform the data to ensure proper structure and filter out 0 values
+        const filteredDisasterTypes = {};
+        if (realStats.by_disaster_type) {
+          Object.entries(realStats.by_disaster_type).forEach(([key, value]) => {
+            console.log(`🔍 Backend filter: ${key} = ${value} (type: ${typeof value})`);
+            // Aggressive filtering - only include if value is definitely greater than 0
+            const numValue = Number(value);
+            if (numValue > 0 && !isNaN(numValue) && numValue !== 0 && value !== "0" && value !== null && value !== undefined) {
+              filteredDisasterTypes[key] = value;
+              console.log(`✅ Including: ${key} = ${value}`);
+            } else {
+              console.log(`❌ Excluding: ${key} = ${value} (converted to number: ${numValue})`);
+            }
+          });
+        }
+        
+        const filteredPriorities = {};
+        if (realStats.by_priority) {
+          Object.entries(realStats.by_priority).forEach(([key, value]) => {
+            if (value > 0) {
+              filteredPriorities[key] = value;
+            }
+          });
+        }
+        
         const transformedStats = {
           total_reports: realStats.total_reports || reportsData.length,
           pending_reports: realStats.pending_reports || 0,
           active_reports: realStats.active_reports || 0,
           resolved_reports: realStats.resolved_reports || 0,
-          by_disaster_type: realStats.by_disaster_type || {},
-          by_priority: realStats.by_priority || {}
+          by_disaster_type: filteredDisasterTypes,
+          by_priority: filteredPriorities
         };
         
         setStats(transformedStats);
         console.log('✅ Real analytics data loaded:', transformedStats);
+        console.log('🔍 Filtered disaster types:', filteredDisasterTypes);
       } catch (apiError) {
         console.log('API not available, using demo data:', apiError.message);
         // Demo analytics data
@@ -100,12 +125,44 @@ const Analytics = () => {
     return data;
   };
 
-  const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884D8'];
+  const COLORS = [
+    '#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FFEAA7', 
+    '#DDA0DD', '#98D8C8', '#F7DC6F', '#BB8FCE', '#85C1E9'
+  ];
 
-  const pieData = stats ? Object.entries(stats.by_disaster_type).map(([key, value]) => ({
-    name: key,
-    value: value
-  })) : [];
+  const pieData = stats ? Object.entries(stats.by_disaster_type || {})
+    .filter(([key, value]) => {
+      // Ultra-aggressive filtering - convert to number and check multiple conditions
+      const numValue = Number(value);
+      const shouldInclude = numValue > 0 && 
+                           !isNaN(numValue) && 
+                           numValue !== 0 && 
+                           value !== "0" && 
+                           value !== 0 && 
+                           value !== null && 
+                           value !== undefined &&
+                           value !== false &&
+                           value !== "";
+      console.log(`🔍 Pie data filter: ${key} = ${value} (type: ${typeof value}, num: ${numValue}), include: ${shouldInclude}`);
+      return shouldInclude;
+    }) // Ultra-aggressive filtering to eliminate ANY zero-like values
+    .map(([key, value]) => ({
+      name: key.length > 8 ? key.substring(0, 8) + '...' : key, // Truncate long names
+      fullName: key, // Keep full name for tooltip
+      value: value
+    })) : [];
+    
+  // Final safety check - remove any remaining zero values
+  const finalPieData = pieData.filter(item => {
+    const numValue = Number(item.value);
+    const isClean = numValue > 0 && !isNaN(numValue);
+    if (!isClean) {
+      console.log(`🚨 Final safety check removing: ${item.fullName} = ${item.value}`);
+    }
+    return isClean;
+  });
+  
+  console.log('🎯 Final pieData for chart:', finalPieData);
 
   const priorityData = stats ? Object.entries(stats.by_priority).map(([key, value]) => ({
     name: key,
@@ -425,25 +482,57 @@ const Analytics = () => {
                   🌪️ Disaster Type Distribution
                 </Typography>
               </Box>
-              <ResponsiveContainer width="100%" height={320}>
-                <PieChart>
+              <Box sx={{ p: 2 }}>
+                {finalPieData.length > 0 ? (
+                  <ResponsiveContainer width="100%" height={400} key={JSON.stringify(finalPieData)}>
+                  <PieChart margin={{ top: 20, right: 20, bottom: 20, left: 20 }}>
                   <Pie
-                    data={pieData}
+                    data={finalPieData}
                     cx="50%"
                     cy="50%"
                     labelLine={false}
-                    label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
-                    outerRadius={90}
+                    label={({ name, percent, value, cx, cy, midAngle, innerRadius, outerRadius }) => {
+                      // Hide labels for 0% values or very small slices
+                      if (percent === 0 || percent < 0.05 || value === 0) return null;
+                      
+                      const RADIAN = Math.PI / 180;
+                      const radius = innerRadius + (outerRadius - innerRadius) * 0.5;
+                      const x = cx + radius * Math.cos(-midAngle * RADIAN);
+                      const y = cy + radius * Math.sin(-midAngle * RADIAN);
+                      
+                      return (
+                        <text 
+                          x={x} 
+                          y={y} 
+                          fill="white" 
+                          textAnchor={x > cx ? 'start' : 'end'} 
+                          dominantBaseline="central"
+                          fontSize="11"
+                          fontWeight="bold"
+                          stroke="black"
+                          strokeWidth="0.8"
+                        >
+                          {`${name} ${(percent * 100).toFixed(0)}%`}
+                        </text>
+                      );
+                    }}
+                    outerRadius={80}
+                    innerRadius={20}
                     fill="#8884d8"
                     dataKey="value"
                     stroke="#fff"
                     strokeWidth={2}
+                    paddingAngle={2}
                   >
-                    {pieData.map((entry, index) => (
+                    {finalPieData.map((entry, index) => (
                       <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                     ))}
                   </Pie>
                   <Tooltip 
+                    formatter={(value, name, props) => [
+                      `${value} reports`,
+                      props.payload.fullName || name
+                    ]}
                     contentStyle={{
                       background: 'rgba(255, 255, 255, 0.95)',
                       backdropFilter: 'blur(10px)',
@@ -451,8 +540,37 @@ const Analytics = () => {
                       borderRadius: 8
                     }}
                   />
+                  <Legend 
+                    verticalAlign="bottom" 
+                    height={60}
+                    margin={{ top: 20, left: 20, right: 20, bottom: 20 }}
+                    payload={finalPieData.map((entry, index) => ({
+                      value: entry.fullName,
+                      type: 'rect',
+                      color: COLORS[index % COLORS.length]
+                    }))}
+                    formatter={(value, entry) => (
+                      <span style={{ color: entry.color, fontSize: '11px', margin: '2px' }}>
+                        {value}
+                      </span>
+                    )}
+                  />
                 </PieChart>
               </ResponsiveContainer>
+                ) : (
+                  <Box sx={{ 
+                    display: 'flex', 
+                    alignItems: 'center', 
+                    justifyContent: 'center', 
+                    height: 400,
+                    color: '#666'
+                  }}>
+                    <Typography variant="h6">
+                      No disaster reports available
+                    </Typography>
+                  </Box>
+                )}
+              </Box>
             </Paper>
           </Fade>
         </Grid>

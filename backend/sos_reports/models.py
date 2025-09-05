@@ -33,10 +33,10 @@ class SOSReport(models.Model):
     
     user = models.ForeignKey(User, on_delete=models.CASCADE, null=True, blank=True)
     phone_number = models.CharField(
-        max_length=20,
+        max_length=15,
         validators=[
             RegexValidator(
-                regex=r'^\+[1-9]\d{1,14}$',
+                regex=r'^\+[1-9]\d{9,14}$',
                 message='Enter a valid international phone number (e.g., +919876543210)'
             )
         ]

@@ -11,7 +11,7 @@ import {
   Menu as MenuIcon, Close, Logout, Settings, Person, ExitToApp
 } from '@mui/icons-material';
 import { useAuth } from '../contexts/AuthContext';
-import DemoToggle from './DemoToggle';
+// import DemoToggle from './DemoToggle'; // Removed for production
 
 const Navbar = () => {
   const location = useLocation();
@@ -143,11 +143,7 @@ const Navbar = () => {
           </Box>
 
           {/* Demo Toggle - Only show when authenticated */}
-          {isAuthenticated && (
-            <Box sx={{ display: { xs: 'none', md: 'block' }, mr: 2 }}>
-              <DemoToggle />
-            </Box>
-          )}
+          {/* Demo toggle removed for production */}
 
           {/* Compact Status */}
           <Box sx={{ display: { xs: 'none', sm: 'flex' }, alignItems: 'center', mr: 2, gap: 1 }}>
@@ -421,9 +417,7 @@ const Navbar = () => {
         {isAuthenticated && (
           <>
             <Divider sx={{ my: 2 }} />
-            <Box sx={{ px: 2, mb: 2 }}>
-              <DemoToggle />
-            </Box>
+            {/* Demo toggle removed for production */}
             <ListComponent>
               <ListItem button onClick={() => handleProfileAction('profile')}>
                 <ListItemIcon><Person /></ListItemIcon>

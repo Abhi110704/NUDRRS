@@ -137,7 +137,7 @@ NUDRRS/
 │   │   ├── ReportsMap.js   # Live mapping
 │   │   └── Analytics.js    # Analytics dashboard
 │   └── src/contexts/       # React contexts
-└── Command.txt             # Setup commands
+└── SETUP_INSTRUCTIONS.md   # Setup instructions
 ```
 
 ---

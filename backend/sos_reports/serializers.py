@@ -16,7 +16,18 @@ class ReportUpdateSerializer(serializers.ModelSerializer):
 class SOSReportSerializer(serializers.ModelSerializer):
     media = ReportMediaSerializer(many=True, read_only=True)
     updates = ReportUpdateSerializer(many=True, read_only=True)
-    user = serializers.StringRelatedField(read_only=True)
+    user = serializers.SerializerMethodField()
+    
+    def get_user(self, obj):
+        if obj.user:
+            return {
+                'id': obj.user.id,
+                'username': obj.user.username,
+                'first_name': obj.user.first_name,
+                'last_name': obj.user.last_name,
+                'email': obj.user.email
+            }
+        return None
     
     class Meta:
         model = SOSReport
@@ -31,5 +42,5 @@ class SOSReportCreateSerializer(serializers.ModelSerializer):
     class Meta:
         model = SOSReport
         fields = [
-            'phone_number', 'latitude', 'longitude', 'address', 'disaster_type', 'description', 'is_demo'
+            'phone_number', 'latitude', 'longitude', 'address', 'disaster_type', 'description', 'priority'
         ]

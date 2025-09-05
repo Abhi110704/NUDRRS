@@ -15,7 +15,7 @@ export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [token, setToken] = useState(localStorage.getItem('token'));
   const [loading, setLoading] = useState(true);
-  const [isDemoMode, setIsDemoMode] = useState(false);
+  const [isDemoMode] = useState(false); // Always false for production
 
   // Configure axios defaults
   useEffect(() => {
@@ -107,9 +107,7 @@ export const AuthProvider = ({ children }) => {
     delete axios.defaults.headers.common['Authorization'];
   };
 
-  const toggleDemoMode = () => {
-    setIsDemoMode(!isDemoMode);
-  };
+  // Demo mode toggle removed for production
 
   const isAdmin = user?.profile?.role === 'ADMIN';
   const isManager = user?.profile?.role === 'MANAGER';
@@ -124,7 +122,7 @@ export const AuthProvider = ({ children }) => {
     login,
     register,
     logout,
-    toggleDemoMode,
+    // toggleDemoMode, // Removed for production
     isAuthenticated: !!token,
     isAdmin,
     isManager,
