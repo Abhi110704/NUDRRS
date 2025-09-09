@@ -6,6 +6,7 @@ from rest_framework.authtoken.models import Token
 from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.models import User
 from django.db import transaction
+from django.conf import settings
 from .models import UserProfile, Organization
 from .serializers import (
     UserSerializer, LoginSerializer, UserProfileSerializer, 
@@ -85,17 +86,17 @@ def logout_view(request):
 @permission_classes([IsAuthenticated])
 def profile_view(request):
     if request.method == 'GET':
-        serializer = UserSerializer(request.user)
+        serializer = UserSerializer(request.user, context={'request': request})
         return Response(serializer.data)
     
     elif request.method == 'PUT':
-        user_serializer = UserSerializer(request.user, data=request.data, partial=True)
-        profile_serializer = UserProfileSerializer(request.user.profile, data=request.data.get('profile', {}), partial=True)
+        user_serializer = UserSerializer(request.user, data=request.data, partial=True, context={'request': request})
+        profile_serializer = UserProfileSerializer(request.user.profile, data=request.data.get('profile', {}), partial=True, context={'request': request})
         
         if user_serializer.is_valid() and profile_serializer.is_valid():
             user_serializer.save()
             profile_serializer.save()
-            return Response(UserSerializer(request.user).data)
+            return Response(UserSerializer(request.user, context={'request': request}).data)
         
         errors = {}
         if user_serializer.errors:
@@ -145,3 +146,58 @@ class OrganizationDetailView(generics.RetrieveUpdateDestroyAPIView):
     queryset = Organization.objects.all()
     serializer_class = OrganizationSerializer
     permission_classes = [IsAuthenticated]
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def upload_profile_image(request):
+    """Upload profile image for authenticated user"""
+    try:
+        if 'profile_image' not in request.FILES:
+            return Response({
+                'success': False,
+                'error': 'No image file provided'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        image_file = request.FILES['profile_image']
+        
+        # Validate file type
+        if not image_file.content_type.startswith('image/'):
+            return Response({
+                'success': False,
+                'error': 'File must be an image'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Validate file size (max 5MB)
+        if image_file.size > 5 * 1024 * 1024:
+            return Response({
+                'success': False,
+                'error': 'Image size must be less than 5MB'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Get or create user profile
+        profile, created = UserProfile.objects.get_or_create(
+            user=request.user,
+            defaults={'role': 'VIEWER'}
+        )
+        
+        # Save the image
+        profile.profile_image = image_file
+        profile.save()
+        
+        # Return success response with image URL
+        image_url = None
+        if profile.profile_image:
+            image_url = request.build_absolute_uri(profile.profile_image.url)
+        
+        return Response({
+            'success': True,
+            'message': 'Profile image uploaded successfully',
+            'image_url': image_url,
+            'profile': UserProfileSerializer(profile, context={'request': request}).data
+        }, status=status.HTTP_200_OK)
+        
+    except Exception as e:
+        return Response({
+            'success': False,
+            'error': f'Failed to upload image: {str(e)}'
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

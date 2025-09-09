@@ -8,7 +8,8 @@ import {
 } from '@mui/material';
 import {
   Visibility, Edit, Delete, Add, FilterList, Search, LocalHospital as Emergency, 
-  LocationOn, Phone, Schedule, Security, Speed, Warning, CheckCircle, Close
+  LocationOn, Phone, Schedule, Security, Speed, Warning, CheckCircle, Close,
+  CloudUpload, Image as ImageIcon, Delete as DeleteIcon
 } from '@mui/icons-material';
 import axios from 'axios';
 import { useAuth } from '../contexts/AuthContext';
@@ -57,6 +58,11 @@ const Reports = () => {
     countryCode: '+91',
     phone_number: ''
   });
+
+  // Image upload states
+  const [selectedImages, setSelectedImages] = useState([]);
+  const [imagePreview, setImagePreview] = useState([]);
+  const [uploadingImages, setUploadingImages] = useState(false);
 
   // Location autocomplete states
   const [locationSuggestions, setLocationSuggestions] = useState([]);
@@ -252,7 +258,10 @@ const Reports = () => {
             last_name: report.user.last_name || 'User',
             username: report.user.username || 'anonymous'
           } : { id: null, first_name: 'Anonymous', last_name: 'User', username: 'anonymous' },
-          ai_confidence: report.ai_confidence || 0.85
+          ai_confidence: report.ai_confidence || 0.85,
+          ai_fraud_score: report.ai_fraud_score || 0.0,
+          ai_analysis_data: report.ai_analysis_data || {},
+          media: report.media || [] // Include media data for image display
         }));
         
         console.log('✅ Live data loaded from backend:', currentReports);
@@ -357,6 +366,41 @@ const Reports = () => {
     setLocationSuggestions([]);
   };
 
+  // Image handling functions
+  const handleImageSelect = (event) => {
+    const files = Array.from(event.target.files);
+    const imageFiles = files.filter(file => file.type.startsWith('image/'));
+    
+    if (imageFiles.length > 0) {
+      setSelectedImages(prev => [...prev, ...imageFiles]);
+      
+      // Create preview URLs
+      const newPreviews = imageFiles.map(file => ({
+        file,
+        url: URL.createObjectURL(file),
+        name: file.name
+      }));
+      setImagePreview(prev => [...prev, ...newPreviews]);
+    }
+  };
+
+  const removeImage = (index) => {
+    setSelectedImages(prev => prev.filter((_, i) => i !== index));
+    setImagePreview(prev => {
+      const newPreviews = prev.filter((_, i) => i !== index);
+      // Revoke the URL to free memory
+      URL.revokeObjectURL(prev[index].url);
+      return newPreviews;
+    });
+  };
+
+  const clearAllImages = () => {
+    // Revoke all URLs to free memory
+    imagePreview.forEach(preview => URL.revokeObjectURL(preview.url));
+    setSelectedImages([]);
+    setImagePreview([]);
+  };
+
   // Handler functions
   const handleNewReport = () => {
     setNewReportDialog(true);
@@ -370,6 +414,7 @@ const Reports = () => {
     });
     setLocationSuggestions([]);
     setShowLocationSuggestions(false);
+    clearAllImages();
   };
 
   const handleViewReport = (report) => {
@@ -437,28 +482,43 @@ const Reports = () => {
 
     // Try to send to backend first
     try {
-      const backendReport = {
-        phone_number: newReport.phone_number,
-        latitude: newReport.latitude,
-        longitude: newReport.longitude,
-        address: newReport.address,
-        disaster_type: newReport.disaster_type,
-        description: newReport.description,
-        priority: newReport.priority || 'MEDIUM' // Include priority field
-      };
+      setUploadingImages(true);
       
-      const response = await axios.post('http://localhost:8000/api/sos_reports/', backendReport);
-      console.log('✅ Report sent to backend:', response.data);
+      // Create FormData for file upload
+      const formData = new FormData();
+      formData.append('phone_number', newReport.phone_number);
+      formData.append('latitude', newReport.latitude);
+      formData.append('longitude', newReport.longitude);
+      formData.append('address', newReport.address);
+      formData.append('disaster_type', newReport.disaster_type);
+      formData.append('description', newReport.description);
+      formData.append('priority', newReport.priority || 'MEDIUM');
+      
+      // Add image files
+      selectedImages.forEach((file, index) => {
+        formData.append('files', file);
+      });
+      
+      const response = await axios.post('http://localhost:8000/api/sos_reports/sos_reports/', formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      });
+      
+      console.log('✅ Report with images sent to backend:', response.data);
+      setUploadingImages(false);
+      
       // Refresh data from backend
       await fetchReports();
       setSnackbar({
         open: true,
-        message: '✅ Emergency report sent to backend successfully!',
+        message: `✅ Emergency report with ${selectedImages.length} image(s) sent to backend successfully!`,
         severity: 'success'
       });
-      addLiveUpdate('✅ New report added to backend', 'success');
+      addLiveUpdate(`✅ New report with ${selectedImages.length} image(s) added to backend`, 'success');
     } catch (error) {
       console.error('Backend error, saving locally:', error);
+      setUploadingImages(false);
       // Fallback to local storage
       const updatedReports = [newReport, ...reports];
       setReports(updatedReports);
@@ -478,17 +538,45 @@ const Reports = () => {
     try {
       // Try to update via backend API first
       try {
-        const updatedReportData = {
-          phone_number: `${newReportForm.countryCode}${newReportForm.phone_number}`,
-          latitude: selectedReport.latitude,
-          longitude: selectedReport.longitude,
-          address: newReportForm.address,
-          disaster_type: newReportForm.disaster_type,
-          description: newReportForm.description,
-          priority: newReportForm.priority
-        };
+        setUploadingImages(true);
+        
+        // Create FormData for file upload if there are new images
+        if (selectedImages.length > 0) {
+          const formData = new FormData();
+          formData.append('phone_number', `${newReportForm.countryCode}${newReportForm.phone_number}`);
+          formData.append('latitude', selectedReport.latitude);
+          formData.append('longitude', selectedReport.longitude);
+          formData.append('address', newReportForm.address);
+          formData.append('disaster_type', newReportForm.disaster_type);
+          formData.append('description', newReportForm.description);
+          formData.append('priority', newReportForm.priority);
+          
+          // Add new image files
+          selectedImages.forEach((file, index) => {
+            formData.append('files', file);
+          });
+          
+          await axios.put(`http://localhost:8000/api/sos_reports/sos_reports/${selectedReport.id}/`, formData, {
+            headers: {
+              'Content-Type': 'multipart/form-data',
+            },
+          });
+        } else {
+          // No new images, just update the report data
+          const updatedReportData = {
+            phone_number: `${newReportForm.countryCode}${newReportForm.phone_number}`,
+            latitude: selectedReport.latitude,
+            longitude: selectedReport.longitude,
+            address: newReportForm.address,
+            disaster_type: newReportForm.disaster_type,
+            description: newReportForm.description,
+            priority: newReportForm.priority
+          };
 
-        await axios.put(`http://localhost:8000/api/sos_reports/sos_reports/${selectedReport.id}/`, updatedReportData);
+          await axios.put(`http://localhost:8000/api/sos_reports/sos_reports/${selectedReport.id}/`, updatedReportData);
+        }
+        
+        setUploadingImages(false);
         
         // Update local state
         const updatedReports = reports.map(report => 
@@ -502,7 +590,9 @@ const Reports = () => {
         setEditReportDialog(false);
         setSnackbar({
           open: true,
-          message: 'Report updated successfully!',
+          message: selectedImages.length > 0 
+            ? `Report updated successfully with ${selectedImages.length} new image(s)!`
+            : 'Report updated successfully!',
           severity: 'success'
         });
         
@@ -511,6 +601,7 @@ const Reports = () => {
         
       } catch (apiError) {
         console.log('Backend update failed, updating locally:', apiError.message);
+        setUploadingImages(false);
         
         // Fallback to local update
         const updatedReports = reports.map(report => 
@@ -527,7 +618,7 @@ const Reports = () => {
         setEditReportDialog(false);
         setSnackbar({
           open: true,
-          message: 'Report updated locally!',
+          message: 'Report updated locally (backend unavailable)!',
           severity: 'warning'
         });
       }
@@ -985,6 +1076,116 @@ const Reports = () => {
                       </Typography>
                     </Box>
 
+                    {/* Image Display Section */}
+                    {report.media && report.media.length > 0 && (
+                      <Box sx={{ 
+                        mb: 2.5,
+                        p: 2,
+                        background: 'linear-gradient(135deg, rgba(59, 130, 246, 0.05), rgba(37, 99, 235, 0.05))',
+                        borderRadius: 2,
+                        border: '1px solid rgba(59, 130, 246, 0.1)'
+                      }}>
+                        <Box sx={{ display: 'flex', alignItems: 'center', mb: 1.5 }}>
+                          <ImageIcon sx={{ 
+                            color: '#3b82f6', 
+                            mr: 1, 
+                            fontSize: 18 
+                          }} />
+                          <Typography variant="subtitle2" sx={{ 
+                            color: '#1e40af',
+                            fontWeight: 600,
+                            fontSize: '0.875rem'
+                          }}>
+                            📸 Attached Images ({report.media.length})
+                          </Typography>
+                        </Box>
+                        <Box sx={{ 
+                          display: 'flex', 
+                          flexWrap: 'wrap', 
+                          gap: 1,
+                          maxHeight: '120px',
+                          overflowY: 'auto'
+                        }}>
+                          {report.media.slice(0, 4).map((media, index) => (
+                            <Box
+                              key={media.id || index}
+                              sx={{
+                                position: 'relative',
+                                width: 60,
+                                height: 60,
+                                borderRadius: 1,
+                                overflow: 'hidden',
+                                border: '2px solid #e5e7eb',
+                                cursor: 'pointer',
+                                transition: 'all 0.2s ease',
+                                '&:hover': {
+                                  transform: 'scale(1.05)',
+                                  borderColor: '#3b82f6',
+                                  boxShadow: '0 4px 12px rgba(59, 130, 246, 0.3)'
+                                }
+                              }}
+                              onClick={() => {
+                                // Open image in new tab or show in modal
+                                const imageUrl = media.file.startsWith('http') 
+                                  ? media.file 
+                                  : `http://localhost:8000${media.file}`;
+                                window.open(imageUrl, '_blank');
+                              }}
+                            >
+                              <img
+                                src={media.file.startsWith('http') 
+                                  ? media.file 
+                                  : `http://localhost:8000${media.file}`}
+                                alt={`Emergency image ${index + 1}`}
+                                style={{
+                                  width: '100%',
+                                  height: '100%',
+                                  objectFit: 'cover'
+                                }}
+                                onError={(e) => {
+                                  e.target.style.display = 'none';
+                                  e.target.nextSibling.style.display = 'flex';
+                                }}
+                              />
+                              <Box sx={{
+                                display: 'none',
+                                width: '100%',
+                                height: '100%',
+                                background: '#f3f4f6',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                color: '#6b7280',
+                                fontSize: '12px'
+                              }}>
+                                📷
+                              </Box>
+                            </Box>
+                          ))}
+                          {report.media.length > 4 && (
+                            <Box sx={{
+                              width: 60,
+                              height: 60,
+                              borderRadius: 1,
+                              background: 'linear-gradient(135deg, #f3f4f6, #e5e7eb)',
+                              border: '2px solid #d1d5db',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              color: '#6b7280',
+                              fontSize: '12px',
+                              fontWeight: 'bold',
+                              cursor: 'pointer',
+                              '&:hover': {
+                                background: 'linear-gradient(135deg, #e5e7eb, #d1d5db)'
+                              }
+                            }}>
+                              +{report.media.length - 4}
+                            </Box>
+                          )}
+                        </Box>
+                      </Box>
+                    )}
+
                     {/* Enhanced Reporter Info */}
                     <Box sx={{ 
                       display: 'flex', 
@@ -1050,16 +1251,32 @@ const Reports = () => {
                           alignItems: 'center',
                           gap: 0.5
                         }}>
-                          🤖 AI Confidence
+                          🤖 AI Analysis
                         </Typography>
-                        <Typography variant="caption" sx={{ 
-                          fontWeight: 'bold',
-                          fontSize: '0.9rem',
-                          color: report.ai_confidence > 0.9 ? '#27ae60' : 
-                                 report.ai_confidence > 0.7 ? '#f39c12' : '#e74c3c'
-                        }}>
-                          {(report.ai_confidence * 100).toFixed(0)}%
-                        </Typography>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                          <Typography variant="caption" sx={{ 
+                            fontWeight: 'bold',
+                            fontSize: '0.9rem',
+                            color: report.ai_confidence > 0.9 ? '#27ae60' : 
+                                   report.ai_confidence > 0.7 ? '#f39c12' : '#e74c3c'
+                          }}>
+                            {(report.ai_confidence * 100).toFixed(0)}%
+                          </Typography>
+                          {report.ai_fraud_score > 0.3 && (
+                            <Typography variant="caption" sx={{ 
+                              fontWeight: 'bold',
+                              fontSize: '0.7rem',
+                              color: report.ai_fraud_score > 0.6 ? '#e74c3c' : '#f39c12',
+                              bgcolor: report.ai_fraud_score > 0.6 ? '#fdf2f2' : '#fef9e7',
+                              px: 0.8,
+                              py: 0.3,
+                              borderRadius: 1,
+                              border: `1px solid ${report.ai_fraud_score > 0.6 ? '#e74c3c' : '#f39c12'}`
+                            }}>
+                              FRAUD: {(report.ai_fraud_score * 100).toFixed(0)}%
+                            </Typography>
+                          )}
+                        </Box>
                       </Box>
                       <Box sx={{ 
                         height: 8, 
@@ -1071,11 +1288,13 @@ const Reports = () => {
                         <Box sx={{
                           height: '100%',
                           width: `${report.ai_confidence * 100}%`,
-                          background: report.ai_confidence > 0.9 
-                            ? 'linear-gradient(90deg, #4caf50, #66bb6a)'
+                          background: report.ai_fraud_score > 0.6 
+                            ? 'linear-gradient(90deg, #e74c3c, #c0392b)' // Red for high fraud
+                            : report.ai_confidence > 0.9 
+                            ? 'linear-gradient(90deg, #4caf50, #66bb6a)' // Green for high confidence
                             : report.ai_confidence > 0.7
-                            ? 'linear-gradient(90deg, #ff9800, #ffb74d)'
-                            : 'linear-gradient(90deg, #f44336, #ef5350)',
+                            ? 'linear-gradient(90deg, #ff9800, #ffb74d)' // Orange for medium confidence
+                            : 'linear-gradient(90deg, #f44336, #ef5350)', // Red for low confidence
                           borderRadius: 4,
                           transition: 'width 0.6s cubic-bezier(0.4, 0, 0.2, 1)',
                           boxShadow: '0 2px 8px rgba(0, 0, 0, 0.2)',
@@ -1444,6 +1663,118 @@ const Reports = () => {
                 }}
               />
             </Grid>
+            
+            {/* Image Upload Section */}
+            <Grid item xs={12}>
+              <Box sx={{ 
+                border: '2px dashed #d1d5db', 
+                borderRadius: 2, 
+                p: 2, 
+                textAlign: 'center',
+                background: '#f9fafb',
+                '&:hover': {
+                  borderColor: '#3b82f6',
+                  background: '#f0f9ff'
+                }
+              }}>
+                <input
+                  accept="image/*"
+                  style={{ display: 'none' }}
+                  id="image-upload"
+                  multiple
+                  type="file"
+                  onChange={handleImageSelect}
+                />
+                <label htmlFor="image-upload">
+                  <Button
+                    variant="outlined"
+                    component="span"
+                    startIcon={<CloudUpload />}
+                    sx={{
+                      borderColor: '#d1d5db',
+                      color: '#6b7280',
+                      '&:hover': {
+                        borderColor: '#3b82f6',
+                        color: '#3b82f6'
+                      }
+                    }}
+                  >
+                    📸 Upload Images (Optional)
+                  </Button>
+                </label>
+                <Typography variant="caption" sx={{ display: 'block', mt: 1, color: '#6b7280' }}>
+                  Upload photos of the emergency situation for AI analysis
+                </Typography>
+              </Box>
+            </Grid>
+            
+            {/* Image Preview Section */}
+            {imagePreview.length > 0 && (
+              <Grid item xs={12}>
+                <Box sx={{ 
+                  border: '1px solid #e5e7eb', 
+                  borderRadius: 2, 
+                  p: 2,
+                  background: 'white'
+                }}>
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+                    <Typography variant="subtitle2" sx={{ fontWeight: 600, color: '#374151' }}>
+                      📷 Selected Images ({imagePreview.length})
+                    </Typography>
+                    <Button
+                      size="small"
+                      onClick={clearAllImages}
+                      sx={{ color: '#ef4444', fontSize: '0.75rem' }}
+                    >
+                      Clear All
+                    </Button>
+                  </Box>
+                  <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
+                    {imagePreview.map((preview, index) => (
+                      <Box
+                        key={index}
+                        sx={{
+                          position: 'relative',
+                          width: 80,
+                          height: 80,
+                          borderRadius: 1,
+                          overflow: 'hidden',
+                          border: '2px solid #e5e7eb'
+                        }}
+                      >
+                        <img
+                          src={preview.url}
+                          alt={preview.name}
+                          style={{
+                            width: '100%',
+                            height: '100%',
+                            objectFit: 'cover'
+                          }}
+                        />
+                        <IconButton
+                          size="small"
+                          onClick={() => removeImage(index)}
+                          sx={{
+                            position: 'absolute',
+                            top: 2,
+                            right: 2,
+                            background: 'rgba(239, 68, 68, 0.8)',
+                            color: 'white',
+                            width: 20,
+                            height: 20,
+                            '&:hover': {
+                              background: '#ef4444'
+                            }
+                          }}
+                        >
+                          <DeleteIcon sx={{ fontSize: 12 }} />
+                        </IconButton>
+                      </Box>
+                    ))}
+                  </Box>
+                </Box>
+              </Grid>
+            )}
           </Grid>
         </DialogContent>
         <DialogActions sx={{ p: 2, gap: 1 }}>
@@ -1458,13 +1789,13 @@ const Reports = () => {
             onClick={submitNewReport}
             variant="contained"
             size="small"
-            disabled={!newReportForm.disaster_type || !newReportForm.description || !newReportForm.address}
+            disabled={!newReportForm.disaster_type || !newReportForm.description || !newReportForm.address || uploadingImages}
             sx={{
               background: '#ef4444',
               '&:hover': { background: '#dc2626' }
             }}
           >
-            Submit Report
+            {uploadingImages ? 'Uploading...' : 'Submit Report'}
           </Button>
         </DialogActions>
       </Dialog>
@@ -1535,9 +1866,47 @@ const Reports = () => {
                 <strong>Contact:</strong> {selectedReport.phone_number}
               </Typography>
               
-              <Typography variant="body2" sx={{ mb: 2, color: '#6b7280' }}>
-                <strong>AI Confidence:</strong> {(selectedReport.ai_confidence * 100).toFixed(0)}%
-              </Typography>
+              <Box sx={{ mb: 2, p: 2, bgcolor: '#f8f9fa', borderRadius: 2, border: '1px solid #e9ecef' }}>
+                <Typography variant="h6" sx={{ mb: 1, color: '#2c3e50', fontWeight: 'bold' }}>
+                  🤖 AI Analysis Results
+                </Typography>
+                
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 1 }}>
+                  <Typography variant="body2" sx={{ color: '#6b7280' }}>
+                    <strong>Confidence:</strong> {(selectedReport.ai_confidence * 100).toFixed(0)}%
+                  </Typography>
+                  {selectedReport.ai_fraud_score > 0.3 && (
+                    <Typography variant="body2" sx={{ 
+                      color: selectedReport.ai_fraud_score > 0.6 ? '#e74c3c' : '#f39c12',
+                      fontWeight: 'bold'
+                    }}>
+                      <strong>Fraud Risk:</strong> {(selectedReport.ai_fraud_score * 100).toFixed(0)}%
+                    </Typography>
+                  )}
+                </Box>
+                
+                {selectedReport.ai_analysis_data && selectedReport.ai_analysis_data.fraud_indicators && selectedReport.ai_analysis_data.fraud_indicators.length > 0 && (
+                  <Box sx={{ mb: 1 }}>
+                    <Typography variant="caption" sx={{ color: '#e74c3c', fontWeight: 'bold' }}>
+                      Fraud Indicators: {selectedReport.ai_analysis_data.fraud_indicators.join(', ')}
+                    </Typography>
+                  </Box>
+                )}
+                
+                {selectedReport.ai_analysis_data && selectedReport.ai_analysis_data.emergency_indicators && selectedReport.ai_analysis_data.emergency_indicators.length > 0 && (
+                  <Box sx={{ mb: 1 }}>
+                    <Typography variant="caption" sx={{ color: '#27ae60', fontWeight: 'bold' }}>
+                      Emergency Keywords: {selectedReport.ai_analysis_data.emergency_indicators.join(', ')}
+                    </Typography>
+                  </Box>
+                )}
+                
+                {selectedReport.ai_analysis_data && selectedReport.ai_analysis_data.analysis_version && (
+                  <Typography variant="caption" sx={{ color: '#6b7280', fontStyle: 'italic' }}>
+                    Analysis Version: {selectedReport.ai_analysis_data.analysis_version}
+                  </Typography>
+                )}
+              </Box>
               
               <Typography variant="body2" sx={{ mb: 1, color: '#6b7280' }}>
                 <strong>Description:</strong>
@@ -1552,6 +1921,77 @@ const Reports = () => {
               }}>
                 "{selectedReport.description}"
               </Typography>
+              
+              {/* Images in View Dialog */}
+              {selectedReport.media && selectedReport.media.length > 0 && (
+                <Box sx={{ mt: 2 }}>
+                  <Typography variant="body2" sx={{ mb: 1, color: '#6b7280', fontWeight: 600 }}>
+                    📸 Attached Images ({selectedReport.media.length}):
+                  </Typography>
+                  <Box sx={{ 
+                    display: 'flex', 
+                    flexWrap: 'wrap', 
+                    gap: 1,
+                    maxHeight: '200px',
+                    overflowY: 'auto'
+                  }}>
+                    {selectedReport.media.map((media, index) => (
+                      <Box
+                        key={media.id || index}
+                        sx={{
+                          position: 'relative',
+                          width: 80,
+                          height: 80,
+                          borderRadius: 1,
+                          overflow: 'hidden',
+                          border: '2px solid #e5e7eb',
+                          cursor: 'pointer',
+                          transition: 'all 0.2s ease',
+                          '&:hover': {
+                            transform: 'scale(1.05)',
+                            borderColor: '#3b82f6',
+                            boxShadow: '0 4px 12px rgba(59, 130, 246, 0.3)'
+                          }
+                        }}
+                        onClick={() => {
+                          const imageUrl = media.file.startsWith('http') 
+                            ? media.file 
+                            : `http://localhost:8000${media.file}`;
+                          window.open(imageUrl, '_blank');
+                        }}
+                      >
+                        <img
+                          src={media.file.startsWith('http') 
+                            ? media.file 
+                            : `http://localhost:8000${media.file}`}
+                          alt={`Emergency image ${index + 1}`}
+                          style={{
+                            width: '100%',
+                            height: '100%',
+                            objectFit: 'cover'
+                          }}
+                          onError={(e) => {
+                            e.target.style.display = 'none';
+                            e.target.nextSibling.style.display = 'flex';
+                          }}
+                        />
+                        <Box sx={{
+                          display: 'none',
+                          width: '100%',
+                          height: '100%',
+                          background: '#f3f4f6',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          color: '#6b7280',
+                          fontSize: '12px'
+                        }}>
+                          📷
+                        </Box>
+                      </Box>
+                    ))}
+                  </Box>
+                </Box>
+              )}
               
               <Typography variant="caption" sx={{ color: '#9ca3af', mt: 2, display: 'block' }}>
                 Reported: {new Date(selectedReport.created_at).toLocaleString()}
@@ -1793,6 +2233,193 @@ const Reports = () => {
                 }}
               />
             </Grid>
+            
+            {/* Image Upload Section for Edit */}
+            <Grid item xs={12}>
+              <Box sx={{ 
+                border: '2px dashed #d1d5db', 
+                borderRadius: 2, 
+                p: 2, 
+                textAlign: 'center',
+                background: '#f9fafb',
+                '&:hover': {
+                  borderColor: '#3b82f6',
+                  background: '#f0f9ff'
+                }
+              }}>
+                <input
+                  accept="image/*"
+                  style={{ display: 'none' }}
+                  id="image-upload-edit"
+                  multiple
+                  type="file"
+                  onChange={handleImageSelect}
+                />
+                <label htmlFor="image-upload-edit">
+                  <Button
+                    variant="outlined"
+                    component="span"
+                    startIcon={<CloudUpload />}
+                    sx={{
+                      borderColor: '#d1d5db',
+                      color: '#6b7280',
+                      '&:hover': {
+                        borderColor: '#3b82f6',
+                        color: '#3b82f6'
+                      }
+                    }}
+                  >
+                    📸 Add More Images (Optional)
+                  </Button>
+                </label>
+                <Typography variant="caption" sx={{ display: 'block', mt: 1, color: '#6b7280' }}>
+                  Add additional photos to the emergency report
+                </Typography>
+              </Box>
+            </Grid>
+            
+            {/* Image Preview Section for Edit */}
+            {imagePreview.length > 0 && (
+              <Grid item xs={12}>
+                <Box sx={{ 
+                  border: '1px solid #e5e7eb', 
+                  borderRadius: 2, 
+                  p: 2,
+                  background: 'white'
+                }}>
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+                    <Typography variant="subtitle2" sx={{ fontWeight: 600, color: '#374151' }}>
+                      📷 New Images ({imagePreview.length})
+                    </Typography>
+                    <Button
+                      size="small"
+                      onClick={clearAllImages}
+                      sx={{ color: '#ef4444', fontSize: '0.75rem' }}
+                    >
+                      Clear All
+                    </Button>
+                  </Box>
+                  <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
+                    {imagePreview.map((preview, index) => (
+                      <Box
+                        key={index}
+                        sx={{
+                          position: 'relative',
+                          width: 80,
+                          height: 80,
+                          borderRadius: 1,
+                          overflow: 'hidden',
+                          border: '2px solid #e5e7eb'
+                        }}
+                      >
+                        <img
+                          src={preview.url}
+                          alt={preview.name}
+                          style={{
+                            width: '100%',
+                            height: '100%',
+                            objectFit: 'cover'
+                          }}
+                        />
+                        <IconButton
+                          size="small"
+                          onClick={() => removeImage(index)}
+                          sx={{
+                            position: 'absolute',
+                            top: 2,
+                            right: 2,
+                            background: 'rgba(239, 68, 68, 0.8)',
+                            color: 'white',
+                            width: 20,
+                            height: 20,
+                            '&:hover': {
+                              background: '#ef4444'
+                            }
+                          }}
+                        >
+                          <DeleteIcon sx={{ fontSize: 12 }} />
+                        </IconButton>
+                      </Box>
+                    ))}
+                  </Box>
+                </Box>
+              </Grid>
+            )}
+            
+            {/* Existing Images Display */}
+            {selectedReport && selectedReport.media && selectedReport.media.length > 0 && (
+              <Grid item xs={12}>
+                <Box sx={{ 
+                  border: '1px solid #e5e7eb', 
+                  borderRadius: 2, 
+                  p: 2,
+                  background: '#f8fafc'
+                }}>
+                  <Typography variant="subtitle2" sx={{ fontWeight: 600, color: '#374151', mb: 1.5 }}>
+                    📸 Current Images ({selectedReport.media.length})
+                  </Typography>
+                  <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
+                    {selectedReport.media.map((media, index) => (
+                      <Box
+                        key={media.id || index}
+                        sx={{
+                          position: 'relative',
+                          width: 60,
+                          height: 60,
+                          borderRadius: 1,
+                          overflow: 'hidden',
+                          border: '2px solid #e5e7eb',
+                          cursor: 'pointer',
+                          transition: 'all 0.2s ease',
+                          '&:hover': {
+                            transform: 'scale(1.05)',
+                            borderColor: '#3b82f6',
+                            boxShadow: '0 4px 12px rgba(59, 130, 246, 0.3)'
+                          }
+                        }}
+                        onClick={() => {
+                          const imageUrl = media.file.startsWith('http') 
+                            ? media.file 
+                            : `http://localhost:8000${media.file}`;
+                          window.open(imageUrl, '_blank');
+                        }}
+                      >
+                        <img
+                          src={media.file.startsWith('http') 
+                            ? media.file 
+                            : `http://localhost:8000${media.file}`}
+                          alt={`Current image ${index + 1}`}
+                          style={{
+                            width: '100%',
+                            height: '100%',
+                            objectFit: 'cover'
+                          }}
+                          onError={(e) => {
+                            e.target.style.display = 'none';
+                            e.target.nextSibling.style.display = 'flex';
+                          }}
+                        />
+                        <Box sx={{
+                          display: 'none',
+                          width: '100%',
+                          height: '100%',
+                          background: '#f3f4f6',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          color: '#6b7280',
+                          fontSize: '12px'
+                        }}>
+                          📷
+                        </Box>
+                      </Box>
+                    ))}
+                  </Box>
+                  <Typography variant="caption" sx={{ color: '#6b7280', mt: 1, display: 'block' }}>
+                    Click to view full size • Existing images cannot be removed in edit mode
+                  </Typography>
+                </Box>
+              </Grid>
+            )}
           </Grid>
         </DialogContent>
         <DialogActions sx={{ p: 2, gap: 1 }}>
@@ -1807,13 +2434,13 @@ const Reports = () => {
             onClick={submitEditReport}
             variant="contained"
             size="small"
-            disabled={!newReportForm.disaster_type || !newReportForm.description || !newReportForm.address}
+            disabled={!newReportForm.disaster_type || !newReportForm.description || !newReportForm.address || uploadingImages}
             sx={{
               background: '#f59e0b',
               '&:hover': { background: '#d97706' }
             }}
           >
-            Update Report
+            {uploadingImages ? 'Updating...' : 'Update Report'}
           </Button>
         </DialogActions>
       </Dialog>

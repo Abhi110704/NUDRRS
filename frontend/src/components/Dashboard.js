@@ -242,17 +242,29 @@ const Dashboard = () => {
     );
   }
 
-  const pieData = stats ? Object.entries(stats.by_disaster_type).map(([key, value]) => ({
-    name: key,
-    value: value,
-    color: key === 'FLOOD' ? '#2196f3' : key === 'EARTHQUAKE' ? '#ff9800' : key === 'FIRE' ? '#f44336' : '#4caf50'
-  })) : [];
+  const pieData = stats ? Object.entries(stats.by_disaster_type)
+    .filter(([key, value]) => {
+      // Filter out zero values and ensure value is a positive number
+      const numValue = Number(value);
+      return numValue > 0 && !isNaN(numValue);
+    })
+    .map(([key, value]) => ({
+      name: key,
+      value: value,
+      color: key === 'FLOOD' ? '#2196f3' : key === 'EARTHQUAKE' ? '#ff9800' : key === 'FIRE' ? '#f44336' : '#4caf50'
+    })) : [];
 
-  const barData = stats ? Object.entries(stats.by_priority).map(([key, value]) => ({
-    name: key,
-    value: value,
-    color: key === 'HIGH' ? '#f44336' : key === 'MEDIUM' ? '#ff9800' : '#4caf50'
-  })) : [];
+  const barData = stats ? Object.entries(stats.by_priority)
+    .filter(([key, value]) => {
+      // Filter out zero values and ensure value is a positive number
+      const numValue = Number(value);
+      return numValue > 0 && !isNaN(numValue);
+    })
+    .map(([key, value]) => ({
+      name: key,
+      value: value,
+      color: key === 'HIGH' ? '#f44336' : key === 'MEDIUM' ? '#ff9800' : '#4caf50'
+    })) : [];
 
   const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884D8'];
 
@@ -829,32 +841,54 @@ const Dashboard = () => {
                     Reports by Disaster Type
             </Typography>
                 </Box>
-                <ResponsiveContainer width="100%" height={280}>
-              <PieChart>
-                <Pie
-                  data={pieData}
-                  cx="50%"
-                  cy="50%"
-                  labelLine={false}
-                  label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
-                  outerRadius={80}
-                  fill="#8884d8"
-                  dataKey="value"
-                >
-                  {pieData.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={entry.color || COLORS[index % COLORS.length]} />
-                  ))}
-                </Pie>
-                    <RechartsTooltip 
-                      contentStyle={{
-                        backgroundColor: 'white',
-                        border: '1px solid rgba(0, 0, 0, 0.1)',
-                        borderRadius: '8px',
-                        boxShadow: '0 4px 12px rgba(0, 0, 0, 0.1)'
-                      }}
-                    />
-              </PieChart>
-            </ResponsiveContainer>
+                {pieData.length > 0 ? (
+                  <ResponsiveContainer width="100%" height={280}>
+                    <PieChart>
+                      <Pie
+                        data={pieData}
+                        cx="50%"
+                        cy="50%"
+                        labelLine={false}
+                        label={({ name, percent, value }) => {
+                          // Hide labels for 0% values or very small slices
+                          if (percent === 0 || percent < 0.05 || value === 0) return null;
+                          return `${name} ${(percent * 100).toFixed(0)}%`;
+                        }}
+                        outerRadius={80}
+                        fill="#8884d8"
+                        dataKey="value"
+                      >
+                        {pieData.map((entry, index) => (
+                              <Cell key={`cell-${index}`} fill={entry.color || COLORS[index % COLORS.length]} />
+                        ))}
+                      </Pie>
+                          <RechartsTooltip 
+                            contentStyle={{
+                              backgroundColor: 'white',
+                              border: '1px solid rgba(0, 0, 0, 0.1)',
+                              borderRadius: '8px',
+                              boxShadow: '0 4px 12px rgba(0, 0, 0, 0.1)'
+                            }}
+                          />
+                    </PieChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <Box sx={{ 
+                    display: 'flex', 
+                    flexDirection: 'column', 
+                    alignItems: 'center', 
+                    justifyContent: 'center', 
+                    height: 280,
+                    color: '#6b7280'
+                  }}>
+                    <Typography variant="h6" sx={{ mb: 1, fontWeight: 'bold' }}>
+                      No Disaster Reports
+                    </Typography>
+                    <Typography variant="body2" sx={{ textAlign: 'center' }}>
+                      No disaster types with active reports to display
+                    </Typography>
+                  </Box>
+                )}
               </CardContent>
             </Card>
         </Grid>
@@ -889,43 +923,61 @@ const Dashboard = () => {
                     Reports by Priority
             </Typography>
                 </Box>
-                <ResponsiveContainer width="100%" height={280}>
-              <BarChart data={barData}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                    <XAxis 
-                      dataKey="name" 
-                      tick={{ fontSize: 12, fill: '#64748b' }}
-                      axisLine={{ stroke: '#e2e8f0' }}
-                    />
-                    <YAxis 
-                      tick={{ fontSize: 12, fill: '#64748b' }}
-                      axisLine={{ stroke: '#e2e8f0' }}
-                    />
-                    <RechartsTooltip 
-                      contentStyle={{
-                        backgroundColor: 'white',
-                        border: '1px solid rgba(0, 0, 0, 0.1)',
-                        borderRadius: '8px',
-                        boxShadow: '0 4px 12px rgba(0, 0, 0, 0.1)'
-                      }}
-                    />
-                    <Bar 
-                      dataKey="value" 
-                      fill="url(#colorGradient)"
-                      radius={[4, 4, 0, 0]}
-                    >
-                      {barData.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={entry.color || COLORS[index % COLORS.length]} />
-                      ))}
-                    </Bar>
-                    <defs>
-                      <linearGradient id="colorGradient" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="#2563eb" stopOpacity={0.8}/>
-                        <stop offset="95%" stopColor="#1d4ed8" stopOpacity={0.8}/>
-                      </linearGradient>
-                    </defs>
-              </BarChart>
-            </ResponsiveContainer>
+                {barData.length > 0 ? (
+                  <ResponsiveContainer width="100%" height={280}>
+                    <BarChart data={barData}>
+                          <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                          <XAxis 
+                            dataKey="name" 
+                            tick={{ fontSize: 12, fill: '#64748b' }}
+                            axisLine={{ stroke: '#e2e8f0' }}
+                          />
+                          <YAxis 
+                            tick={{ fontSize: 12, fill: '#64748b' }}
+                            axisLine={{ stroke: '#e2e8f0' }}
+                          />
+                          <RechartsTooltip 
+                            contentStyle={{
+                              backgroundColor: 'white',
+                              border: '1px solid rgba(0, 0, 0, 0.1)',
+                              borderRadius: '8px',
+                              boxShadow: '0 4px 12px rgba(0, 0, 0, 0.1)'
+                            }}
+                          />
+                          <Bar 
+                            dataKey="value" 
+                            fill="url(#colorGradient)"
+                            radius={[4, 4, 0, 0]}
+                          >
+                            {barData.map((entry, index) => (
+                              <Cell key={`cell-${index}`} fill={entry.color || COLORS[index % COLORS.length]} />
+                            ))}
+                          </Bar>
+                          <defs>
+                            <linearGradient id="colorGradient" x1="0" y1="0" x2="0" y2="1">
+                              <stop offset="5%" stopColor="#2563eb" stopOpacity={0.8}/>
+                              <stop offset="95%" stopColor="#1d4ed8" stopOpacity={0.8}/>
+                            </linearGradient>
+                          </defs>
+                    </BarChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <Box sx={{ 
+                    display: 'flex', 
+                    flexDirection: 'column', 
+                    alignItems: 'center', 
+                    justifyContent: 'center', 
+                    height: 280,
+                    color: '#6b7280'
+                  }}>
+                    <Typography variant="h6" sx={{ mb: 1, fontWeight: 'bold' }}>
+                      No Priority Reports
+                    </Typography>
+                    <Typography variant="body2" sx={{ textAlign: 'center' }}>
+                      No priority levels with active reports to display
+                    </Typography>
+                  </Box>
+                )}
               </CardContent>
             </Card>
           </Grid>

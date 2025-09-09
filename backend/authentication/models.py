@@ -24,6 +24,12 @@ class UserProfile(models.Model):
             )
         ]
     )
+    profile_image = models.ImageField(
+        upload_to='profile_images/%Y/%m/%d/',
+        null=True,
+        blank=True,
+        help_text='User profile photo'
+    )
     organization = models.ForeignKey('Organization', on_delete=models.SET_NULL, null=True, blank=True)
     is_active = models.BooleanField(default=True)
     last_login_ip = models.GenericIPAddressField(null=True, blank=True)

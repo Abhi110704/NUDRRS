@@ -1,17 +1,19 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   Box, Typography, Paper, Avatar, Grid, Card, CardContent,
   Button, TextField, Divider, Chip, useTheme, useMediaQuery,
-  IconButton, Tooltip, Alert
+  IconButton, Tooltip, Alert, Snackbar
 } from '@mui/material';
 import {
   Edit, Save, Cancel, Person, Email, Phone, Business,
-  Security, LocationOn, AccessTime, Emergency
+  Security, LocationOn, AccessTime, Emergency, CloudUpload,
+  PhotoCamera, Delete, Image as ImageIcon
 } from '@mui/icons-material';
 import { useAuth } from '../contexts/AuthContext';
+import axios from 'axios';
 
 const Profile = () => {
-  const { user, isDemoMode } = useAuth();
+  const { user, isDemoMode, refreshUserProfile } = useAuth();
   const [isEditing, setIsEditing] = useState(false);
   const [editData, setEditData] = useState({
     firstName: user?.first_name || '',
@@ -20,8 +22,23 @@ const Profile = () => {
     phone: user?.profile?.phone_number || '',
     organization: user?.profile?.organization?.name || ''
   });
+  
+  // Image upload states
+  const [profileImage, setProfileImage] = useState(null);
+  const [imagePreview, setImagePreview] = useState(user?.profile?.profile_image_url || null);
+  const [uploadingImage, setUploadingImage] = useState(false);
+  const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'info' });
+  const fileInputRef = useRef(null);
+  
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
+
+  // Update image preview when user data changes
+  useEffect(() => {
+    if (user?.profile?.profile_image_url) {
+      setImagePreview(user.profile.profile_image_url);
+    }
+  }, [user?.profile?.profile_image_url]);
 
   const handleEdit = () => {
     setIsEditing(true);
@@ -48,6 +65,104 @@ const Profile = () => {
       ...editData,
       [e.target.name]: e.target.value
     });
+  };
+
+  // Image upload handlers
+  const handleImageSelect = (event) => {
+    const file = event.target.files[0];
+    if (file) {
+      // Validate file type
+      if (!file.type.startsWith('image/')) {
+        setSnackbar({
+          open: true,
+          message: 'Please select a valid image file',
+          severity: 'error'
+        });
+        return;
+      }
+
+      // Validate file size (max 5MB)
+      if (file.size > 5 * 1024 * 1024) {
+        setSnackbar({
+          open: true,
+          message: 'Image size must be less than 5MB',
+          severity: 'error'
+        });
+        return;
+      }
+
+      setProfileImage(file);
+      
+      // Create preview URL
+      const previewUrl = URL.createObjectURL(file);
+      setImagePreview(previewUrl);
+    }
+  };
+
+  const handleImageUpload = async () => {
+    if (!profileImage) return;
+
+    setUploadingImage(true);
+    try {
+      const formData = new FormData();
+      formData.append('profile_image', profileImage);
+
+      // Upload to backend
+      const response = await axios.post(
+        'http://localhost:8000/api/auth/upload-profile-image/',
+        formData,
+        {
+          headers: {
+            'Content-Type': 'multipart/form-data',
+          },
+        }
+      );
+
+      if (response.data.success) {
+        setSnackbar({
+          open: true,
+          message: 'Profile image uploaded successfully!',
+          severity: 'success'
+        });
+        
+        // Refresh user profile to get updated data
+        const updatedUser = await refreshUserProfile();
+        
+        // Update the image preview with the new URL
+        if (response.data.image_url) {
+          setImagePreview(response.data.image_url);
+        } else if (updatedUser?.profile?.profile_image_url) {
+          setImagePreview(updatedUser.profile.profile_image_url);
+        }
+        
+        // Clear the selected file
+        setProfileImage(null);
+        if (fileInputRef.current) {
+          fileInputRef.current.value = '';
+        }
+      }
+    } catch (error) {
+      console.error('Error uploading image:', error);
+      setSnackbar({
+        open: true,
+        message: 'Failed to upload image. Please try again.',
+        severity: 'error'
+      });
+    } finally {
+      setUploadingImage(false);
+    }
+  };
+
+  const handleRemoveImage = () => {
+    setProfileImage(null);
+    setImagePreview(null);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
+
+  const handleSnackbarClose = () => {
+    setSnackbar({ ...snackbar, open: false });
   };
 
   const getRoleColor = (role) => {
@@ -146,14 +261,30 @@ const Profile = () => {
                 width: 120,
                 height: 120,
                 borderRadius: '50%',
-                background: 'linear-gradient(135deg, #d32f2f 0%, #ff9800 100%)',
+                background: imagePreview 
+                  ? 'transparent' 
+                  : 'linear-gradient(135deg, #d32f2f 0%, #ff9800 100%)',
                 mb: 3,
                 boxShadow: '0 8px 32px rgba(211, 47, 47, 0.3)',
-                position: 'relative'
+                position: 'relative',
+                overflow: 'hidden'
               }}>
-                <Typography variant="h2" sx={{ color: 'white', fontWeight: 'bold' }}>
-                  {user?.first_name?.[0] || user?.username?.[0] || 'U'}
-                </Typography>
+                {imagePreview ? (
+                  <img
+                    src={imagePreview}
+                    alt="Profile"
+                    style={{
+                      width: '100%',
+                      height: '100%',
+                      objectFit: 'cover',
+                      borderRadius: '50%'
+                    }}
+                  />
+                ) : (
+                  <Typography variant="h2" sx={{ color: 'white', fontWeight: 'bold' }}>
+                    {user?.first_name?.[0] || user?.username?.[0] || 'U'}
+                  </Typography>
+                )}
                 {isDemoMode && (
                   <Box sx={{
                     position: 'absolute',
@@ -241,6 +372,83 @@ const Profile = () => {
                     </Grid>
                   </Grid>
                 )}
+              </Box>
+
+              {/* Profile Image Upload Section */}
+              <Box sx={{ mt: 3, p: 2, bgcolor: '#f8f9fa', borderRadius: 2, border: '1px solid #e9ecef' }}>
+                <Typography variant="h6" sx={{ 
+                  fontWeight: 'bold', 
+                  mb: 2, 
+                  color: '#333',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 1
+                }}>
+                  <PhotoCamera sx={{ fontSize: 20 }} />
+                  Profile Photo
+                </Typography>
+                
+                <input
+                  type="file"
+                  ref={fileInputRef}
+                  onChange={handleImageSelect}
+                  accept="image/*"
+                  style={{ display: 'none' }}
+                />
+                
+                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                  <Button
+                    variant="outlined"
+                    startIcon={<CloudUpload />}
+                    onClick={() => fileInputRef.current?.click()}
+                    fullWidth
+                    sx={{
+                      borderColor: '#d32f2f',
+                      color: '#d32f2f',
+                      '&:hover': {
+                        borderColor: '#b71c1c',
+                        backgroundColor: 'rgba(211, 47, 47, 0.04)'
+                      }
+                    }}
+                  >
+                    Choose Photo
+                  </Button>
+                  
+                  {profileImage && (
+                    <Box sx={{ display: 'flex', gap: 1 }}>
+                      <Button
+                        variant="contained"
+                        startIcon={<CloudUpload />}
+                        onClick={handleImageUpload}
+                        disabled={uploadingImage}
+                        fullWidth
+                        sx={{
+                          backgroundColor: '#4caf50',
+                          '&:hover': { backgroundColor: '#45a049' }
+                        }}
+                      >
+                        {uploadingImage ? 'Uploading...' : 'Upload Photo'}
+                      </Button>
+                      <Button
+                        variant="outlined"
+                        startIcon={<Delete />}
+                        onClick={handleRemoveImage}
+                        color="error"
+                        sx={{ minWidth: 'auto', px: 2 }}
+                      >
+                        Remove
+                      </Button>
+                    </Box>
+                  )}
+                  
+                  <Typography variant="caption" sx={{ 
+                    color: 'text.secondary', 
+                    textAlign: 'center',
+                    fontSize: '0.75rem'
+                  }}>
+                    Supported formats: JPG, PNG, GIF (Max 5MB)
+                  </Typography>
+                </Box>
               </Box>
             </CardContent>
           </Card>
@@ -427,6 +635,22 @@ const Profile = () => {
           </Card>
         </Grid>
       </Grid>
+
+      {/* Snackbar for notifications */}
+      <Snackbar
+        open={snackbar.open}
+        autoHideDuration={6000}
+        onClose={handleSnackbarClose}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+      >
+        <Alert 
+          onClose={handleSnackbarClose} 
+          severity={snackbar.severity}
+          sx={{ width: '100%' }}
+        >
+          {snackbar.message}
+        </Alert>
+      </Snackbar>
     </Box>
   );
 };

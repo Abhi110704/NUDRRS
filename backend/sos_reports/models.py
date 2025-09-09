@@ -50,6 +50,8 @@ class SOSReport(models.Model):
     status = models.CharField(max_length=15, choices=STATUS_CHOICES, default='PENDING')
     ai_verified = models.BooleanField(default=False)
     ai_confidence = models.FloatField(default=0.0)
+    ai_fraud_score = models.FloatField(default=0.0, help_text='AI fraud detection score (0.0-1.0)')
+    ai_analysis_data = models.JSONField(default=dict, blank=True, help_text='Detailed AI analysis results')
     verified_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='verified_reports')
     verified_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(default=timezone.now)

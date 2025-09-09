@@ -11,10 +11,18 @@ class OrganizationSerializer(serializers.ModelSerializer):
 class UserProfileSerializer(serializers.ModelSerializer):
     organization = OrganizationSerializer(read_only=True)
     organization_id = serializers.IntegerField(write_only=True, required=False, allow_null=True)
+    profile_image_url = serializers.SerializerMethodField()
     
     class Meta:
         model = UserProfile
-        fields = ['id', 'role', 'phone_number', 'organization', 'organization_id', 'is_active']
+        fields = ['id', 'role', 'phone_number', 'profile_image', 'profile_image_url', 'organization', 'organization_id', 'is_active']
+    
+    def get_profile_image_url(self, obj):
+        if obj.profile_image:
+            request = self.context.get('request')
+            if request:
+                return request.build_absolute_uri(obj.profile_image.url)
+        return None
 
 class UserSerializer(serializers.ModelSerializer):
     profile = UserProfileSerializer(read_only=True)
@@ -22,6 +30,12 @@ class UserSerializer(serializers.ModelSerializer):
     password2 = serializers.CharField(write_only=True, required=True)
     phone_number = serializers.CharField(max_length=15, required=False, allow_blank=True)
     organization = serializers.CharField(max_length=200, required=False, allow_blank=True)
+    
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Pass context to nested profile serializer
+        if 'context' in kwargs:
+            self.fields['profile'] = UserProfileSerializer(context=kwargs['context'])
     
     class Meta:
         model = User

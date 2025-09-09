@@ -3,6 +3,7 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from django.db.models import Q, Count
+from django.utils import timezone
 from .models import SOSReport, ReportMedia, ReportUpdate
 from .serializers import SOSReportSerializer, SOSReportCreateSerializer, ReportMediaSerializer
 from ai_services.services import AIVerificationService
@@ -72,8 +73,10 @@ class SOSReportViewSet(viewsets.ModelViewSet):
             is_demo=False  # Always mark new reports as real reports
         )
         
-        # Process uploaded media files
+        # Process uploaded media files and perform comprehensive AI analysis
         files = request.FILES.getlist('files')
+        image_paths = []
+        
         for file in files:
             media_type = 'IMAGE' if file.content_type.startswith('image/') else 'VIDEO'
             media = ReportMedia.objects.create(
@@ -82,19 +85,67 @@ class SOSReportViewSet(viewsets.ModelViewSet):
                 file=file
             )
             
-            # Trigger AI verification
-            ai_service = AIVerificationService()
             if media_type == 'IMAGE':
-                verification_result = ai_service.verify_image(media.file.path)
-                media.ai_analysis = verification_result
-                media.save()
-                
-                # Update report based on AI analysis
-                if verification_result.get('is_emergency', False):
-                    report.ai_verified = True
-                    report.ai_confidence = verification_result.get('confidence', 0.0)
-                    report.priority = verification_result.get('suggested_priority', 'MEDIUM')
-                    report.save()
+                image_paths.append(media.file.path)
+        
+        # Perform comprehensive AI analysis
+        ai_service = AIVerificationService()
+        comprehensive_analysis = ai_service.analyze_report(
+            text_description=report.description,
+            image_paths=image_paths
+        )
+        
+        # Update report with comprehensive analysis results
+        report.ai_verified = comprehensive_analysis.get('is_emergency', False)
+        report.ai_confidence = comprehensive_analysis.get('confidence', 0.0)
+        
+        # Store fraud score and detailed analysis in existing fields
+        fraud_score = comprehensive_analysis.get('fraud_score', 0.0)
+        report.ai_fraud_score = fraud_score
+        report.ai_analysis_data = {
+            'comprehensive_analysis': comprehensive_analysis,
+            'text_analysis': comprehensive_analysis.get('text_analysis', {}),
+            'image_analyses': comprehensive_analysis.get('image_analyses', []),
+            'combined_metrics': comprehensive_analysis.get('combined_metrics', {}),
+            'fraud_indicators': comprehensive_analysis.get('text_analysis', {}).get('fraud_keywords_found', []),
+            'emergency_indicators': comprehensive_analysis.get('text_analysis', {}).get('keywords_found', []),
+            'analysis_timestamp': timezone.now().isoformat(),
+            'analysis_version': '2.0_enhanced'
+        }
+        
+        # Enhanced priority determination based on AI analysis
+        suggested_priority = comprehensive_analysis.get('suggested_priority', 'MEDIUM')
+        confidence = comprehensive_analysis.get('confidence', 0.0)
+        
+        # Override priority based on confidence and fraud score
+        if fraud_score > 0.7 or confidence < 0.3:
+            report.priority = 'LOW'  # Mark as low priority if likely fraud
+        elif confidence > 0.8 and fraud_score < 0.2:
+            report.priority = 'HIGH'  # High confidence, low fraud = high priority
+        elif confidence > 0.6 and fraud_score < 0.4:
+            report.priority = 'MEDIUM'
+        else:
+            report.priority = suggested_priority
+        
+        # Enhanced status determination
+        if comprehensive_analysis.get('is_fraud', False) or fraud_score > 0.6:
+            report.status = 'REJECTED'
+        elif comprehensive_analysis.get('suggested_status'):
+            report.status = comprehensive_analysis.get('suggested_status', 'PENDING')
+        elif confidence > 0.8 and fraud_score < 0.2:
+            report.status = 'VERIFIED'  # Auto-verify high confidence reports
+        else:
+            report.status = 'PENDING'
+        
+        report.save()
+        
+        # Store detailed AI analysis in media records
+        for i, file in enumerate(files):
+            if file.content_type.startswith('image/'):
+                media = ReportMedia.objects.filter(report=report, file__icontains=file.name).first()
+                if media and i < len(comprehensive_analysis.get('image_analyses', [])):
+                    media.ai_analysis = comprehensive_analysis['image_analyses'][i]
+                    media.save()
         
         return Response(SOSReportSerializer(report).data, status=status.HTTP_201_CREATED)
     

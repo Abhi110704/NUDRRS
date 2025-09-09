@@ -107,6 +107,20 @@ export const AuthProvider = ({ children }) => {
     delete axios.defaults.headers.common['Authorization'];
   };
 
+  const refreshUserProfile = async () => {
+    if (token) {
+      try {
+        const response = await axios.get('http://localhost:8000/api/auth/profile/');
+        setUser(response.data);
+        return response.data;
+      } catch (error) {
+        console.error('Error refreshing user profile:', error);
+        return null;
+      }
+    }
+    return null;
+  };
+
   // Demo mode toggle removed for production
 
   const isAdmin = user?.profile?.role === 'ADMIN';
@@ -122,6 +136,7 @@ export const AuthProvider = ({ children }) => {
     login,
     register,
     logout,
+    refreshUserProfile,
     // toggleDemoMode, // Removed for production
     isAuthenticated: !!token,
     isAdmin,

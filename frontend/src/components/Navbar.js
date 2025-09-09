@@ -264,16 +264,21 @@ const Navbar = () => {
                     transition: 'all 0.2s ease'
                   }}
                 >
-                  <Avatar sx={{ 
-                    width: 28, 
-                    height: 28, 
-                    background: 'linear-gradient(45deg, #2563eb, #7c3aed)',
-                    fontSize: '0.8rem',
-                    fontWeight: 'bold',
-                    boxShadow: '0 2px 8px rgba(37, 99, 235, 0.3)',
-                    border: '1px solid rgba(255, 255, 255, 0.2)'
-                  }}>
-                    {user?.first_name?.[0] || user?.username?.[0] || 'U'}
+                  <Avatar 
+                    src={user?.profile?.profile_image_url || null}
+                    sx={{ 
+                      width: 28, 
+                      height: 28, 
+                      background: user?.profile?.profile_image_url 
+                        ? 'transparent' 
+                        : 'linear-gradient(45deg, #2563eb, #7c3aed)',
+                      fontSize: '0.8rem',
+                      fontWeight: 'bold',
+                      boxShadow: '0 2px 8px rgba(37, 99, 235, 0.3)',
+                      border: '1px solid rgba(255, 255, 255, 0.2)'
+                    }}
+                  >
+                    {!user?.profile?.profile_image_url && (user?.first_name?.[0] || user?.username?.[0] || 'U')}
                   </Avatar>
                 </IconButton>
               </>

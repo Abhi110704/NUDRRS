@@ -1,0 +1,290 @@
+# 🚀 NUDRRS - Emergency Management System Commands
+# Copy and paste these commands to set up and run the system
+
+# ========================================
+# ⚡ SUPER QUICK START (2 Minutes)
+# ========================================
+
+# FOR FIRST TIME SETUP:
+# 1. Open Command Prompt
+# 2. Copy-paste these commands:
+
+cd "E:\Internship\NUDRRS\backend"
+python -m venv venv
+venv\Scripts\activate
+pip install -r requirements.txt
+python manage.py migrate
+python run_server.py
+
+# 3. Open NEW Command Prompt and run:
+cd "E:\Internship\NUDRRS\frontend"
+npm install
+npm start
+
+# 4. Open browser and go to:
+# http://localhost:3000 (Frontend)
+# http://localhost:8000/admin/ (Admin - admin/admin123)
+
+# FOR DAILY USE (Already Set Up):
+# Terminal 1: cd "E:\Internship\NUDRRS\backend" && venv\Scripts\activate && python run_server.py
+# Terminal 2: cd "E:\Internship\NUDRRS\frontend" && npm start
+
+# ========================================
+# 📋 PREREQUISITES CHECK
+# ========================================
+# Make sure you have:
+# - Python 3.8+ installed
+# - Node.js 14+ installed
+# - Git installed
+
+# ========================================
+# 🔧 BACKEND SETUP (Django)
+# ========================================
+
+# Navigate to project directory
+cd "E:\Internship\NUDRRS"
+
+# Navigate to backend
+cd backend
+
+# Create virtual environment
+python -m venv venv
+
+# Activate virtual environment (Windows)
+venv\Scripts\activate
+
+# Install Python dependencies
+pip install -r requirements.txt
+
+# Run database migrations
+python manage.py migrate
+
+# Create admin user (optional - run_server.py creates one automatically)
+python manage.py createsuperuser
+
+# Start Django server
+python run_server.py
+
+# ========================================
+# 🌐 FRONTEND SETUP (React)
+# ========================================
+
+# Open new terminal/command prompt and navigate to project
+cd "E:\Internship\NUDRRS"
+
+# Navigate to frontend
+cd frontend
+
+# Install Node.js dependencies
+npm install
+
+# Start React development server
+npm start
+
+# ========================================
+# 🔗 ACCESS URLS & LINKS
+# ========================================
+
+# Frontend Application (React)
+# http://localhost:3000
+
+# Backend API (Django)
+# http://localhost:8000
+
+# Django Admin Panel
+# http://localhost:8000/admin/
+# Username: admin
+# Password: admin123
+
+# Emergency Dashboard (Custom Admin)
+# http://localhost:8000/admin/emergency-dashboard/
+
+# API Endpoints:
+# - All Reports: http://localhost:8000/api/sos_reports/
+# - Dashboard Stats: http://localhost:8000/api/sos_reports/dashboard_stats/
+# - API Root: http://localhost:8000/api/
+
+# ========================================
+# 🛠️ DEVELOPMENT COMMANDS
+# ========================================
+
+# Backend Commands:
+# Stop server: Ctrl+C
+# Run migrations: python manage.py migrate
+# Create superuser: python manage.py createsuperuser
+# Check Django version: python manage.py version
+# Collect static files: python manage.py collectstatic
+
+# Frontend Commands:
+# Stop server: Ctrl+C
+# Install new package: npm install package-name
+# Build for production: npm run build
+# Check React version: npm list react
+
+# ========================================
+# 🗄️ DATABASE COMMANDS
+# ========================================
+
+# Reset database (WARNING: Deletes all data)
+# Delete: backend\db.sqlite3
+# Then run: python manage.py migrate
+
+# Create new migration:
+# python manage.py makemigrations
+
+# Apply migrations:
+# python manage.py migrate
+
+# ========================================
+# 🚨 TROUBLESHOOTING COMMANDS
+# ========================================
+
+# If port 8000 is busy:
+# python manage.py runserver 8001
+
+# If port 3000 is busy:
+# npm start -- --port 3001
+
+# Clear npm cache:
+# npm cache clean --force
+
+# Reinstall node_modules:
+# Remove-Item -Recurse -Force node_modules
+# npm install
+
+# Clear Python cache:
+# Get-ChildItem -Recurse -Directory | Where-Object {$_.Name -eq "__pycache__" -and $_.FullName -notlike "*venv*"} | Remove-Item -Recurse -Force
+
+# ========================================
+# ⚡ ULTRA QUICK START (5 Minutes Setup)
+# ========================================
+
+# STEP 1: Open Command Prompt/Terminal
+# STEP 2: Copy and paste these commands one by one:
+
+# Navigate to project
+cd "E:\Internship\NUDRRS"
+
+# Backend Setup (Terminal 1)
+cd backend
+python -m venv venv
+venv\Scripts\activate
+pip install -r requirements.txt
+python manage.py migrate
+python run_server.py
+
+# Frontend Setup (Open NEW Terminal/Command Prompt)
+cd "E:\Internship\NUDRRS\frontend"
+npm install
+npm start
+
+# ========================================
+# 🚀 INSTANT START (If Already Set Up)
+# ========================================
+
+# Terminal 1 - Backend (Copy-Paste):
+cd "E:\Internship\NUDRRS\backend"
+venv\Scripts\activate
+python run_server.py
+
+# Terminal 2 - Frontend (Copy-Paste):
+cd "E:\Internship\NUDRRS\frontend"
+npm start
+
+# ========================================
+# 📱 QUICK START (Copy-Paste Sequence)
+# ========================================
+
+# Terminal 1 - Backend:
+cd "E:\Internship\NUDRRS\backend"
+venv\Scripts\activate
+python run_server.py
+
+# Terminal 2 - Frontend:
+cd "E:\Internship\NUDRRS\frontend"
+venv\Scripts\activate
+npm start
+
+# ========================================
+# 🎯 FEATURES TO TEST
+# ========================================
+
+# 1. Create Emergency Report:
+# - Go to http://localhost:3000
+# - Click "New Emergency Report"
+# - Fill form and submit
+
+# 2. View Live Map:
+# - Go to Reports tab
+# - Click "View on Map"
+# - See real-time emergency locations
+
+# 3. Check Analytics:
+# - Go to Analytics tab
+# - View real-time statistics
+
+# 4. Admin Panel:
+# - Go to http://localhost:8000/admin/
+# - Login with admin/admin123
+# - View emergency dashboard
+
+# ========================================
+# 🔐 DEFAULT CREDENTIALS
+# ========================================
+
+# Django Admin:
+# Username: admin
+# Password: admin123
+
+# API Access:
+# No authentication required for basic endpoints
+# All endpoints are publicly accessible for demo
+
+# ========================================
+# 📊 SYSTEM STATUS CHECK
+# ========================================
+
+# Check if backend is running:
+# curl http://localhost:8000/api/
+
+# Check if frontend is running:
+# Open http://localhost:3000 in browser
+
+# Check database:
+# python manage.py shell -c "from sos_reports.models import SOSReport; print(f'Reports: {SOSReport.objects.count()}')"
+
+# ========================================
+# 🚀 PRODUCTION DEPLOYMENT NOTES
+# ========================================
+
+# For production:
+# 1. Set DEBUG = False in settings.py
+# 2. Configure PostgreSQL database
+# 3. Set up environment variables
+# 4. Use Gunicorn for Django
+# 5. Build React app: npm run build
+# 6. Configure static file serving
+# 7. Set up HTTPS
+
+# ========================================
+# 📞 SUPPORT & HELP
+# ========================================
+
+# If you encounter issues:
+# 1. Check console logs for error messages
+# 2. Ensure all services are running on correct ports
+# 3. Verify database migrations are up to date
+# 4. Check network connectivity between frontend and backend
+# 5. Restart both servers if needed
+
+# ========================================
+# 🎉 READY TO GO!
+# ========================================
+
+# After running the setup commands:
+# ✅ Backend: http://localhost:8000
+# ✅ Frontend: http://localhost:3000
+# ✅ Admin: http://localhost:8000/admin/
+# ✅ Emergency Dashboard: http://localhost:8000/admin/emergency-dashboard/
+
+# Happy coding! 🚀
