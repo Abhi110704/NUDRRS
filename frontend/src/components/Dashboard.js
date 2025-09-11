@@ -114,22 +114,21 @@ const Dashboard = () => {
       
       // Demo data (different content for demo mode)
       const demoStats = isDemoMode ? {
-        total_reports: 6,
-        pending_reports: 2,
-        active_reports: 3,
-        resolved_reports: 1,
+        total_reports: 7,
+        pending_reports: 3,
+        active_reports: 2,
+        resolved_reports: 2,
         by_disaster_type: {
-          'FLOOD': 1,
-          'FIRE': 1,
+          'FLOOD': 2,
+          'FIRE': 2,
           'EARTHQUAKE': 1,
           'LANDSLIDE': 1,
-          'CYCLONE': 1,
-          'MEDICAL': 1
+          'CYCLONE': 1
         },
         by_priority: {
           'HIGH': 3,
           'CRITICAL': 2,
-          'MEDIUM': 1
+          'MEDIUM': 2
         }
       } : {
         total_reports: 0,
@@ -144,43 +143,130 @@ const Dashboard = () => {
         {
           id: 1,
           disaster_type: 'FLOOD',
-            status: 'PENDING',
-            priority: 'HIGH',
-            address: 'Sector 15, Chandigarh, Punjab',
-            description: 'Heavy rainfall causing waterlogging in residential areas. Multiple families need evacuation.',
-          created_at: new Date().toISOString()
+          status: 'PENDING',
+          priority: 'HIGH',
+          address: 'Sector 15, Chandigarh, Punjab',
+          description: 'Heavy rainfall causing severe waterlogging in residential areas. Water level rising rapidly, multiple families trapped and need immediate evacuation. Roads completely submerged.',
+          created_at: new Date().toISOString(),
+          user: { first_name: 'Rajesh', last_name: 'Kumar' },
+          media: [
+            {
+              id: 1,
+              file: 'https://images.unsplash.com/photo-1544551763-46a013bb70d5?w=400&h=300&fit=crop',
+              file_type: 'image'
+            },
+            {
+              id: 2,
+              file: 'https://images.unsplash.com/photo-1574263867122-4a1b0b0b0b0b?w=400&h=300&fit=crop',
+              file_type: 'image'
+            }
+          ]
         },
         {
           id: 2,
           disaster_type: 'FIRE',
-            status: 'IN_PROGRESS',
-            priority: 'CRITICAL',
-            address: 'Industrial Area, Gurgaon, Haryana',
-            description: 'Factory fire spreading rapidly. Fire department on site, need additional resources.',
-          created_at: new Date(Date.now() - 3600000).toISOString()
+          status: 'IN_PROGRESS',
+          priority: 'CRITICAL',
+          address: 'Industrial Area, Gurgaon, Haryana',
+          description: 'Massive factory fire spreading rapidly across multiple buildings. Thick black smoke visible from 5km away. Fire department on site but need additional resources and evacuation support.',
+          created_at: new Date(Date.now() - 3600000).toISOString(),
+          user: { first_name: 'Priya', last_name: 'Sharma' },
+          media: [
+            {
+              id: 3,
+              file: 'https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=400&h=300&fit=crop',
+              file_type: 'image'
+            }
+          ]
         },
         {
           id: 3,
           disaster_type: 'EARTHQUAKE',
-            status: 'VERIFIED',
-            priority: 'MEDIUM',
-            address: 'Hill Station Road, Shimla, Himachal Pradesh',
-            description: 'Minor earthquake reported, checking for structural damages in old buildings.',
-          created_at: new Date(Date.now() - 7200000).toISOString()
+          status: 'VERIFIED',
+          priority: 'MEDIUM',
+          address: 'Hill Station Road, Shimla, Himachal Pradesh',
+          description: 'Moderate earthquake (5.2 magnitude) reported. Several old buildings showing cracks, checking for structural damages. No casualties reported yet but residents evacuated as precaution.',
+          created_at: new Date(Date.now() - 7200000).toISOString(),
+          user: { first_name: 'Amit', last_name: 'Singh' },
+          media: [
+            {
+              id: 4,
+              file: 'https://images.unsplash.com/photo-1574263867122-4a1b0b0b0b0b?w=400&h=300&fit=crop',
+              file_type: 'image'
+            }
+          ]
+        },
+        {
+          id: 4,
+          disaster_type: 'LANDSLIDE',
+          status: 'PENDING',
+          priority: 'HIGH',
+          address: 'Mountain View, Dehradun, Uttarakhand',
+          description: 'Heavy rainfall triggered landslide blocking main highway. Multiple vehicles trapped, rescue operations underway. Road completely blocked for next 24-48 hours.',
+          created_at: new Date(Date.now() - 1800000).toISOString(),
+          user: { first_name: 'Suresh', last_name: 'Yadav' },
+          media: [
+            {
+              id: 5,
+              file: 'https://images.unsplash.com/photo-1574263867122-4a1b0b0b0b0b?w=400&h=300&fit=crop',
+              file_type: 'image'
+            }
+          ]
+        },
+        {
+          id: 5,
+          disaster_type: 'CYCLONE',
+          status: 'IN_PROGRESS',
+          priority: 'CRITICAL',
+          address: 'Coastal Area, Puri, Odisha',
+          description: 'Cyclone warning issued. Wind speed increasing rapidly, heavy rainfall expected. Coastal areas being evacuated. Emergency shelters activated.',
+          created_at: new Date(Date.now() - 900000).toISOString(),
+          user: { first_name: 'Lakshmi', last_name: 'Patel' },
+          media: [
+            {
+              id: 6,
+              file: 'https://images.unsplash.com/photo-1574263867122-4a1b0b0b0b0b?w=400&h=300&fit=crop',
+              file_type: 'image'
+            }
+          ]
         }
       ] : [];
 
       // Demo user-specific reports
       const demoUserReports = isDemoMode && user ? [
         {
-          id: 4,
+          id: 6,
           disaster_type: 'FLOOD',
           priority: 'HIGH',
           status: 'PENDING',
           address: 'Your Location, City',
-          description: 'Your recent emergency report',
+          description: 'Heavy rainfall in my area causing waterlogging. Water entering ground floor of my house. Need immediate assistance for evacuation.',
           created_at: new Date(Date.now() - 1800000).toISOString(),
-          user: { first_name: user.first_name || 'Demo', last_name: user.last_name || 'User' }
+          user: { id: 999, first_name: user.first_name || 'Current', last_name: user.last_name || 'User' },
+          media: [
+            {
+              id: 7,
+              file: 'https://images.unsplash.com/photo-1544551763-46a013bb70d5?w=400&h=300&fit=crop',
+              file_type: 'image'
+            }
+          ]
+        },
+        {
+          id: 7,
+          disaster_type: 'FIRE',
+          priority: 'MEDIUM',
+          status: 'RESOLVED',
+          address: 'Nearby Market, Your City',
+          description: 'Small fire in electrical panel of nearby shop. Fire department responded quickly and extinguished it. No injuries reported.',
+          created_at: new Date(Date.now() - 86400000).toISOString(),
+          user: { id: 999, first_name: user.first_name || 'Current', last_name: user.last_name || 'User' },
+          media: [
+            {
+              id: 8,
+              file: 'https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=400&h=300&fit=crop',
+              file_type: 'image'
+            }
+          ]
         }
       ] : [];
 
@@ -702,7 +788,7 @@ const Dashboard = () => {
           
           <Grid item xs={12} sm={6} md={3}>
             <Card 
-              onClick={() => navigate('/reports')}
+              onClick={() => navigate('/emergency-contacts')}
               sx={{ 
                 background: 'white',
                 borderRadius: 2,
@@ -749,54 +835,6 @@ const Dashboard = () => {
             </Card>
           </Grid>
 
-          <Grid item xs={12} sm={6} md={3}>
-            <Card 
-              onClick={() => navigate('/reports')}
-              sx={{ 
-                background: 'white',
-                borderRadius: 2,
-                border: '1px solid #e2e8f0',
-                boxShadow: '0 1px 3px rgba(0, 0, 0, 0.1)',
-                transition: 'all 0.2s ease',
-                cursor: 'pointer',
-                height: 120,
-                '&:hover': {
-                  transform: 'translateY(-2px)',
-                  boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)'
-                }
-              }}
-            >
-              <CardContent sx={{ p: 2.5, textAlign: 'center', height: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
-                <Box sx={{
-                  width: 40,
-                  height: 40,
-                  borderRadius: 2,
-                  background: '#eff6ff',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  mb: 1.5,
-                  mx: 'auto'
-                }}>
-                  <PriorityHigh sx={{ fontSize: 20, color: '#2563eb' }} />
-                </Box>
-                <Typography variant="subtitle1" sx={{ 
-                  fontWeight: 600, 
-                  color: '#1a202c',
-                  mb: 0.5,
-                  fontSize: '0.875rem'
-                }}>
-                  Broadcast Alert
-                </Typography>
-                <Typography variant="body2" sx={{ 
-                  color: '#4a5568',
-                  fontSize: '0.75rem'
-                }}>
-                  Send notifications
-                </Typography>
-              </CardContent>
-            </Card>
-          </Grid>
         </Grid>
       </Box>
 

@@ -29,6 +29,11 @@ class SOSReportViewSet(viewsets.ModelViewSet):
             return SOSReportCreateSerializer
         return SOSReportSerializer
     
+    def get_serializer_context(self):
+        context = super().get_serializer_context()
+        context['request'] = self.request
+        return context
+    
     def get_queryset(self):
         queryset = SOSReport.objects.all()
         
@@ -179,6 +184,52 @@ class SOSReportViewSet(viewsets.ModelViewSet):
         serializer = self.get_serializer(reports, many=True)
         return Response(serializer.data)
     
+    def update(self, request, *args, **kwargs):
+        """Custom update method to handle file uploads for existing reports"""
+        partial = kwargs.pop('partial', False)
+        instance = self.get_object()
+        
+        # Get the serializer
+        serializer = self.get_serializer(instance, data=request.data, partial=partial)
+        serializer.is_valid(raise_exception=True)
+        
+        # Save the report
+        report = serializer.save()
+        
+        # Process uploaded media files if any
+        files = request.FILES.getlist('files')
+        if files:
+            image_paths = []
+            
+            for file in files:
+                media_type = 'IMAGE' if file.content_type.startswith('image/') else 'VIDEO'
+                media = ReportMedia.objects.create(
+                    report=report,
+                    media_type=media_type,
+                    file=file
+                )
+                
+                if media_type == 'IMAGE':
+                    image_paths.append(media.file.path)
+            
+            # Perform AI analysis on new images if any
+            if image_paths:
+                ai_service = AIVerificationService()
+                comprehensive_analysis = ai_service.analyze_report(
+                    text_description=report.description,
+                    image_paths=image_paths
+                )
+                
+                # Update report with AI analysis results
+                report.ai_verified = comprehensive_analysis.get('is_emergency', False)
+                report.ai_confidence = comprehensive_analysis.get('confidence', 0.0)
+                report.ai_fraud_score = comprehensive_analysis.get('fraud_score', 0.0)
+                report.ai_analysis_data = comprehensive_analysis
+                report.save()
+        
+        # Return the updated report with media
+        response_serializer = SOSReportSerializer(report, context={'request': request})
+        return Response(response_serializer.data)
 
     @action(detail=True, methods=['post'])
     def update_status(self, request, pk=None):

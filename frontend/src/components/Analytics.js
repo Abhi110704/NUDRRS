@@ -73,26 +73,31 @@ const Analytics = () => {
         console.log('🔍 Filtered disaster types:', filteredDisasterTypes);
       } catch (apiError) {
         console.log('API not available, using demo data:', apiError.message);
-        // Demo analytics data
-        setStats({
-          total_reports: 247,
-          pending_reports: 23,
-          active_reports: 15,
-          resolved_reports: 209,
+        // Demo analytics data - ensure it's always available
+        const demoStats = {
+          total_reports: 342,
+          pending_reports: 45,
+          active_reports: 28,
+          resolved_reports: 269,
           by_disaster_type: {
-            'FLOOD': 89,
-            'EARTHQUAKE': 45,
-            'FIRE': 67,
-            'LANDSLIDE': 28,
-            'CYCLONE': 18
+            'FLOOD': 125,
+            'FIRE': 89,
+            'EARTHQUAKE': 67,
+            'LANDSLIDE': 35,
+            'CYCLONE': 26,
+            'DROUGHT': 12,
+            'STORM': 18,
+            'MEDICAL': 15
           },
           by_priority: {
-            'LOW': 98,
-            'MEDIUM': 87,
-            'HIGH': 45,
-            'CRITICAL': 17
+            'LOW': 156,
+            'MEDIUM': 98,
+            'HIGH': 67,
+            'CRITICAL': 21
           }
-        });
+        };
+        setStats(demoStats);
+        console.log('✅ Demo analytics data loaded:', demoStats);
       }
       
       // Generate mock time series data for demo
@@ -102,6 +107,30 @@ const Analytics = () => {
       setLoading(false);
     } catch (error) {
       console.error('Error fetching analytics:', error);
+      // Fallback demo data in case of any error
+      setStats({
+        total_reports: 342,
+        pending_reports: 45,
+        active_reports: 28,
+        resolved_reports: 269,
+        by_disaster_type: {
+          'FLOOD': 125,
+          'FIRE': 89,
+          'EARTHQUAKE': 67,
+          'LANDSLIDE': 35,
+          'CYCLONE': 26,
+          'DROUGHT': 12,
+          'STORM': 18,
+          'MEDICAL': 15
+        },
+        by_priority: {
+          'LOW': 156,
+          'MEDIUM': 98,
+          'HIGH': 67,
+          'CRITICAL': 21
+        }
+      });
+      setTimeSeriesData(generateMockTimeSeriesData());
       setLoading(false);
     }
   };
@@ -114,11 +143,20 @@ const Analytics = () => {
       const date = new Date(today);
       date.setDate(date.getDate() - i);
       
+      // More realistic data with some patterns
+      const baseReports = 8;
+      const weekendMultiplier = (date.getDay() === 0 || date.getDay() === 6) ? 0.7 : 1;
+      const weatherFactor = Math.random() > 0.8 ? 1.5 : 1; // 20% chance of weather-related spike
+      
+      const reports = Math.floor((baseReports + Math.random() * 15) * weekendMultiplier * weatherFactor);
+      const resolved = Math.floor(reports * (0.6 + Math.random() * 0.3)); // 60-90% resolution rate
+      const pending = Math.max(0, reports - resolved);
+      
       data.push({
         date: date.toISOString().split('T')[0],
-        reports: Math.floor(Math.random() * 20) + 5,
-        resolved: Math.floor(Math.random() * 15) + 3,
-        pending: Math.floor(Math.random() * 8) + 1
+        reports: reports,
+        resolved: resolved,
+        pending: pending
       });
     }
     
@@ -126,48 +164,56 @@ const Analytics = () => {
   };
 
   const COLORS = [
-    '#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FFEAA7', 
-    '#DDA0DD', '#98D8C8', '#F7DC6F', '#BB8FCE', '#85C1E9'
+    '#FF8C00', // Orange for EARTHQUAKE
+    '#FF4444', // Red for FIRE  
+    '#4A90E2', // Blue for FLOOD
+    '#2ECC71', // Dark Green for MEDICAL
+    '#27AE60', // Medium Green for LANDSLIDE
+    '#58D68D'  // Light Green for CYCLONE
   ];
 
   const pieData = stats ? Object.entries(stats.by_disaster_type || {})
     .filter(([key, value]) => {
-      // Ultra-aggressive filtering - convert to number and check multiple conditions
+      // Simplified filtering - just check if value is greater than 0
       const numValue = Number(value);
-      const shouldInclude = numValue > 0 && 
-                           !isNaN(numValue) && 
-                           numValue !== 0 && 
-                           value !== "0" && 
-                           value !== 0 && 
-                           value !== null && 
-                           value !== undefined &&
-                           value !== false &&
-                           value !== "";
+      const shouldInclude = numValue > 0 && !isNaN(numValue);
       console.log(`🔍 Pie data filter: ${key} = ${value} (type: ${typeof value}, num: ${numValue}), include: ${shouldInclude}`);
       return shouldInclude;
-    }) // Ultra-aggressive filtering to eliminate ANY zero-like values
+    })
     .map(([key, value]) => ({
       name: key.length > 8 ? key.substring(0, 8) + '...' : key, // Truncate long names
       fullName: key, // Keep full name for tooltip
-      value: value
+      value: Number(value) // Ensure value is a number
     })) : [];
     
-  // Final safety check - remove any remaining zero values
-  const finalPieData = pieData.filter(item => {
-    const numValue = Number(item.value);
-    const isClean = numValue > 0 && !isNaN(numValue);
-    if (!isClean) {
-      console.log(`🚨 Final safety check removing: ${item.fullName} = ${item.value}`);
-    }
-    return isClean;
-  });
-  
-  console.log('🎯 Final pieData for chart:', finalPieData);
+  console.log('🎯 Final pieData for chart:', pieData);
+  console.log('📊 Stats object:', stats);
+  console.log('📈 Priority data:', stats?.by_priority);
 
-  const priorityData = stats ? Object.entries(stats.by_priority).map(([key, value]) => ({
+  const priorityData = stats ? Object.entries(stats.by_priority || {}).map(([key, value]) => ({
     name: key,
-    value: value
+    value: Number(value) || 0
   })) : [];
+  
+  console.log('🎯 Final priorityData for chart:', priorityData);
+
+  if (loading) {
+    return (
+      <Box sx={{ 
+        display: 'flex', 
+        justifyContent: 'center', 
+        alignItems: 'center', 
+        height: '100vh',
+        background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)'
+      }}>
+        <Box sx={{ textAlign: 'center', color: 'white' }}>
+          <Typography variant="h5" sx={{ fontWeight: 'bold' }}>
+            Loading Analytics...
+          </Typography>
+        </Box>
+      </Box>
+    );
+  }
 
   return (
     <Box sx={{ 
@@ -474,100 +520,107 @@ const Analytics = () => {
               backdropFilter: 'blur(10px)',
               borderRadius: 3,
               boxShadow: '0 8px 32px rgba(0, 0, 0, 0.1)',
-              border: '1px solid rgba(255, 255, 255, 0.2)'
+              border: '1px solid rgba(255, 255, 255, 0.2)',
+              height: '100%',
+              display: 'flex',
+              flexDirection: 'column'
             }}>
               <Box sx={{ display: 'flex', alignItems: 'center', mb: 3 }}>
-                <PieChartIcon sx={{ color: '#ff9800', mr: 2, fontSize: 28 }} />
+                <PieChartIcon sx={{ color: '#4A90E2', mr: 2, fontSize: 28 }} />
                 <Typography variant="h5" sx={{ fontWeight: 'bold', color: '#333' }}>
-                  🌪️ Disaster Type Distribution
+                  Reports by Disaster Type
                 </Typography>
               </Box>
-              <Box sx={{ p: 2 }}>
-                {finalPieData.length > 0 ? (
-                  <ResponsiveContainer width="100%" height={400} key={JSON.stringify(finalPieData)}>
-                  <PieChart margin={{ top: 20, right: 20, bottom: 20, left: 20 }}>
-                  <Pie
-                    data={finalPieData}
-                    cx="50%"
-                    cy="50%"
-                    labelLine={false}
-                    label={({ name, percent, value, cx, cy, midAngle, innerRadius, outerRadius }) => {
-                      // Hide labels for 0% values or very small slices
-                      if (percent === 0 || percent < 0.05 || value === 0) return null;
-                      
-                      const RADIAN = Math.PI / 180;
-                      const radius = innerRadius + (outerRadius - innerRadius) * 0.5;
-                      const x = cx + radius * Math.cos(-midAngle * RADIAN);
-                      const y = cy + radius * Math.sin(-midAngle * RADIAN);
-                      
-                      return (
-                        <text 
-                          x={x} 
-                          y={y} 
-                          fill="white" 
-                          textAnchor={x > cx ? 'start' : 'end'} 
-                          dominantBaseline="central"
-                          fontSize="11"
-                          fontWeight="bold"
-                          stroke="black"
-                          strokeWidth="0.8"
+              <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+                {pieData.length > 0 ? (
+                  <Box sx={{ flex: 1, minHeight: 300 }}>
+                    <ResponsiveContainer width="100%" height={300} key={JSON.stringify(pieData)}>
+                      <PieChart margin={{ top: 10, right: 10, bottom: 60, left: 10 }}>
+                        <Pie
+                          data={pieData}
+                          cx="50%"
+                          cy="50%"
+                          labelLine={true}
+                          label={({ name, percent, value, cx, cy, midAngle, innerRadius, outerRadius }) => {
+                            // Hide labels for 0% values or very small slices
+                            if (percent === 0 || percent < 0.05 || value === 0) return null;
+                            
+                            const RADIAN = Math.PI / 180;
+                            const radius = outerRadius + 20; // Position labels outside the pie
+                            const x = cx + radius * Math.cos(-midAngle * RADIAN);
+                            const y = cy + radius * Math.sin(-midAngle * RADIAN);
+                            
+                            return (
+                              <text 
+                                x={x} 
+                                y={y} 
+                                fill="#333" 
+                                textAnchor={x > cx ? 'start' : 'end'} 
+                                dominantBaseline="central"
+                                fontSize="12"
+                                fontWeight="bold"
+                              >
+                                {`${name} ${(percent * 100).toFixed(0)}%`}
+                              </text>
+                            );
+                          }}
+                          outerRadius={100}
+                          innerRadius={0}
+                          fill="#8884d8"
+                          dataKey="value"
+                          stroke="#fff"
+                          strokeWidth={2}
+                          paddingAngle={1}
                         >
-                          {`${name} ${(percent * 100).toFixed(0)}%`}
-                        </text>
-                      );
-                    }}
-                    outerRadius={80}
-                    innerRadius={20}
-                    fill="#8884d8"
-                    dataKey="value"
-                    stroke="#fff"
-                    strokeWidth={2}
-                    paddingAngle={2}
-                  >
-                    {finalPieData.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                    ))}
-                  </Pie>
-                  <Tooltip 
-                    formatter={(value, name, props) => [
-                      `${value} reports`,
-                      props.payload.fullName || name
-                    ]}
-                    contentStyle={{
-                      background: 'rgba(255, 255, 255, 0.95)',
-                      backdropFilter: 'blur(10px)',
-                      border: '1px solid rgba(0,0,0,0.1)',
-                      borderRadius: 8
-                    }}
-                  />
-                  <Legend 
-                    verticalAlign="bottom" 
-                    height={60}
-                    margin={{ top: 20, left: 20, right: 20, bottom: 20 }}
-                    payload={finalPieData.map((entry, index) => ({
-                      value: entry.fullName,
-                      type: 'rect',
-                      color: COLORS[index % COLORS.length]
-                    }))}
-                    formatter={(value, entry) => (
-                      <span style={{ color: entry.color, fontSize: '11px', margin: '2px' }}>
-                        {value}
-                      </span>
-                    )}
-                  />
-                </PieChart>
-              </ResponsiveContainer>
+                          {pieData.map((entry, index) => (
+                            <Cell 
+                              key={`cell-${index}`} 
+                              fill={COLORS[index % COLORS.length]}
+                              style={{ 
+                                filter: 'drop-shadow(2px 2px 4px rgba(0,0,0,0.2))',
+                                transition: 'all 0.3s ease'
+                              }}
+                            />
+                          ))}
+                        </Pie>
+                        <Tooltip 
+                          formatter={(value, name, props) => [
+                            `${value} reports (${((value / pieData.reduce((sum, item) => sum + item.value, 0)) * 100).toFixed(1)}%)`,
+                            props.payload.fullName || name
+                          ]}
+                          contentStyle={{
+                            background: 'rgba(255, 255, 255, 0.98)',
+                            backdropFilter: 'blur(10px)',
+                            border: '1px solid rgba(0,0,0,0.1)',
+                            borderRadius: 12,
+                            boxShadow: '0 4px 20px rgba(0,0,0,0.15)'
+                          }}
+                          labelStyle={{ 
+                            color: '#333', 
+                            fontWeight: 'bold',
+                            fontSize: '14px'
+                          }}
+                        />
+                      </PieChart>
+                    </ResponsiveContainer>
+                  </Box>
                 ) : (
                   <Box sx={{ 
                     display: 'flex', 
                     alignItems: 'center', 
                     justifyContent: 'center', 
-                    height: 400,
-                    color: '#666'
+                    flex: 1,
+                    color: '#666',
+                    minHeight: 300
                   }}>
-                    <Typography variant="h6">
-                      No disaster reports available
-                    </Typography>
+                    <Box sx={{ textAlign: 'center' }}>
+                      <Typography variant="h6" sx={{ mb: 1 }}>
+                        No disaster reports available
+                      </Typography>
+                      <Typography variant="body2" sx={{ color: '#999' }}>
+                        Data will appear here once reports are submitted
+                      </Typography>
+                    </Box>
                   </Box>
                 )}
               </Box>
@@ -584,7 +637,10 @@ const Analytics = () => {
               backdropFilter: 'blur(10px)',
               borderRadius: 3,
               boxShadow: '0 8px 32px rgba(0, 0, 0, 0.1)',
-              border: '1px solid rgba(255, 255, 255, 0.2)'
+              border: '1px solid rgba(255, 255, 255, 0.2)',
+              height: '100%',
+              display: 'flex',
+              flexDirection: 'column'
             }}>
               <Box sx={{ display: 'flex', alignItems: 'center', mb: 3 }}>
                 <Assessment sx={{ color: '#f44336', mr: 2, fontSize: 28 }} />
@@ -592,32 +648,77 @@ const Analytics = () => {
                   ⚡ Priority Level Analysis
                 </Typography>
               </Box>
-              <ResponsiveContainer width="100%" height={320}>
-                <BarChart data={priorityData}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(0,0,0,0.1)" />
-                  <XAxis dataKey="name" stroke="#666" />
-                  <YAxis stroke="#666" />
-                  <Tooltip 
-                    contentStyle={{
-                      background: 'rgba(255, 255, 255, 0.95)',
-                      backdropFilter: 'blur(10px)',
-                      border: '1px solid rgba(0,0,0,0.1)',
-                      borderRadius: 8
-                    }}
-                  />
-                  <Bar 
-                    dataKey="value" 
-                    fill="url(#colorGradient)"
-                    radius={[4, 4, 0, 0]}
-                  />
-                  <defs>
-                    <linearGradient id="colorGradient" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#667eea" stopOpacity={0.8}/>
-                      <stop offset="95%" stopColor="#764ba2" stopOpacity={0.8}/>
-                    </linearGradient>
-                  </defs>
-                </BarChart>
-              </ResponsiveContainer>
+              <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+                {priorityData.length > 0 ? (
+                  <Box sx={{ flex: 1, minHeight: 300 }}>
+                    <ResponsiveContainer width="100%" height={300}>
+                      <BarChart data={priorityData} margin={{ top: 10, right: 10, bottom: 10, left: 10 }}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="rgba(0,0,0,0.1)" />
+                        <XAxis 
+                          dataKey="name" 
+                          stroke="#666" 
+                          fontSize={12}
+                          tick={{ fontSize: 12 }}
+                        />
+                        <YAxis 
+                          stroke="#666" 
+                          fontSize={12}
+                          tick={{ fontSize: 12 }}
+                        />
+                        <Tooltip 
+                          contentStyle={{
+                            background: 'rgba(255, 255, 255, 0.98)',
+                            backdropFilter: 'blur(10px)',
+                            border: '1px solid rgba(0,0,0,0.1)',
+                            borderRadius: 12,
+                            boxShadow: '0 4px 20px rgba(0,0,0,0.15)'
+                          }}
+                          labelStyle={{ 
+                            color: '#333', 
+                            fontWeight: 'bold',
+                            fontSize: '14px'
+                          }}
+                          formatter={(value, name) => [`${value} reports`, 'Count']}
+                        />
+                        <Bar 
+                          dataKey="value" 
+                          fill="url(#colorGradient)"
+                          radius={[6, 6, 0, 0]}
+                          style={{ 
+                            filter: 'drop-shadow(2px 2px 4px rgba(0,0,0,0.2))',
+                            transition: 'all 0.3s ease'
+                          }}
+                        />
+                        <defs>
+                          <linearGradient id="colorGradient" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="5%" stopColor="#667eea" stopOpacity={0.9}/>
+                            <stop offset="50%" stopColor="#764ba2" stopOpacity={0.8}/>
+                            <stop offset="95%" stopColor="#f093fb" stopOpacity={0.7}/>
+                          </linearGradient>
+                        </defs>
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </Box>
+                ) : (
+                  <Box sx={{ 
+                    display: 'flex', 
+                    alignItems: 'center', 
+                    justifyContent: 'center', 
+                    flex: 1,
+                    color: '#666',
+                    minHeight: 300
+                  }}>
+                    <Box sx={{ textAlign: 'center' }}>
+                      <Typography variant="h6" sx={{ mb: 1 }}>
+                        No priority data available
+                      </Typography>
+                      <Typography variant="body2" sx={{ color: '#999' }}>
+                        Priority analysis will appear here once reports are submitted
+                      </Typography>
+                    </Box>
+                  </Box>
+                )}
+              </Box>
             </Paper>
           </Fade>
         </Grid>

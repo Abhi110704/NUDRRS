@@ -17,10 +17,19 @@ if __name__ == "__main__":
     
     # Create superuser if it doesn't exist
     from django.contrib.auth.models import User
+    from authentication.models import UserProfile
     if not User.objects.filter(username='admin').exists():
         print("Creating admin user...")
-        User.objects.create_superuser('admin', 'admin@nudrrs.com', 'admin123')
-        print("Admin user created: username=admin, password=admin123")
+        admin_user = User.objects.create_superuser('admin', 'admin@nudrrs.com', 'admin123')
+        
+        # Create admin profile with ADMIN role
+        UserProfile.objects.create(
+            user=admin_user,
+            role='ADMIN',
+            phone_number='+919876543210',
+            is_active=True
+        )
+        print("Admin user created: username=admin, password=admin123, role=ADMIN")
     
     # Run the server
     print("Starting Django development server...")

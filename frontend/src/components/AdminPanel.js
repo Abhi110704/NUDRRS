@@ -22,6 +22,8 @@ const AdminPanel = () => {
   const { user, isAdmin } = useAuth();
 
   useEffect(() => {
+    console.log('🔍 AdminPanel - User:', user);
+    console.log('🔍 AdminPanel - isAdmin:', isAdmin);
     if (isAdmin) {
       fetchReports();
     }
@@ -30,8 +32,11 @@ const AdminPanel = () => {
   const fetchReports = async () => {
     try {
       setLoading(true);
-      const response = await axios.get('http://localhost:8000/api/sos_reports/');
-      setReports(response.data.results || response.data || []);
+      const response = await axios.get('http://localhost:8000/api/sos_reports/sos_reports/');
+      console.log('🔍 AdminPanel API response:', response.data);
+      const reportsData = response.data.results || response.data || [];
+      console.log('🔍 AdminPanel reports data:', reportsData);
+      setReports(reportsData);
     } catch (error) {
       console.error('Error fetching reports:', error);
       // Fallback to demo data
@@ -67,7 +72,7 @@ const AdminPanel = () => {
   const handleVerifyReport = async (reportId, action) => {
     try {
       const newStatus = action === 'verify' ? 'VERIFIED' : 'REJECTED';
-      await axios.patch(`http://localhost:8000/api/sos_reports/${reportId}/`, {
+      await axios.patch(`http://localhost:8000/api/sos_reports/sos_reports/${reportId}/`, {
         status: newStatus,
         verified_by: user.id,
         verified_at: new Date().toISOString()
@@ -130,9 +135,9 @@ const AdminPanel = () => {
     }
   };
 
-  const pendingReports = reports.filter(r => r.status === 'PENDING');
-  const verifiedReports = reports.filter(r => r.status === 'VERIFIED');
-  const rejectedReports = reports.filter(r => r.status === 'REJECTED');
+  const pendingReports = Array.isArray(reports) ? reports.filter(r => r.status === 'PENDING') : [];
+  const verifiedReports = Array.isArray(reports) ? reports.filter(r => r.status === 'VERIFIED') : [];
+  const rejectedReports = Array.isArray(reports) ? reports.filter(r => r.status === 'REJECTED') : [];
 
   if (!isAdmin) {
     return (

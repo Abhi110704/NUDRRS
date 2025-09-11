@@ -2,9 +2,19 @@ from rest_framework import serializers
 from .models import SOSReport, ReportMedia, ReportUpdate
 
 class ReportMediaSerializer(serializers.ModelSerializer):
+    file_url = serializers.SerializerMethodField()
+    
+    def get_file_url(self, obj):
+        if obj.file:
+            request = self.context.get('request')
+            if request:
+                return request.build_absolute_uri(obj.file.url)
+            return obj.file.url
+        return None
+    
     class Meta:
         model = ReportMedia
-        fields = ['id', 'media_type', 'file', 'ai_analysis', 'created_at']
+        fields = ['id', 'media_type', 'file', 'file_url', 'ai_analysis', 'created_at']
 
 class ReportUpdateSerializer(serializers.ModelSerializer):
     user = serializers.StringRelatedField(read_only=True)

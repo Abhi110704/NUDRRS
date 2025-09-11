@@ -9,7 +9,7 @@ import {
 import {
   Visibility, Edit, Delete, Add, FilterList, Search, LocalHospital as Emergency, 
   LocationOn, Phone, Schedule, Security, Speed, Warning, CheckCircle, Close,
-  CloudUpload, Image as ImageIcon, Delete as DeleteIcon
+  CloudUpload, Image as ImageIcon, Delete as DeleteIcon, AutoAwesome, Psychology
 } from '@mui/icons-material';
 import axios from 'axios';
 import { useAuth } from '../contexts/AuthContext';
@@ -19,19 +19,62 @@ const Reports = () => {
   
   // Get or create current user session for demo purposes
   const getCurrentUser = () => {
-    let currentUser = localStorage.getItem('nudrrs_current_user');
-    if (!currentUser) {
-      currentUser = {
-        id: Date.now(),
+    try {
+      let currentUser = localStorage.getItem('nudrrs_current_user');
+      if (!currentUser) {
+        currentUser = {
+          id: 999, // Fixed ID for demo purposes
+          username: 'current_user',
+          first_name: 'Current',
+          last_name: 'User'
+        };
+        localStorage.setItem('nudrrs_current_user', JSON.stringify(currentUser));
+      } else {
+        currentUser = JSON.parse(currentUser);
+      }
+      return currentUser;
+    } catch (error) {
+      console.error('Error getting current user:', error);
+      return {
+        id: 999, // Fixed ID for demo purposes
         username: 'current_user',
         first_name: 'Current',
         last_name: 'User'
       };
-      localStorage.setItem('nudrrs_current_user', JSON.stringify(currentUser));
-    } else {
-      currentUser = JSON.parse(currentUser);
     }
-    return currentUser;
+  };
+
+  // Check if current user can edit a report (admin or report owner)
+  const canEditReport = (report) => {
+    try {
+      const currentUser = getCurrentUser();
+      if (!currentUser || !report || !report.user) {
+        return false;
+      }
+      return (isAdmin === true) || (report.user && report.user.id === currentUser.id);
+    } catch (error) {
+      console.error('Error checking edit permissions:', error);
+      return false;
+    }
+  };
+
+  // Check if current user can upload images to a report (anyone can upload images)
+  const canUploadImages = (report) => {
+    return true; // Anyone can upload images to any report
+  };
+
+  // Check if current user can delete a report (admin or report owner)
+  const canDeleteReport = (report) => {
+    try {
+      const currentUser = getCurrentUser();
+      if (!currentUser || !report || !report.user) {
+        return false;
+      }
+      return (isAdmin === true) || (report.user && report.user.id === currentUser.id);
+    } catch (error) {
+      console.error('Error checking delete permissions:', error);
+      return false;
+    }
   };
   const [reports, setReports] = useState([]);
   const [filteredReports, setFilteredReports] = useState([]);
@@ -46,6 +89,7 @@ const Reports = () => {
   const [newReportDialog, setNewReportDialog] = useState(false);
   const [viewReportDialog, setViewReportDialog] = useState(false);
   const [editReportDialog, setEditReportDialog] = useState(false);
+  const [addImagesDialog, setAddImagesDialog] = useState(false);
   const [deleteConfirmDialog, setDeleteConfirmDialog] = useState(false);
   const [selectedReport, setSelectedReport] = useState(null);
   
@@ -68,6 +112,13 @@ const Reports = () => {
   const [locationSuggestions, setLocationSuggestions] = useState([]);
   const [showLocationSuggestions, setShowLocationSuggestions] = useState(false);
   const [locationLoading, setLocationLoading] = useState(false);
+
+  // AI Description states
+  const [aiDescriptionLoading, setAiDescriptionLoading] = useState(false);
+  const [aiEnhancedDescription, setAiEnhancedDescription] = useState('');
+  const [showAiDescription, setShowAiDescription] = useState(false);
+  const [descriptionSuggestions, setDescriptionSuggestions] = useState(null);
+  const [showSuggestions, setShowSuggestions] = useState(false);
 
   // Close suggestions when clicking outside
   useEffect(() => {
@@ -161,15 +212,27 @@ const Reports = () => {
     return [
       {
         id: 1,
-        user: { username: 'citizen1', first_name: 'Raj', last_name: 'Kumar' },
+        user: { id: 999, username: 'current_user', first_name: 'Current', last_name: 'User' },
         disaster_type: 'FLOOD',
         priority: 'HIGH',
         status: 'PENDING',
-        description: 'Heavy rainfall causing waterlogging in residential areas. Multiple families need evacuation.',
+        description: 'Heavy rainfall causing severe waterlogging in residential areas. Water level rising rapidly, multiple families trapped and need immediate evacuation. Roads completely submerged.',
         address: 'Sector 15, Chandigarh, Punjab',
         phone_number: '+91-9876543210',
-        created_at: '2025-09-03T10:30:00Z',
-        ai_confidence: 0.92
+        created_at: new Date().toISOString(),
+        ai_confidence: 0.92,
+        media: [
+          {
+            id: 1,
+            file: 'https://images.unsplash.com/photo-1544551763-46a013bb70d5?w=400&h=300&fit=crop',
+            file_type: 'image'
+          },
+          {
+            id: 2,
+            file: 'https://images.unsplash.com/photo-1574263867122-4a1b0b0b0b0b?w=400&h=300&fit=crop',
+            file_type: 'image'
+          }
+        ]
       },
       {
         id: 2,
@@ -177,11 +240,18 @@ const Reports = () => {
         disaster_type: 'FIRE',
         priority: 'CRITICAL',
         status: 'IN_PROGRESS',
-        description: 'Factory fire spreading rapidly. Fire department on site, need additional resources.',
+        description: 'Massive factory fire spreading rapidly across multiple buildings. Thick black smoke visible from 5km away. Fire department on site but need additional resources and evacuation support.',
         address: 'Industrial Area, Gurgaon, Haryana',
         phone_number: '+91-9876543211',
-        created_at: '2025-09-03T11:15:00Z',
-        ai_confidence: 0.98
+        created_at: new Date(Date.now() - 3600000).toISOString(),
+        ai_confidence: 0.98,
+        media: [
+          {
+            id: 3,
+            file: 'https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=400&h=300&fit=crop',
+            file_type: 'image'
+          }
+        ]
       },
       {
         id: 3,
@@ -189,47 +259,113 @@ const Reports = () => {
         disaster_type: 'EARTHQUAKE',
         priority: 'MEDIUM',
         status: 'VERIFIED',
-        description: 'Minor earthquake reported, checking for structural damages in old buildings.',
+        description: 'Moderate earthquake (5.2 magnitude) reported. Several old buildings showing cracks, checking for structural damages. No casualties reported yet but residents evacuated as precaution.',
         address: 'Hill Station Road, Shimla, Himachal Pradesh',
         phone_number: '+91-9876543212',
-        created_at: '2025-09-03T09:45:00Z',
-        ai_confidence: 0.85
+        created_at: new Date(Date.now() - 7200000).toISOString(),
+        ai_confidence: 0.85,
+        media: [
+          {
+            id: 4,
+            file: 'https://images.unsplash.com/photo-1574263867122-4a1b0b0b0b0b?w=400&h=300&fit=crop',
+            file_type: 'image'
+          }
+        ]
       },
       {
         id: 4,
-        user: { username: 'citizen4', first_name: 'Sunita', last_name: 'Devi' },
+        user: { username: 'citizen4', first_name: 'Suresh', last_name: 'Yadav' },
         disaster_type: 'LANDSLIDE',
         priority: 'HIGH',
-        status: 'RESOLVED',
-        description: 'Road blocked due to landslide. Cleared successfully, traffic restored.',
+        status: 'PENDING',
+        description: 'Heavy rainfall triggered landslide blocking main highway. Multiple vehicles trapped, rescue operations underway. Road completely blocked for next 24-48 hours.',
         address: 'Mountain View, Dehradun, Uttarakhand',
         phone_number: '+91-9876543213',
-        created_at: '2025-09-02T16:20:00Z',
-        ai_confidence: 0.89
+        created_at: new Date(Date.now() - 1800000).toISOString(),
+        ai_confidence: 0.89,
+        media: [
+          {
+            id: 5,
+            file: 'https://images.unsplash.com/photo-1574263867122-4a1b0b0b0b0b?w=400&h=300&fit=crop',
+            file_type: 'image'
+          }
+        ]
       },
       {
         id: 5,
-        user: { username: 'citizen5', first_name: 'Ravi', last_name: 'Patel' },
+        user: { username: 'citizen5', first_name: 'Lakshmi', last_name: 'Patel' },
         disaster_type: 'CYCLONE',
         priority: 'CRITICAL',
-        status: 'PENDING',
-        description: 'Cyclone warning issued. Evacuation of coastal villages in progress.',
-        address: 'Coastal Area, Visakhapatnam, Andhra Pradesh',
+        status: 'IN_PROGRESS',
+        description: 'Cyclone warning issued. Wind speed increasing rapidly, heavy rainfall expected. Coastal areas being evacuated. Emergency shelters activated.',
+        address: 'Coastal Area, Puri, Odisha',
         phone_number: '+91-9876543214',
-        created_at: '2025-09-03T12:00:00Z',
-        ai_confidence: 0.95
+        created_at: new Date(Date.now() - 900000).toISOString(),
+        ai_confidence: 0.95,
+        media: [
+          {
+            id: 6,
+            file: 'https://images.unsplash.com/photo-1574263867122-4a1b0b0b0b0b?w=400&h=300&fit=crop',
+            file_type: 'image'
+          }
+        ]
       },
       {
         id: 6,
-        user: { username: 'citizen1', first_name: 'Meera', last_name: 'Joshi' },
+        user: { username: 'citizen6', first_name: 'Meera', last_name: 'Joshi' },
         disaster_type: 'MEDICAL',
         priority: 'HIGH',
         status: 'IN_PROGRESS',
-        description: 'Medical emergency - multiple casualties from building collapse.',
+        description: 'Medical emergency - multiple casualties from building collapse. Ambulance services dispatched, need additional medical support and rescue teams.',
         address: 'Old City, Ahmedabad, Gujarat',
         phone_number: '+91-9876543215',
-        created_at: '2025-09-03T08:30:00Z',
-        ai_confidence: 0.91
+        created_at: new Date(Date.now() - 5400000).toISOString(),
+        ai_confidence: 0.91,
+        media: [
+          {
+            id: 7,
+            file: 'https://images.unsplash.com/photo-1574263867122-4a1b0b0b0b0b?w=400&h=300&fit=crop',
+            file_type: 'image'
+          }
+        ]
+      },
+      {
+        id: 7,
+        user: { username: 'citizen7', first_name: 'Vikram', last_name: 'Reddy' },
+        disaster_type: 'DROUGHT',
+        priority: 'MEDIUM',
+        status: 'VERIFIED',
+        description: 'Severe water shortage in rural areas. Wells dried up, crops failing. Need immediate water supply and relief measures.',
+        address: 'Rural District, Telangana',
+        phone_number: '+91-9876543216',
+        created_at: new Date(Date.now() - 86400000).toISOString(),
+        ai_confidence: 0.87,
+        media: [
+          {
+            id: 8,
+            file: 'https://images.unsplash.com/photo-1574263867122-4a1b0b0b0b0b?w=400&h=300&fit=crop',
+            file_type: 'image'
+          }
+        ]
+      },
+      {
+        id: 8,
+        user: { username: 'citizen8', first_name: 'Anita', last_name: 'Desai' },
+        disaster_type: 'STORM',
+        priority: 'HIGH',
+        status: 'PENDING',
+        description: 'Severe thunderstorm with hailstorm causing damage to crops and property. Trees uprooted, power lines down.',
+        address: 'Agricultural Area, Maharashtra',
+        phone_number: '+91-9876543217',
+        created_at: new Date(Date.now() - 2700000).toISOString(),
+        ai_confidence: 0.93,
+        media: [
+          {
+            id: 9,
+            file: 'https://images.unsplash.com/photo-1574263867122-4a1b0b0b0b0b?w=400&h=300&fit=crop',
+            file_type: 'image'
+          }
+        ]
       }
     ];
   };
@@ -244,7 +380,7 @@ const Reports = () => {
         const response = await axios.get('http://localhost:8000/api/sos_reports/sos_reports/');
         const reportsData = response.data.results || response.data || [];
         
-        // Transform the data to ensure proper structure
+        // Transform the data to ensure proper structure and fix media URLs
         currentReports = reportsData.map(report => ({
           ...report,
           disaster_type: report.disaster_type || report.properties?.disaster_type,
@@ -261,10 +397,26 @@ const Reports = () => {
           ai_confidence: report.ai_confidence || 0.85,
           ai_fraud_score: report.ai_fraud_score || 0.0,
           ai_analysis_data: report.ai_analysis_data || {},
-          media: report.media || [] // Include media data for image display
+          media: (report.media || []).map(media => {
+            console.log('🔍 Processing media:', media);
+            let fileUrl = media.file_url || media.file;
+            
+            // If it's a relative path, make it absolute
+            if (fileUrl && !fileUrl.startsWith('http') && !fileUrl.startsWith('blob:')) {
+              fileUrl = `http://localhost:8000${fileUrl}`;
+            }
+            
+            console.log('🔍 Final file URL:', fileUrl);
+            
+            return {
+              ...media,
+              file: fileUrl
+            };
+          })
         }));
         
         console.log('✅ Live data loaded from backend:', currentReports);
+        console.log('🔍 Media data sample:', currentReports[0]?.media);
         setUpdateStatus('success');
         addLiveUpdate(`✅ Live data loaded: ${currentReports.length} reports`, 'success');
       } catch (apiError) {
@@ -369,9 +521,38 @@ const Reports = () => {
   // Image handling functions
   const handleImageSelect = (event) => {
     const files = Array.from(event.target.files);
-    const imageFiles = files.filter(file => file.type.startsWith('image/'));
+    console.log('📁 Files selected:', files);
+    
+    // Filter for image files only
+    const imageFiles = files.filter(file => {
+      const isImage = file.type.startsWith('image/');
+      const isValidSize = file.size <= 10 * 1024 * 1024; // 10MB limit
+      console.log(`📷 File: ${file.name}, Type: ${file.type}, Size: ${file.size}, Valid: ${isImage && isValidSize}`);
+      return isImage && isValidSize;
+    });
+    
+    // Check for invalid files
+    const invalidFiles = files.filter(file => !file.type.startsWith('image/'));
+    const oversizedFiles = files.filter(file => file.type.startsWith('image/') && file.size > 10 * 1024 * 1024);
+    
+    if (invalidFiles.length > 0) {
+      setSnackbar({
+        open: true,
+        message: `⚠️ ${invalidFiles.length} non-image file(s) were skipped`,
+        severity: 'warning'
+      });
+    }
+    
+    if (oversizedFiles.length > 0) {
+      setSnackbar({
+        open: true,
+        message: `⚠️ ${oversizedFiles.length} image(s) were too large (max 10MB)`,
+        severity: 'warning'
+      });
+    }
     
     if (imageFiles.length > 0) {
+      console.log('✅ Valid images to add:', imageFiles);
       setSelectedImages(prev => [...prev, ...imageFiles]);
       
       // Create preview URLs
@@ -381,7 +562,22 @@ const Reports = () => {
         name: file.name
       }));
       setImagePreview(prev => [...prev, ...newPreviews]);
+      
+      setSnackbar({
+        open: true,
+        message: `✅ ${imageFiles.length} image(s) added successfully`,
+        severity: 'success'
+      });
+    } else if (files.length > 0) {
+      setSnackbar({
+        open: true,
+        message: '❌ No valid images were selected',
+        severity: 'error'
+      });
     }
+    
+    // Clear the input value to allow selecting the same file again
+    event.target.value = '';
   };
 
   const removeImage = (index) => {
@@ -427,9 +623,28 @@ const Reports = () => {
     
     // Parse country code from existing phone number
     const phoneNumber = report.phone_number || '';
-    const countryCodeMatch = phoneNumber.match(/^\+(\d{1,4})/);
-    const countryCode = countryCodeMatch ? `+${countryCodeMatch[1]}` : '+91';
-    const phoneNumberOnly = phoneNumber.replace(/^\+\d{1,4}/, '');
+    let countryCode = '+91';
+    let phoneNumberOnly = phoneNumber;
+    
+    // Handle different phone number formats
+    if (phoneNumber.startsWith('+')) {
+      // Find the longest matching country code
+      const sortedCodes = countryCodes.sort((a, b) => b.code.length - a.code.length);
+      for (const country of sortedCodes) {
+        if (phoneNumber.startsWith(country.code)) {
+          countryCode = country.code;
+          phoneNumberOnly = phoneNumber.substring(country.code.length);
+          break;
+        }
+      }
+    } else if (phoneNumber.includes('-')) {
+      // Handle format like "+91-9876543210"
+      const parts = phoneNumber.split('-');
+      if (parts.length === 2) {
+        countryCode = parts[0];
+        phoneNumberOnly = parts[1];
+      }
+    }
     
     setNewReportForm({
       disaster_type: report.disaster_type,
@@ -440,6 +655,111 @@ const Reports = () => {
       phone_number: phoneNumberOnly
     });
     setEditReportDialog(true);
+  };
+
+  const handleAddImages = (report) => {
+    setSelectedReport(report);
+    setAddImagesDialog(true);
+  };
+
+  const submitImagesOnly = async () => {
+    if (selectedImages.length === 0) {
+      setSnackbar({
+        open: true,
+        message: 'Please select at least one image to upload',
+        severity: 'warning'
+      });
+      return;
+    }
+
+    try {
+      setUploadingImages(true);
+      
+      // Try to upload to backend first
+      try {
+        const formData = new FormData();
+        formData.append('phone_number', selectedReport.phone_number);
+        formData.append('latitude', selectedReport.latitude);
+        formData.append('longitude', selectedReport.longitude);
+        formData.append('address', selectedReport.address);
+        formData.append('disaster_type', selectedReport.disaster_type);
+        formData.append('description', selectedReport.description);
+        formData.append('priority', selectedReport.priority);
+        
+        // Add new image files
+        selectedImages.forEach((file, index) => {
+          formData.append('files', file);
+        });
+        
+        const response = await axios.put(`http://localhost:8000/api/sos_reports/sos_reports/${selectedReport.id}/`, formData, {
+          headers: {
+            'Content-Type': 'multipart/form-data',
+          },
+        });
+        
+        console.log('✅ Images uploaded to backend, response:', response.data);
+        console.log('🔍 Response media:', response.data.media);
+        
+        // Refresh data from backend to get the properly updated report with backend URLs
+        await fetchReports();
+        
+        setAddImagesDialog(false);
+        clearAllImages();
+        setSnackbar({
+          open: true,
+          message: `✅ ${selectedImages.length} image(s) uploaded to backend successfully!`,
+          severity: 'success'
+        });
+        
+      } catch (apiError) {
+        console.log('Backend upload failed, saving locally:', apiError.message);
+        
+        // Fallback to local storage
+        const newMediaArray = selectedImages.map((file, index) => ({
+          id: Date.now() + index,
+          file: URL.createObjectURL(file),
+          file_type: 'image',
+          name: file.name,
+          size: file.size
+        }));
+        
+        // Combine existing media with new media
+        const combinedMedia = [...(selectedReport.media || []), ...newMediaArray];
+        
+        // Update local state
+        const updatedReports = reports.map(report => 
+          report.id === selectedReport.id 
+            ? { 
+                ...report, 
+                media: combinedMedia
+              }
+            : report
+        );
+        
+        setReports(updatedReports);
+        
+        // Save to localStorage for persistence
+        localStorage.setItem('nudrrs_reports', JSON.stringify(updatedReports));
+        
+        setAddImagesDialog(false);
+        clearAllImages();
+        setSnackbar({
+          open: true,
+          message: `⚠️ ${selectedImages.length} image(s) saved locally (backend unavailable)`,
+          severity: 'warning'
+        });
+      }
+      
+    } catch (error) {
+      console.error('Error adding images:', error);
+      setSnackbar({
+        open: true,
+        message: '❌ Error adding images. Please try again.',
+        severity: 'error'
+      });
+    } finally {
+      setUploadingImages(false);
+    }
   };
 
   const handleDeleteReport = (report) => {
@@ -468,6 +788,16 @@ const Reports = () => {
     }
 
     const currentUser = getCurrentUser();
+    
+    // Create media array from selected images
+    const mediaArray = selectedImages.map((file, index) => ({
+      id: Date.now() + index,
+      file: URL.createObjectURL(file), // Create object URL for preview
+      file_type: 'image',
+      name: file.name,
+      size: file.size
+    }));
+    
     const newReport = {
       id: Date.now(), // Generate unique ID
       user: currentUser,
@@ -477,7 +807,8 @@ const Reports = () => {
       longitude: longitude,
       status: 'PENDING',
       created_at: new Date().toISOString(),
-      ai_confidence: Math.random() * 0.3 + 0.7 // Random AI confidence between 0.7-1.0
+      ai_confidence: Math.random() * 0.3 + 0.7, // Random AI confidence between 0.7-1.0
+      media: mediaArray // Add the media array
     };
 
     // Try to send to backend first
@@ -506,9 +837,10 @@ const Reports = () => {
       });
       
       console.log('✅ Report with images sent to backend:', response.data);
+      console.log('🔍 Backend response media:', response.data.media);
       setUploadingImages(false);
       
-      // Refresh data from backend
+      // Refresh data from backend to get the properly saved report with backend URLs
       await fetchReports();
       setSnackbar({
         open: true,
@@ -519,7 +851,7 @@ const Reports = () => {
     } catch (error) {
       console.error('Backend error, saving locally:', error);
       setUploadingImages(false);
-      // Fallback to local storage
+      // Fallback to local storage only when backend fails
       const updatedReports = [newReport, ...reports];
       setReports(updatedReports);
       localStorage.setItem('nudrrs_reports', JSON.stringify(updatedReports));
@@ -578,16 +910,11 @@ const Reports = () => {
         
         setUploadingImages(false);
         
-        // Update local state
-        const updatedReports = reports.map(report => 
-          report.id === selectedReport.id 
-            ? { ...report, ...newReportForm, phone_number: `${newReportForm.countryCode}${newReportForm.phone_number}` }
-            : report
-        );
-        
-        setReports(updatedReports);
+        // Refresh data from backend to get the properly updated report with backend URLs
+        await fetchReports();
         
         setEditReportDialog(false);
+        clearAllImages(); // Clear selected images after successful update
         setSnackbar({
           open: true,
           message: selectedImages.length > 0 
@@ -596,17 +923,31 @@ const Reports = () => {
           severity: 'success'
         });
         
-        // Refresh the reports list to get updated data
-        fetchReports();
-        
       } catch (apiError) {
         console.log('Backend update failed, updating locally:', apiError.message);
         setUploadingImages(false);
         
+        // Create media array from new selected images for fallback
+        const newMediaArray = selectedImages.map((file, index) => ({
+          id: Date.now() + index,
+          file: URL.createObjectURL(file),
+          file_type: 'image',
+          name: file.name,
+          size: file.size
+        }));
+        
+        // Combine existing media with new media for fallback
+        const combinedMedia = [...(selectedReport.media || []), ...newMediaArray];
+        
         // Fallback to local update
         const updatedReports = reports.map(report => 
           report.id === selectedReport.id 
-            ? { ...report, ...newReportForm, phone_number: `${newReportForm.countryCode}${newReportForm.phone_number}` }
+            ? { 
+                ...report, 
+                ...newReportForm, 
+                phone_number: `${newReportForm.countryCode}${newReportForm.phone_number}`,
+                media: combinedMedia
+              }
             : report
         );
         
@@ -616,10 +957,13 @@ const Reports = () => {
         localStorage.setItem('nudrrs_reports', JSON.stringify(updatedReports));
         
         setEditReportDialog(false);
+        clearAllImages(); // Clear selected images after successful update
         setSnackbar({
           open: true,
-          message: 'Report updated locally (backend unavailable)!',
-          severity: 'warning'
+          message: selectedImages.length > 0 
+            ? `Report updated locally with ${selectedImages.length} new image(s)!`
+            : 'Report updated locally!',
+          severity: 'success'
         });
       }
     } catch (error) {
@@ -638,6 +982,233 @@ const Reports = () => {
     setSnackbar({
       open: true,
       message: 'Report deleted successfully!',
+      severity: 'success'
+    });
+  };
+
+  // AI Description Generation Functions
+  const generateAiDescription = async () => {
+    if (selectedImages.length === 0) {
+      setSnackbar({
+        open: true,
+        message: 'Please upload an image first to generate AI description',
+        severity: 'warning'
+      });
+      return;
+    }
+
+    setAiDescriptionLoading(true);
+    try {
+      const formData = new FormData();
+      formData.append('image', selectedImages[0]);
+      formData.append('disaster_type', newReportForm.disaster_type);
+      formData.append('location', newReportForm.address);
+
+      const response = await axios.post('http://localhost:8000/api/ai_services/generate-ai-description/', formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      });
+
+      if (response.data.success) {
+        setAiEnhancedDescription(response.data.description);
+        setShowAiDescription(true);
+        setSnackbar({
+          open: true,
+          message: 'AI description generated successfully!',
+          severity: 'success'
+        });
+      } else {
+        setSnackbar({
+          open: true,
+          message: 'Failed to generate AI description',
+          severity: 'error'
+        });
+      }
+    } catch (error) {
+      console.error('Error generating AI description:', error);
+      setSnackbar({
+        open: true,
+        message: 'Error generating AI description. Please try again.',
+        severity: 'error'
+      });
+    } finally {
+      setAiDescriptionLoading(false);
+    }
+  };
+
+  const enhanceDescription = async () => {
+    if (!newReportForm.description.trim()) {
+      setSnackbar({
+        open: true,
+        message: 'Please enter a description first to enhance it',
+        severity: 'warning'
+      });
+      return;
+    }
+
+    setAiDescriptionLoading(true);
+    try {
+      const response = await axios.post('http://localhost:8000/api/ai_services/enhance-description/', {
+        description: newReportForm.description,
+        disaster_type: newReportForm.disaster_type,
+        location: newReportForm.address
+      });
+
+      if (response.data.success) {
+        setAiEnhancedDescription(response.data.description);
+        setShowAiDescription(true);
+        setSnackbar({
+          open: true,
+          message: 'Description enhanced successfully!',
+          severity: 'success'
+        });
+      } else {
+        setSnackbar({
+          open: true,
+          message: 'Failed to enhance description',
+          severity: 'error'
+        });
+      }
+    } catch (error) {
+      console.error('Error enhancing description:', error);
+      setSnackbar({
+        open: true,
+        message: 'Error enhancing description. Please try again.',
+        severity: 'error'
+      });
+    } finally {
+      setAiDescriptionLoading(false);
+    }
+  };
+
+  const useAiDescription = () => {
+    setNewReportForm(prev => ({
+      ...prev,
+      description: aiEnhancedDescription
+    }));
+    setShowAiDescription(false);
+    setSnackbar({
+      open: true,
+      message: 'AI description applied to form!',
+      severity: 'success'
+    });
+  };
+
+  const fetchDescriptionSuggestions = async () => {
+    if (!newReportForm.disaster_type) {
+      setSnackbar({
+        open: true,
+        message: 'Please select a disaster type first',
+        severity: 'warning'
+      });
+      return;
+    }
+
+    try {
+      const response = await axios.get('http://localhost:8000/api/ai_services/description-suggestions/', {
+        params: {
+          disaster_type: newReportForm.disaster_type,
+          location: newReportForm.address
+        }
+      });
+
+      setDescriptionSuggestions(response.data);
+      setShowSuggestions(true);
+      setSnackbar({
+        open: true,
+        message: 'Description suggestions loaded!',
+        severity: 'success'
+      });
+    } catch (error) {
+      console.error('Error fetching description suggestions:', error);
+      
+      // Provide demo suggestions when backend is not available
+      const location = newReportForm.address || 'the area';
+      
+      // Determine location type for more specific suggestions
+      const isUrban = location.toLowerCase().includes('city') || location.toLowerCase().includes('sector') || 
+                     location.toLowerCase().includes('street') || location.toLowerCase().includes('road');
+      const isRural = location.toLowerCase().includes('village') || location.toLowerCase().includes('rural') || 
+                     location.toLowerCase().includes('district');
+      const isCoastal = location.toLowerCase().includes('coastal') || location.toLowerCase().includes('beach') || 
+                       location.toLowerCase().includes('puri') || location.toLowerCase().includes('goa');
+      const isIndustrial = location.toLowerCase().includes('industrial') || location.toLowerCase().includes('factory') || 
+                          location.toLowerCase().includes('plant');
+      
+      const demoSuggestions = {
+        suggestions: [
+          {
+            title: `Professional ${newReportForm.disaster_type} Report - ${location}`,
+            description: `This is a ${newReportForm.disaster_type.toLowerCase()} emergency in ${location} requiring immediate attention. The situation is developing rapidly and poses significant risk to public safety. Emergency services have been notified and are responding to the scene. Residents in the affected area are advised to evacuate immediately and follow all safety protocols.`,
+            confidence: 0.95,
+            disaster_type: newReportForm.disaster_type,
+            location: location
+          },
+          {
+            title: `Detailed ${newReportForm.disaster_type} Assessment - ${location}`,
+            description: `A ${newReportForm.disaster_type.toLowerCase()} incident has been reported in ${location}. The situation appears to be escalating with potential for widespread impact. Multiple agencies are coordinating response efforts. Citizens are urged to avoid the affected area and monitor official updates for further instructions.`,
+            confidence: 0.88,
+            disaster_type: newReportForm.disaster_type,
+            location: location
+          },
+          {
+            title: `Concise ${newReportForm.disaster_type} Alert - ${location}`,
+            description: `${newReportForm.disaster_type} emergency in progress at ${location}. Immediate response required. Please provide specific details about the current situation, any visible damage or injuries, and the exact location of the incident.`,
+            confidence: 0.92,
+            disaster_type: newReportForm.disaster_type,
+            location: location
+          },
+          ...(isUrban ? [{
+            title: `Urban ${newReportForm.disaster_type} Response - ${location}`,
+            description: `${newReportForm.disaster_type} emergency in urban area ${location}. High population density requires coordinated evacuation and response efforts. Traffic management and emergency services coordination essential. Public transportation may be affected.`,
+            confidence: 0.87,
+            disaster_type: newReportForm.disaster_type,
+            location: location
+          }] : []),
+          ...(isRural ? [{
+            title: `Rural ${newReportForm.disaster_type} Alert - ${location}`,
+            description: `${newReportForm.disaster_type} emergency in rural area ${location}. Limited access roads may affect emergency response time. Local community coordination essential. Agricultural areas and livestock may be at risk.`,
+            confidence: 0.85,
+            disaster_type: newReportForm.disaster_type,
+            location: location
+          }] : []),
+          ...(isCoastal ? [{
+            title: `Coastal ${newReportForm.disaster_type} Warning - ${location}`,
+            description: `${newReportForm.disaster_type} emergency in coastal area ${location}. Marine rescue services may be required. Tidal conditions and weather patterns should be monitored. Fishing communities and tourism areas at risk.`,
+            confidence: 0.89,
+            disaster_type: newReportForm.disaster_type,
+            location: location
+          }] : []),
+          ...(isIndustrial ? [{
+            title: `Industrial ${newReportForm.disaster_type} Emergency - ${location}`,
+            description: `${newReportForm.disaster_type} emergency in industrial area ${location}. Chemical safety protocols may be required. Industrial fire suppression systems activated. Worker evacuation and safety procedures in effect.`,
+            confidence: 0.91,
+            disaster_type: newReportForm.disaster_type,
+            location: location
+          }] : [])
+        ]
+      };
+      
+      setDescriptionSuggestions(demoSuggestions);
+      setShowSuggestions(true);
+      setSnackbar({
+        open: true,
+        message: 'Demo description suggestions loaded!',
+        severity: 'success'
+      });
+    }
+  };
+
+  const applySuggestion = (suggestion) => {
+    setNewReportForm(prev => ({
+      ...prev,
+      description: suggestion.description
+    }));
+    setShowSuggestions(false);
+    setSnackbar({
+      open: true,
+      message: 'AI description applied to form!',
       severity: 'success'
     });
   };
@@ -1126,14 +1697,15 @@ const Reports = () => {
                               }}
                               onClick={() => {
                                 // Open image in new tab or show in modal
-                                const imageUrl = media.file.startsWith('http') 
-                                  ? media.file 
-                                  : `http://localhost:8000${media.file}`;
+                                let imageUrl = media.file;
+                                if (!media.file.startsWith('http') && !media.file.startsWith('blob:')) {
+                                  imageUrl = `http://localhost:8000${media.file}`;
+                                }
                                 window.open(imageUrl, '_blank');
                               }}
                             >
                               <img
-                                src={media.file.startsWith('http') 
+                                src={media.file.startsWith('http') || media.file.startsWith('blob:')
                                   ? media.file 
                                   : `http://localhost:8000${media.file}`}
                                 alt={`Emergency image ${index + 1}`}
@@ -1142,7 +1714,9 @@ const Reports = () => {
                                   height: '100%',
                                   objectFit: 'cover'
                                 }}
+                                onLoad={() => console.log('✅ Image loaded successfully:', media.file)}
                                 onError={(e) => {
+                                  console.log('❌ Image failed to load:', media.file);
                                   e.target.style.display = 'none';
                                   e.target.nextSibling.style.display = 'flex';
                                 }}
@@ -1366,7 +1940,7 @@ const Reports = () => {
                         </Tooltip>
                         
                         {/* Edit button - only visible to report creator or admin */}
-                        {(isAdmin || (report.user && report.user.id === getCurrentUser().id)) && (
+                        {canEditReport(report) && (
                           <Tooltip title="Edit Report" arrow>
                             <IconButton 
                               size="small"
@@ -1390,8 +1964,33 @@ const Reports = () => {
                           </Tooltip>
                         )}
                         
-                        {isAdmin && (
-                          <Tooltip title="Delete Report (Admin Only)" arrow>
+                        {/* Add Images button - visible to all users who can't edit */}
+                        {canUploadImages(report) && !canEditReport(report) && (
+                          <Tooltip title="Add Images to Report" arrow>
+                            <IconButton 
+                              size="small"
+                              onClick={() => handleAddImages(report)}
+                              sx={{ 
+                                background: 'linear-gradient(45deg, #4caf50, #66bb6a)',
+                                color: 'white',
+                                width: 36,
+                                height: 36,
+                                boxShadow: '0 4px 12px rgba(76, 175, 80, 0.3)',
+                                '&:hover': { 
+                                  background: 'linear-gradient(45deg, #66bb6a, #4caf50)',
+                                  transform: 'scale(1.15) translateY(-2px)',
+                                  boxShadow: '0 6px 20px rgba(76, 175, 80, 0.4)'
+                                },
+                                transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)'
+                              }}
+                            >
+                              <CloudUpload fontSize="small" />
+                            </IconButton>
+                          </Tooltip>
+                        )}
+
+                        {canDeleteReport(report) && (
+                          <Tooltip title={isAdmin ? "Delete Report (Admin)" : "Delete My Report"} arrow>
                             <IconButton 
                               size="small"
                               onClick={() => handleDeleteReport(report)}
@@ -1625,6 +2224,103 @@ const Reports = () => {
                 onChange={(e) => setNewReportForm({...newReportForm, description: e.target.value})}
                 placeholder="Describe the emergency situation"
               />
+              <Box sx={{ display: 'flex', justifyContent: 'flex-end', mt: 1 }}>
+                <Button
+                  size="small"
+                  variant="outlined"
+                  startIcon={<AutoAwesome />}
+                  onClick={fetchDescriptionSuggestions}
+                  disabled={!newReportForm.disaster_type}
+                  sx={{ 
+                    textTransform: 'none',
+                    fontSize: '0.75rem',
+                    px: 1.5,
+                    py: 0.5,
+                    minWidth: 'auto'
+                  }}
+                >
+                  AI Suggestions
+                </Button>
+              </Box>
+              
+              {/* AI Description Suggestions */}
+              {showSuggestions && descriptionSuggestions && (
+                <Box sx={{
+                  bg: 'white',
+                  border: '1px solid #e5e7eb',
+                  borderRadius: 2,
+                  boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
+                  maxHeight: 300,
+                  overflow: 'auto',
+                  mt: 2
+                }}>
+                  <Box sx={{ p: 2, borderBottom: '1px solid #e5e7eb' }}>
+                    <Typography variant="subtitle2" sx={{ fontWeight: 'bold', mb: 1 }}>
+                      🤖 AI Description Suggestions
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary">
+                      Choose a suggestion to auto-fill the description:
+                    </Typography>
+                    {newReportForm.address && (
+                      <Typography variant="caption" color="primary" sx={{ display: 'block', mt: 1 }}>
+                        📍 Location-aware suggestions for: {newReportForm.address}
+                      </Typography>
+                    )}
+                  </Box>
+                  {descriptionSuggestions.suggestions?.map((suggestion, index) => (
+                    <Box
+                      key={index}
+                      sx={{
+                        p: 2,
+                        borderBottom: index < descriptionSuggestions.suggestions.length - 1 ? '1px solid #f3f4f6' : 'none',
+                        cursor: 'pointer',
+                        '&:hover': {
+                          bg: '#f9fafb'
+                        }
+                      }}
+                      onClick={() => applySuggestion(suggestion)}
+                    >
+                      <Typography variant="body2" sx={{ mb: 1, fontWeight: 'medium' }}>
+                        {suggestion.title}
+                      </Typography>
+                      <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.875rem' }}>
+                        {suggestion.description}
+                      </Typography>
+                      <Box sx={{ mt: 1, display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+                        <Chip 
+                          size="small" 
+                          label={`Confidence: ${Math.round(suggestion.confidence * 100)}%`}
+                          color="primary"
+                          variant="outlined"
+                        />
+                        <Chip 
+                          size="small" 
+                          label={suggestion.disaster_type}
+                          color="secondary"
+                          variant="outlined"
+                        />
+                        {suggestion.location && (
+                          <Chip 
+                            size="small" 
+                            label={`📍 ${suggestion.location}`}
+                            color="info"
+                            variant="outlined"
+                          />
+                        )}
+                      </Box>
+                    </Box>
+                  ))}
+                  <Box sx={{ p: 2, textAlign: 'center' }}>
+                    <Button
+                      size="small"
+                      onClick={() => setShowSuggestions(false)}
+                      sx={{ textTransform: 'none' }}
+                    >
+                      Close
+                    </Button>
+                  </Box>
+                </Box>
+              )}
             </Grid>
             <Grid item xs={4}>
               <FormControl fullWidth size="small">
@@ -1666,17 +2362,41 @@ const Reports = () => {
             
             {/* Image Upload Section */}
             <Grid item xs={12}>
-              <Box sx={{ 
-                border: '2px dashed #d1d5db', 
-                borderRadius: 2, 
-                p: 2, 
-                textAlign: 'center',
-                background: '#f9fafb',
-                '&:hover': {
-                  borderColor: '#3b82f6',
-                  background: '#f0f9ff'
-                }
-              }}>
+              <Box 
+                sx={{ 
+                  border: '2px dashed #d1d5db', 
+                  borderRadius: 2, 
+                  p: 2, 
+                  textAlign: 'center',
+                  background: '#f9fafb',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s ease',
+                  '&:hover': {
+                    borderColor: '#3b82f6',
+                    background: '#f0f9ff'
+                  }
+                }}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  console.log('🎯 Files dropped:', e.dataTransfer.files);
+                  const fakeEvent = {
+                    target: {
+                      files: e.dataTransfer.files,
+                      value: ''
+                    }
+                  };
+                  handleImageSelect(fakeEvent);
+                }}
+                onDragOver={(e) => {
+                  e.preventDefault();
+                }}
+                onDragEnter={(e) => {
+                  e.preventDefault();
+                }}
+                onClick={() => {
+                  document.getElementById('image-upload').click();
+                }}
+              >
                 <input
                   accept="image/*"
                   style={{ display: 'none' }}
@@ -1685,26 +2405,15 @@ const Reports = () => {
                   type="file"
                   onChange={handleImageSelect}
                 />
-                <label htmlFor="image-upload">
-                  <Button
-                    variant="outlined"
-                    component="span"
-                    startIcon={<CloudUpload />}
-                    sx={{
-                      borderColor: '#d1d5db',
-                      color: '#6b7280',
-                      '&:hover': {
-                        borderColor: '#3b82f6',
-                        color: '#3b82f6'
-                      }
-                    }}
-                  >
-                    📸 Upload Images (Optional)
-                  </Button>
-                </label>
-                <Typography variant="caption" sx={{ display: 'block', mt: 1, color: '#6b7280' }}>
-                  Upload photos of the emergency situation for AI analysis
-                </Typography>
+                <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1 }}>
+                  <CloudUpload sx={{ fontSize: 32, color: '#6b7280' }} />
+                  <Typography variant="body2" sx={{ color: '#6b7280', fontWeight: 500 }}>
+                    📸 Click to Upload Images or Drag & Drop
+                  </Typography>
+                  <Typography variant="caption" sx={{ color: '#9ca3af' }}>
+                    Supports JPG, PNG, GIF (max 10MB each)
+                  </Typography>
+                </Box>
               </Box>
             </Grid>
             
@@ -1954,14 +2663,15 @@ const Reports = () => {
                           }
                         }}
                         onClick={() => {
-                          const imageUrl = media.file.startsWith('http') 
-                            ? media.file 
-                            : `http://localhost:8000${media.file}`;
+                          let imageUrl = media.file;
+                          if (!media.file.startsWith('http') && !media.file.startsWith('blob:')) {
+                            imageUrl = `http://localhost:8000${media.file}`;
+                          }
                           window.open(imageUrl, '_blank');
                         }}
                       >
                         <img
-                          src={media.file.startsWith('http') 
+                          src={media.file.startsWith('http') || media.file.startsWith('blob:')
                             ? media.file 
                             : `http://localhost:8000${media.file}`}
                           alt={`Emergency image ${index + 1}`}
@@ -1970,7 +2680,9 @@ const Reports = () => {
                             height: '100%',
                             objectFit: 'cover'
                           }}
+                          onLoad={() => console.log('✅ Image loaded successfully:', media.file)}
                           onError={(e) => {
+                            console.log('❌ Image failed to load:', media.file);
                             e.target.style.display = 'none';
                             e.target.nextSibling.style.display = 'flex';
                           }}
@@ -2007,20 +2719,37 @@ const Reports = () => {
           >
             Close
           </Button>
-          <Button 
-            onClick={() => {
-              setViewReportDialog(false);
-              handleEditReport(selectedReport);
-            }}
-            variant="contained"
-            size="small"
-            sx={{
-              background: '#f59e0b',
-              '&:hover': { background: '#d97706' }
-            }}
-          >
-            Edit
-          </Button>
+          {canEditReport(selectedReport) ? (
+            <Button 
+              onClick={() => {
+                setViewReportDialog(false);
+                handleEditReport(selectedReport);
+              }}
+              variant="contained"
+              size="small"
+              sx={{
+                background: '#f59e0b',
+                '&:hover': { background: '#d97706' }
+              }}
+            >
+              Edit
+            </Button>
+          ) : canUploadImages(selectedReport) ? (
+            <Button 
+              onClick={() => {
+                setViewReportDialog(false);
+                handleAddImages(selectedReport);
+              }}
+              variant="contained"
+              size="small"
+              sx={{
+                background: '#4caf50',
+                '&:hover': { background: '#45a049' }
+              }}
+            >
+              Add Images
+            </Button>
+          ) : null}
         </DialogActions>
       </Dialog>
 
@@ -2195,6 +2924,103 @@ const Reports = () => {
                 onChange={(e) => setNewReportForm({...newReportForm, description: e.target.value})}
                 placeholder="Describe the emergency situation"
               />
+              <Box sx={{ display: 'flex', justifyContent: 'flex-end', mt: 1 }}>
+                <Button
+                  size="small"
+                  variant="outlined"
+                  startIcon={<AutoAwesome />}
+                  onClick={fetchDescriptionSuggestions}
+                  disabled={!newReportForm.disaster_type}
+                  sx={{ 
+                    textTransform: 'none',
+                    fontSize: '0.75rem',
+                    px: 1.5,
+                    py: 0.5,
+                    minWidth: 'auto'
+                  }}
+                >
+                  AI Suggestions
+                </Button>
+              </Box>
+              
+              {/* AI Description Suggestions */}
+              {showSuggestions && descriptionSuggestions && (
+                <Box sx={{
+                  bg: 'white',
+                  border: '1px solid #e5e7eb',
+                  borderRadius: 2,
+                  boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
+                  maxHeight: 300,
+                  overflow: 'auto',
+                  mt: 2
+                }}>
+                  <Box sx={{ p: 2, borderBottom: '1px solid #e5e7eb' }}>
+                    <Typography variant="subtitle2" sx={{ fontWeight: 'bold', mb: 1 }}>
+                      🤖 AI Description Suggestions
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary">
+                      Choose a suggestion to auto-fill the description:
+                    </Typography>
+                    {newReportForm.address && (
+                      <Typography variant="caption" color="primary" sx={{ display: 'block', mt: 1 }}>
+                        📍 Location-aware suggestions for: {newReportForm.address}
+                      </Typography>
+                    )}
+                  </Box>
+                  {descriptionSuggestions.suggestions?.map((suggestion, index) => (
+                    <Box
+                      key={index}
+                      sx={{
+                        p: 2,
+                        borderBottom: index < descriptionSuggestions.suggestions.length - 1 ? '1px solid #f3f4f6' : 'none',
+                        cursor: 'pointer',
+                        '&:hover': {
+                          bg: '#f9fafb'
+                        }
+                      }}
+                      onClick={() => applySuggestion(suggestion)}
+                    >
+                      <Typography variant="body2" sx={{ mb: 1, fontWeight: 'medium' }}>
+                        {suggestion.title}
+                      </Typography>
+                      <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.875rem' }}>
+                        {suggestion.description}
+                      </Typography>
+                      <Box sx={{ mt: 1, display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+                        <Chip 
+                          size="small" 
+                          label={`Confidence: ${Math.round(suggestion.confidence * 100)}%`}
+                          color="primary"
+                          variant="outlined"
+                        />
+                        <Chip 
+                          size="small" 
+                          label={suggestion.disaster_type}
+                          color="secondary"
+                          variant="outlined"
+                        />
+                        {suggestion.location && (
+                          <Chip 
+                            size="small" 
+                            label={`📍 ${suggestion.location}`}
+                            color="info"
+                            variant="outlined"
+                          />
+                        )}
+                      </Box>
+                    </Box>
+                  ))}
+                  <Box sx={{ p: 2, textAlign: 'center' }}>
+                    <Button
+                      size="small"
+                      onClick={() => setShowSuggestions(false)}
+                      sx={{ textTransform: 'none' }}
+                    >
+                      Close
+                    </Button>
+                  </Box>
+                </Box>
+              )}
             </Grid>
             <Grid item xs={4}>
               <FormControl fullWidth size="small">
@@ -2236,17 +3062,41 @@ const Reports = () => {
             
             {/* Image Upload Section for Edit */}
             <Grid item xs={12}>
-              <Box sx={{ 
-                border: '2px dashed #d1d5db', 
-                borderRadius: 2, 
-                p: 2, 
-                textAlign: 'center',
-                background: '#f9fafb',
-                '&:hover': {
-                  borderColor: '#3b82f6',
-                  background: '#f0f9ff'
-                }
-              }}>
+              <Box 
+                sx={{ 
+                  border: '2px dashed #d1d5db', 
+                  borderRadius: 2, 
+                  p: 2, 
+                  textAlign: 'center',
+                  background: '#f9fafb',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s ease',
+                  '&:hover': {
+                    borderColor: '#3b82f6',
+                    background: '#f0f9ff'
+                  }
+                }}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  console.log('🎯 Files dropped:', e.dataTransfer.files);
+                  const fakeEvent = {
+                    target: {
+                      files: e.dataTransfer.files,
+                      value: ''
+                    }
+                  };
+                  handleImageSelect(fakeEvent);
+                }}
+                onDragOver={(e) => {
+                  e.preventDefault();
+                }}
+                onDragEnter={(e) => {
+                  e.preventDefault();
+                }}
+                onClick={() => {
+                  document.getElementById('image-upload-edit').click();
+                }}
+              >
                 <input
                   accept="image/*"
                   style={{ display: 'none' }}
@@ -2255,26 +3105,15 @@ const Reports = () => {
                   type="file"
                   onChange={handleImageSelect}
                 />
-                <label htmlFor="image-upload-edit">
-                  <Button
-                    variant="outlined"
-                    component="span"
-                    startIcon={<CloudUpload />}
-                    sx={{
-                      borderColor: '#d1d5db',
-                      color: '#6b7280',
-                      '&:hover': {
-                        borderColor: '#3b82f6',
-                        color: '#3b82f6'
-                      }
-                    }}
-                  >
-                    📸 Add More Images (Optional)
-                  </Button>
-                </label>
-                <Typography variant="caption" sx={{ display: 'block', mt: 1, color: '#6b7280' }}>
-                  Add additional photos to the emergency report
-                </Typography>
+                <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1 }}>
+                  <CloudUpload sx={{ fontSize: 32, color: '#6b7280' }} />
+                  <Typography variant="body2" sx={{ color: '#6b7280', fontWeight: 500 }}>
+                    📸 Add More Images or Drag & Drop
+                  </Typography>
+                  <Typography variant="caption" sx={{ color: '#9ca3af' }}>
+                    Supports JPG, PNG, GIF (max 10MB each)
+                  </Typography>
+                </Box>
               </Box>
             </Grid>
             
@@ -2378,14 +3217,15 @@ const Reports = () => {
                           }
                         }}
                         onClick={() => {
-                          const imageUrl = media.file.startsWith('http') 
-                            ? media.file 
-                            : `http://localhost:8000${media.file}`;
+                          let imageUrl = media.file;
+                          if (!media.file.startsWith('http') && !media.file.startsWith('blob:')) {
+                            imageUrl = `http://localhost:8000${media.file}`;
+                          }
                           window.open(imageUrl, '_blank');
                         }}
                       >
                         <img
-                          src={media.file.startsWith('http') 
+                          src={media.file.startsWith('http') || media.file.startsWith('blob:')
                             ? media.file 
                             : `http://localhost:8000${media.file}`}
                           alt={`Current image ${index + 1}`}
@@ -2441,6 +3281,206 @@ const Reports = () => {
             }}
           >
             {uploadingImages ? 'Updating...' : 'Update Report'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Add Images Only Dialog */}
+      <Dialog 
+        open={addImagesDialog} 
+        onClose={() => setAddImagesDialog(false)}
+        maxWidth="sm"
+        fullWidth
+        PaperProps={{
+          sx: {
+            borderRadius: 2,
+            background: 'white',
+            boxShadow: '0 4px 20px rgba(0, 0, 0, 0.1)'
+          }
+        }}
+      >
+        <DialogTitle sx={{ 
+          background: 'linear-gradient(45deg, #4caf50, #66bb6a)',
+          color: 'white',
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center'
+        }}>
+          <Typography variant="h6" sx={{ fontWeight: 600 }}>
+            📸 Add Images to Report
+          </Typography>
+          <IconButton 
+            onClick={() => setAddImagesDialog(false)} 
+            size="small"
+            sx={{ color: 'white' }}
+          >
+            <Close />
+          </IconButton>
+        </DialogTitle>
+        <DialogContent sx={{ p: 3, pt: 4 }}>
+          <Grid container spacing={2}>
+            {/* Report Info */}
+            <Grid item xs={12}>
+              <Box sx={{ 
+                p: 2, 
+                bgcolor: '#f8fafc', 
+                borderRadius: 2, 
+                border: '1px solid #e2e8f0' 
+              }}>
+                <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
+                  📋 Report Details
+                </Typography>
+                <Typography variant="body2" sx={{ color: '#64748b' }}>
+                  <strong>Type:</strong> {selectedReport?.disaster_type} | 
+                  <strong> Priority:</strong> {selectedReport?.priority} | 
+                  <strong> Location:</strong> {selectedReport?.address}
+                </Typography>
+              </Box>
+            </Grid>
+
+            {/* Image Upload Section */}
+            <Grid item xs={12}>
+              <Box 
+                sx={{ 
+                  border: '2px dashed #d1d5db', 
+                  borderRadius: 2, 
+                  p: 2, 
+                  textAlign: 'center',
+                  background: '#f9fafb',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s ease',
+                  '&:hover': {
+                    borderColor: '#4caf50',
+                    background: '#f0f9f0'
+                  }
+                }}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  console.log('🎯 Files dropped:', e.dataTransfer.files);
+                  const fakeEvent = {
+                    target: {
+                      files: e.dataTransfer.files,
+                      value: ''
+                    }
+                  };
+                  handleImageSelect(fakeEvent);
+                }}
+                onDragOver={(e) => {
+                  e.preventDefault();
+                }}
+                onDragEnter={(e) => {
+                  e.preventDefault();
+                }}
+                onClick={() => {
+                  document.getElementById('image-upload-add').click();
+                }}
+              >
+                <input
+                  accept="image/*"
+                  style={{ display: 'none' }}
+                  id="image-upload-add"
+                  multiple
+                  type="file"
+                  onChange={handleImageSelect}
+                />
+                <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1 }}>
+                  <CloudUpload sx={{ fontSize: 32, color: '#4caf50' }} />
+                  <Typography variant="body2" sx={{ color: '#4caf50', fontWeight: 500 }}>
+                    📸 Click to Upload Images or Drag & Drop
+                  </Typography>
+                  <Typography variant="caption" sx={{ color: '#9ca3af' }}>
+                    Supports JPG, PNG, GIF (max 10MB each)
+                  </Typography>
+                </Box>
+              </Box>
+            </Grid>
+
+            {/* Image Preview Section */}
+            {imagePreview.length > 0 && (
+              <Grid item xs={12}>
+                <Box sx={{ 
+                  border: '1px solid #e5e7eb', 
+                  borderRadius: 2, 
+                  p: 2,
+                  background: 'white'
+                }}>
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+                    <Typography variant="subtitle2" sx={{ fontWeight: 600, color: '#374151' }}>
+                      📷 New Images ({imagePreview.length})
+                    </Typography>
+                    <Button
+                      size="small"
+                      onClick={clearAllImages}
+                      sx={{ color: '#ef4444', fontSize: '0.75rem' }}
+                    >
+                      Clear All
+                    </Button>
+                  </Box>
+                  <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
+                    {imagePreview.map((preview, index) => (
+                      <Box
+                        key={index}
+                        sx={{
+                          position: 'relative',
+                          width: 80,
+                          height: 80,
+                          borderRadius: 1,
+                          overflow: 'hidden',
+                          border: '2px solid #e5e7eb'
+                        }}
+                      >
+                        <img
+                          src={preview.url}
+                          alt={preview.name}
+                          style={{
+                            width: '100%',
+                            height: '100%',
+                            objectFit: 'cover'
+                          }}
+                        />
+                        <IconButton
+                          size="small"
+                          onClick={() => removeImage(index)}
+                          sx={{
+                            position: 'absolute',
+                            top: -8,
+                            right: -8,
+                            bgcolor: '#ef4444',
+                            color: 'white',
+                            width: 20,
+                            height: 20,
+                            '&:hover': { bgcolor: '#dc2626' }
+                          }}
+                        >
+                          <DeleteIcon sx={{ fontSize: 12 }} />
+                        </IconButton>
+                      </Box>
+                    ))}
+                  </Box>
+                </Box>
+              </Grid>
+            )}
+          </Grid>
+        </DialogContent>
+        <DialogActions sx={{ p: 3, pt: 2 }}>
+          <Button 
+            onClick={() => setAddImagesDialog(false)} 
+            variant="outlined"
+            size="small"
+          >
+            Cancel
+          </Button>
+          <Button 
+            onClick={submitImagesOnly}
+            variant="contained"
+            size="small"
+            disabled={selectedImages.length === 0 || uploadingImages}
+            sx={{
+              background: '#4caf50',
+              '&:hover': { background: '#45a049' }
+            }}
+          >
+            {uploadingImages ? 'Uploading...' : `Add ${selectedImages.length} Image(s)`}
           </Button>
         </DialogActions>
       </Dialog>

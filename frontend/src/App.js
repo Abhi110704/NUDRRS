@@ -7,6 +7,7 @@ import Dashboard from './components/Dashboard';
 import ReportsMap from './components/ReportsMap';
 import Reports from './components/Reports';
 import Analytics from './components/Analytics';
+import EmergencyContacts from './components/EmergencyContacts';
 import Navbar from './components/Navbar';
 import Login from './components/Login';
 import Profile from './components/Profile';
@@ -494,6 +495,7 @@ function AppContent({ toggleTheme, isDarkMode }) {
           <Route path="/map" element={<ProtectedRoute><ReportsMap /></ProtectedRoute>} />
           <Route path="/reports" element={<ProtectedRoute><Reports /></ProtectedRoute>} />
           <Route path="/analytics" element={<ProtectedRoute><Analytics /></ProtectedRoute>} />
+          <Route path="/emergency-contacts" element={<ProtectedRoute><EmergencyContacts /></ProtectedRoute>} />
           <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
           <Route path="/admin" element={<ProtectedRoute><AdminPanel /></ProtectedRoute>} />
           <Route path="*" element={<Navigate to="/" />} />

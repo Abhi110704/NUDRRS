@@ -123,7 +123,7 @@ export const AuthProvider = ({ children }) => {
 
   // Demo mode toggle removed for production
 
-  const isAdmin = user?.profile?.role === 'ADMIN';
+  const isAdmin = user?.profile?.role === 'ADMIN' || user?.is_superuser === true || user?.username === 'admin';
   const isManager = user?.profile?.role === 'MANAGER';
   const isResponder = user?.profile?.role === 'RESPONDER';
   const isAnalyst = user?.profile?.role === 'ANALYST';
