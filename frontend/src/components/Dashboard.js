@@ -1,65 +1,96 @@
 import React, { useState, useEffect } from 'react';
 import {
-  Box, Typography, Grid, Card, CardContent, Chip, Paper,
-  CircularProgress, Alert, useTheme, useMediaQuery, IconButton,
-  Tooltip, Divider, LinearProgress
+  Box, Grid, Card, CardContent, Typography, Chip, Button, 
+  LinearProgress, Alert, Snackbar, IconButton, Tooltip,
+  Dialog, DialogTitle, DialogContent, DialogActions, Avatar,
+  Divider, List, ListItem, ListItemText, ListItemAvatar,
+  Stack, Badge, Rating, Paper, TextField
 } from '@mui/material';
 import {
-  TrendingUp, TrendingDown, Speed, Security, Warning,
-  LocationOn, AccessTime, PriorityHigh, Assessment, Phone
+  TrendingUp, TrendingDown, PriorityHigh, Security, 
+  Report, LocationOn, AccessTime, Refresh, Close,
+  Comment, People, Timer, CheckCircle, Flag, Send
 } from '@mui/icons-material';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 import { useNavigate } from 'react-router-dom';
-import axios from 'axios';
 import { useAuth } from '../contexts/AuthContext';
+import { useTheme } from '@mui/material/styles';
+import axios from 'axios';
 
 const Dashboard = () => {
   const [stats, setStats] = useState(null);
   const [recentReports, setRecentReports] = useState([]);
   const [userReports, setUserReports] = useState([]);
   const [loading, setLoading] = useState(true);
-  const { isDemoMode, user, isAdmin, isManager, userRole } = useAuth();
-  const [lastUpdate, setLastUpdate] = useState(new Date()); // Track last update
+  const { user, isAdmin, isManager, userRole } = useAuth();
+  const [lastUpdate, setLastUpdate] = useState(new Date());
   const navigate = useNavigate();
-  const [updateStatus, setUpdateStatus] = useState('idle'); // Update status: idle, updating, success, error
-  const [liveUpdates, setLiveUpdates] = useState([]); // Store live updates
+  const [updateStatus, setUpdateStatus] = useState('idle');
   const theme = useTheme();
-  const isMobile = useMediaQuery(theme.breakpoints.down('md'));
+  
+  // Report details dialog state
+  const [selectedReport, setSelectedReport] = useState(null);
+  const [viewDialogOpen, setViewDialogOpen] = useState(false);
+  const [comments, setComments] = useState([]);
+  const [newComment, setNewComment] = useState('');
 
-  // Live update function
-  const addLiveUpdate = (message, type = 'info') => {
-    const update = {
-      id: Date.now(),
-      message,
-      type,
-      timestamp: new Date(),
-      isNew: true
-    };
-    
-    setLiveUpdates(prev => [update, ...prev.slice(0, 9)]); // Keep last 10 updates
-    
-    // Remove "new" status after 3 seconds
-    setTimeout(() => {
-      setLiveUpdates(prev => 
-        prev.map(u => u.id === update.id ? { ...u, isNew: false } : u)
+
+  // Handle report viewing
+  const handleViewReport = (report) => {
+    setSelectedReport(report);
+    setViewDialogOpen(true);
+    fetchComments(report.id);
+  };
+
+  // Fetch comments for a report
+  const fetchComments = async (reportId) => {
+    try {
+      const response = await axios.get(`http://localhost:8000/api/sos_reports/sos_reports/${reportId}/updates/`, {
+        headers: {
+          'Authorization': `Token ${localStorage.getItem('token')}`
+        }
+      });
+      setComments(response.data || []);
+    } catch (error) {
+      console.error('Error fetching comments:', error);
+      setComments([]);
+    }
+  };
+
+  // Add comment to report
+  const handleAddComment = async () => {
+    if (!newComment.trim() || !selectedReport) return;
+
+    try {
+      const response = await axios.post(
+        `http://localhost:8000/api/sos_reports/sos_reports/${selectedReport.id}/updates/`,
+        { message: newComment },
+        {
+          headers: {
+            'Authorization': `Token ${localStorage.getItem('token')}`,
+            'Content-Type': 'application/json'
+          }
+        }
       );
-    }, 3000);
+      
+      setComments(prev => [...prev, response.data]);
+      setNewComment('');
+    } catch (error) {
+      console.error('Error adding comment:', error);
+    }
   };
 
   useEffect(() => {
     fetchDashboardData();
     const interval = setInterval(fetchDashboardData, 30000);
     return () => clearInterval(interval);
-  }, [isDemoMode]);
+  }, []);
 
   const fetchDashboardData = async () => {
     try {
       setLoading(true);
-      
-      if (!isDemoMode) {
         setUpdateStatus('updating');
-        // Try to fetch real data from backend
-      try {
+      
+      // Fetch real data from backend
         const [statsResponse, reportsResponse] = await Promise.all([
             axios.get(`http://localhost:8000/api/sos_reports/sos_reports/dashboard_stats/`),
             axios.get(`http://localhost:8000/api/sos_reports/sos_reports/?limit=5`)
@@ -75,14 +106,15 @@ const Dashboard = () => {
             by_priority: statsResponse.data.by_priority || {}
           };
           
-          const transformedReports = (reportsResponse.data.results || reportsResponse.data || []).map(report => ({
+          const reportsData = reportsResponse.data.results || reportsResponse.data || [];
+      const transformedReports = (Array.isArray(reportsData) ? reportsData : []).map(report => ({
             ...report,
             disaster_type: report.disaster_type || report.properties?.disaster_type,
             status: report.status || report.properties?.status,
             priority: report.priority || report.properties?.priority,
             address: report.address || report.properties?.address,
             description: report.description || report.properties?.description,
-            user: report.user || { first_name: 'Demo', last_name: 'User' }
+        user: report.user || { first_name: 'User', last_name: 'Name' }
           }));
           
           setStats(transformedStats);
@@ -92,7 +124,8 @@ const Dashboard = () => {
           if (user && !isAdmin && !isManager) {
             try {
               const userReportsResponse = await axios.get(`http://localhost:8000/api/sos_reports/?user=${user.id}`);
-              setUserReports(userReportsResponse.data.results || userReportsResponse.data || []);
+              const userReportsData = userReportsResponse.data.results || userReportsResponse.data || [];
+              setUserReports(Array.isArray(userReportsData) ? userReportsData : []);
             } catch (userReportsError) {
               console.log('Could not fetch user-specific reports:', userReportsError);
               setUserReports([]);
@@ -101,1212 +134,526 @@ const Dashboard = () => {
 
           setUpdateStatus('success');
           setLastUpdate(new Date());
-          addLiveUpdate(`✅ Live data loaded: ${transformedStats.total_reports} reports`, 'success');
-        setLoading(false);
-        return;
-      } catch (apiError) {
-          console.log('Real API not available, using demo mode:', apiError.message);
+    } catch (error) {
+      console.error('Error fetching dashboard data:', error);
           setUpdateStatus('error');
-          addLiveUpdate('⚠️ Backend connection failed - using demo data', 'error');
-          // Continue to demo data below
-        }
-      }
       
-      // Demo data (different content for demo mode)
-      const demoStats = isDemoMode ? {
-        total_reports: 7,
-        pending_reports: 3,
-        active_reports: 2,
-        resolved_reports: 2,
-        by_disaster_type: {
-          'FLOOD': 2,
-          'FIRE': 2,
-          'EARTHQUAKE': 1,
-          'LANDSLIDE': 1,
-          'CYCLONE': 1
-        },
-        by_priority: {
-          'HIGH': 3,
-          'CRITICAL': 2,
-          'MEDIUM': 2
-        }
-      } : {
+      // Set empty data when backend is not available
+      setStats({
         total_reports: 0,
         pending_reports: 0,
         active_reports: 0,
         resolved_reports: 0,
         by_disaster_type: {},
         by_priority: {}
-      };
-      
-      const demoReports = isDemoMode ? [
-        {
-          id: 1,
-          disaster_type: 'FLOOD',
-          status: 'PENDING',
-          priority: 'HIGH',
-          address: 'Sector 15, Chandigarh, Punjab',
-          description: 'Heavy rainfall causing severe waterlogging in residential areas. Water level rising rapidly, multiple families trapped and need immediate evacuation. Roads completely submerged.',
-          created_at: new Date().toISOString(),
-          user: { first_name: 'Rajesh', last_name: 'Kumar' },
-          media: [
-            {
-              id: 1,
-              file: 'https://images.unsplash.com/photo-1544551763-46a013bb70d5?w=400&h=300&fit=crop',
-              file_type: 'image'
-            },
-            {
-              id: 2,
-              file: 'https://images.unsplash.com/photo-1574263867122-4a1b0b0b0b0b?w=400&h=300&fit=crop',
-              file_type: 'image'
-            }
-          ]
-        },
-        {
-          id: 2,
-          disaster_type: 'FIRE',
-          status: 'IN_PROGRESS',
-          priority: 'CRITICAL',
-          address: 'Industrial Area, Gurgaon, Haryana',
-          description: 'Massive factory fire spreading rapidly across multiple buildings. Thick black smoke visible from 5km away. Fire department on site but need additional resources and evacuation support.',
-          created_at: new Date(Date.now() - 3600000).toISOString(),
-          user: { first_name: 'Priya', last_name: 'Sharma' },
-          media: [
-            {
-              id: 3,
-              file: 'https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=400&h=300&fit=crop',
-              file_type: 'image'
-            }
-          ]
-        },
-        {
-          id: 3,
-          disaster_type: 'EARTHQUAKE',
-          status: 'VERIFIED',
-          priority: 'MEDIUM',
-          address: 'Hill Station Road, Shimla, Himachal Pradesh',
-          description: 'Moderate earthquake (5.2 magnitude) reported. Several old buildings showing cracks, checking for structural damages. No casualties reported yet but residents evacuated as precaution.',
-          created_at: new Date(Date.now() - 7200000).toISOString(),
-          user: { first_name: 'Amit', last_name: 'Singh' },
-          media: [
-            {
-              id: 4,
-              file: 'https://images.unsplash.com/photo-1574263867122-4a1b0b0b0b0b?w=400&h=300&fit=crop',
-              file_type: 'image'
-            }
-          ]
-        },
-        {
-          id: 4,
-          disaster_type: 'LANDSLIDE',
-          status: 'PENDING',
-          priority: 'HIGH',
-          address: 'Mountain View, Dehradun, Uttarakhand',
-          description: 'Heavy rainfall triggered landslide blocking main highway. Multiple vehicles trapped, rescue operations underway. Road completely blocked for next 24-48 hours.',
-          created_at: new Date(Date.now() - 1800000).toISOString(),
-          user: { first_name: 'Suresh', last_name: 'Yadav' },
-          media: [
-            {
-              id: 5,
-              file: 'https://images.unsplash.com/photo-1574263867122-4a1b0b0b0b0b?w=400&h=300&fit=crop',
-              file_type: 'image'
-            }
-          ]
-        },
-        {
-          id: 5,
-          disaster_type: 'CYCLONE',
-          status: 'IN_PROGRESS',
-          priority: 'CRITICAL',
-          address: 'Coastal Area, Puri, Odisha',
-          description: 'Cyclone warning issued. Wind speed increasing rapidly, heavy rainfall expected. Coastal areas being evacuated. Emergency shelters activated.',
-          created_at: new Date(Date.now() - 900000).toISOString(),
-          user: { first_name: 'Lakshmi', last_name: 'Patel' },
-          media: [
-            {
-              id: 6,
-              file: 'https://images.unsplash.com/photo-1574263867122-4a1b0b0b0b0b?w=400&h=300&fit=crop',
-              file_type: 'image'
-            }
-          ]
-        }
-      ] : [];
-
-      // Demo user-specific reports
-      const demoUserReports = isDemoMode && user ? [
-        {
-          id: 6,
-          disaster_type: 'FLOOD',
-          priority: 'HIGH',
-          status: 'PENDING',
-          address: 'Your Location, City',
-          description: 'Heavy rainfall in my area causing waterlogging. Water entering ground floor of my house. Need immediate assistance for evacuation.',
-          created_at: new Date(Date.now() - 1800000).toISOString(),
-          user: { id: 999, first_name: user.first_name || 'Current', last_name: user.last_name || 'User' },
-          media: [
-            {
-              id: 7,
-              file: 'https://images.unsplash.com/photo-1544551763-46a013bb70d5?w=400&h=300&fit=crop',
-              file_type: 'image'
-            }
-          ]
-        },
-        {
-          id: 7,
-          disaster_type: 'FIRE',
-          priority: 'MEDIUM',
-          status: 'RESOLVED',
-          address: 'Nearby Market, Your City',
-          description: 'Small fire in electrical panel of nearby shop. Fire department responded quickly and extinguished it. No injuries reported.',
-          created_at: new Date(Date.now() - 86400000).toISOString(),
-          user: { id: 999, first_name: user.first_name || 'Current', last_name: user.last_name || 'User' },
-          media: [
-            {
-              id: 8,
-              file: 'https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=400&h=300&fit=crop',
-              file_type: 'image'
-            }
-          ]
-        }
-      ] : [];
-
-      setStats(demoStats);
-      setRecentReports(demoReports);
-      setUserReports(demoUserReports);
+      });
+      setRecentReports([]);
+      setUserReports([]);
+    } finally {
       setLoading(false);
-    } catch (error) {
-      console.error('Error fetching dashboard data:', error);
-      setLoading(false);
-    }
-  };
-
-  const getStatusColor = (status) => {
-    switch (status) {
-      case 'PENDING': return '#ff9800';
-      case 'VERIFIED': return '#2196f3';
-      case 'IN_PROGRESS': return '#ff9800';
-      case 'RESOLVED': return '#4caf50';
-      default: return '#757575';
     }
   };
 
   const getPriorityColor = (priority) => {
     switch (priority) {
-      case 'HIGH': return '#f44336';
-      case 'MEDIUM': return '#ff9800';
-      case 'LOW': return '#4caf50';
-      default: return '#757575';
+      case 'CRITICAL': return 'error';
+      case 'HIGH': return 'warning';
+      case 'MEDIUM': return 'info';
+      case 'LOW': return 'success';
+      default: return 'default';
     }
   };
 
-  const getDisasterIcon = (type) => {
-    switch (type) {
-      case 'FLOOD': return '🌊';
-      case 'EARTHQUAKE': return '🌋';
-      case 'FIRE': return '🔥';
-      case 'MEDICAL': return '🏥';
-      default: return '🚨';
+  const getStatusColor = (status) => {
+    switch (status) {
+      case 'PENDING': return 'warning';
+      case 'VERIFIED': return 'info';
+      case 'IN_PROGRESS': return 'primary';
+      case 'RESOLVED': return 'success';
+      case 'REJECTED': return 'error';
+      default: return 'default';
     }
   };
 
-  if (loading) {
+  const formatTimeAgo = (dateString) => {
+    const date = new Date(dateString);
+    const now = new Date();
+    const diffInMinutes = Math.floor((now - date) / (1000 * 60));
+    
+    if (diffInMinutes < 1) return 'Just now';
+    if (diffInMinutes < 60) return `${diffInMinutes}m ago`;
+    if (diffInMinutes < 1440) return `${Math.floor(diffInMinutes / 60)}h ago`;
+    return `${Math.floor(diffInMinutes / 1440)}d ago`;
+  };
+
+
+  if (loading && !stats) {
     return (
-      <Box sx={{ 
-        display: 'flex', 
-        justifyContent: 'center', 
-        alignItems: 'center', 
-        height: '100vh',
-        background: 'linear-gradient(135deg, #d32f2f 0%, #ff9800 100%)'
-      }}>
-        <Box sx={{ textAlign: 'center', color: 'white' }}>
-          <CircularProgress size={60} sx={{ color: 'white', mb: 2 }} />
-          <Typography variant="h5" sx={{ fontWeight: 'bold' }}>
-            Loading Emergency Dashboard...
-          </Typography>
-        </Box>
+      <Box sx={{ p: 3 }}>
+        <LinearProgress />
+        <Typography variant="h6" sx={{ mt: 2 }}>Loading dashboard...</Typography>
       </Box>
     );
   }
 
-  const pieData = stats ? Object.entries(stats.by_disaster_type)
-    .filter(([key, value]) => {
-      // Filter out zero values and ensure value is a positive number
-      const numValue = Number(value);
-      return numValue > 0 && !isNaN(numValue);
-    })
-    .map(([key, value]) => ({
-      name: key,
-      value: value,
-      color: key === 'FLOOD' ? '#2196f3' : key === 'EARTHQUAKE' ? '#ff9800' : key === 'FIRE' ? '#f44336' : '#4caf50'
-    })) : [];
-
-  const barData = stats ? Object.entries(stats.by_priority)
-    .filter(([key, value]) => {
-      // Filter out zero values and ensure value is a positive number
-      const numValue = Number(value);
-      return numValue > 0 && !isNaN(numValue);
-    })
-    .map(([key, value]) => ({
-      name: key,
-      value: value,
-      color: key === 'HIGH' ? '#f44336' : key === 'MEDIUM' ? '#ff9800' : '#4caf50'
-    })) : [];
-
-  const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884D8'];
-
   return (
-    <Box sx={{ 
-      flexGrow: 1, 
-      p: { xs: 2, md: 3 },
-      background: '#f8fafc',
-      minHeight: '100vh',
-      '@keyframes pulse': {
-        '0%': { opacity: 1 },
-        '50%': { opacity: 0.5 },
-        '100%': { opacity: 1 }
-      }
-    }}>
-      {/* Professional Header Section */}
-      <Box sx={{ 
-        background: 'white',
-        borderRadius: 2,
-        p: 4,
-        mb: 4,
-        boxShadow: '0 1px 3px rgba(0, 0, 0, 0.1)',
-        border: '1px solid #e2e8f0'
-      }}>
-        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 2 }}>
-          <Box>
-            <Typography variant="h4" sx={{ 
-              fontWeight: 700,
-              color: '#1a202c',
-              mb: 1,
-              fontSize: { xs: '1.5rem', sm: '1.75rem', md: '2rem' }
-            }}>
-              National Unified Disaster Response System
+    <Box sx={{ p: 3 }}>
+      {/* Header */}
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+        <Typography variant="h4" component="h1" sx={{ fontWeight: 'bold' }}>
+          Emergency Dashboard
             </Typography>
-            <Typography variant="body1" sx={{ 
-              color: '#4a5568',
-              fontSize: '1rem',
-              fontWeight: 500
-            }}>
-              Real-time coordination for emergency response across India
-            </Typography>
-          </Box>
+        
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+          <Tooltip title="Refresh Data">
+            <IconButton 
+              onClick={fetchDashboardData} 
+              disabled={loading}
+              color="primary"
+            >
+              <Refresh />
+            </IconButton>
+          </Tooltip>
           
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 3 }}>
-            <Box sx={{
-              background: '#2563eb',
-          color: 'white', 
-              px: 3,
-              py: 1.5,
-              borderRadius: 2,
-          textAlign: 'center',
-              minWidth: 100
-            }}>
-              <Typography variant="h5" sx={{ fontWeight: 'bold', fontSize: '1.5rem' }}>
-                24/7
-              </Typography>
-              <Typography variant="caption" sx={{ fontSize: '0.75rem', fontWeight: 600 }}>
-                Active Monitoring
-        </Typography>
-            </Box>
-            
-            {isDemoMode && (
-              <Chip 
-                label="Demo Mode" 
-                size="small" 
-                sx={{ 
-                  background: '#fef3c7', 
-                  color: '#92400e',
-                  fontWeight: 600,
-                  border: '1px solid #fbbf24'
-                }} 
-              />
-            )}
-            
-            {!isDemoMode && (
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                 <Box sx={{ 
                   width: 8, 
                   height: 8, 
                   borderRadius: '50%', 
-                  background: updateStatus === 'updating' ? '#f59e0b' : 
-                             updateStatus === 'success' ? '#10b981' : 
-                             updateStatus === 'error' ? '#ef4444' : '#64748b',
-                  animation: updateStatus === 'updating' ? 'pulse 1.5s infinite' : 'none'
-                }} />
-                <Typography variant="caption" sx={{ 
-                  color: '#64748b',
-                  fontWeight: 500,
-                  fontSize: '0.75rem'
-                }}>
-                  {updateStatus === 'updating' ? 'Updating...' :
-                   updateStatus === 'success' ? 'Connected' :
-                   updateStatus === 'error' ? 'Connection Error' : 'Idle'}
+              backgroundColor: updateStatus === 'success' ? 'success.main' : 
+                              updateStatus === 'error' ? 'error.main' : 'warning.main'
+            }} />
+            <Typography variant="caption" color="text.secondary">
+              Last updated: {formatTimeAgo(lastUpdate)}
         </Typography>
-              </Box>
-            )}
           </Box>
         </Box>
       </Box>
 
 
-      {/* Key Metrics Section */}
-      <Box sx={{ mb: 4 }}>
-        <Typography variant="h6" sx={{ 
-          fontWeight: 600, 
-          color: '#1a202c', 
-          mb: 3,
-          fontSize: '1.25rem'
-        }}>
-          Key Metrics
-        </Typography>
-        <Grid container spacing={3}>
+      {/* Stats Cards */}
+      <Grid container spacing={3} sx={{ mb: 4 }}>
         <Grid item xs={12} sm={6} md={3}>
-          <Card sx={{ 
-              background: 'white',
-              borderRadius: 2,
-              border: '1px solid #e2e8f0',
-              boxShadow: '0 1px 3px rgba(0, 0, 0, 0.1)',
-              transition: 'all 0.2s ease',
-              height: 120,
-              '&:hover': {
-                transform: 'translateY(-2px)',
-                boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)'
-              }
-            }}>
-              <CardContent sx={{ p: 3, height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <Card>
+            <CardContent>
+              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                 <Box>
-                  <Typography variant="h4" sx={{ 
-                    fontWeight: 700, 
-                    color: '#1a202c',
-                    mb: 0.5,
-                    fontSize: '2rem'
-                  }}>
+                  <Typography color="text.secondary" gutterBottom>
+                    Total Reports
+                  </Typography>
+                  <Typography variant="h4" component="div">
                     {stats?.total_reports || 0}
                   </Typography>
-                  <Typography variant="body2" sx={{ 
-                    color: '#4a5568',
-                    fontWeight: 500,
-                    fontSize: '0.875rem'
-                  }}>
-                    Active Alerts
-                  </Typography>
-                  <Typography variant="caption" sx={{ 
-                    color: '#10b981',
-                    fontWeight: 600,
-                    fontSize: '0.75rem'
-                  }}>
-                    +12% vs last week
-                  </Typography>
                 </Box>
-                <Box sx={{ 
-                  width: 48, 
-                  height: 48, 
-                  borderRadius: '50%', 
-                  background: '#fef2f2',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center'
-                }}>
-                  <Warning sx={{ fontSize: 24, color: '#ef4444' }} />
+                <Report sx={{ fontSize: 40, color: 'primary.main' }} />
               </Box>
             </CardContent>
           </Card>
         </Grid>
 
           <Grid item xs={12} sm={6} md={3}>
-            <Card sx={{ 
-              background: 'white',
-              borderRadius: 2,
-              border: '1px solid #e2e8f0',
-              boxShadow: '0 1px 3px rgba(0, 0, 0, 0.1)',
-              transition: 'all 0.2s ease',
-              height: 120,
-              '&:hover': {
-                transform: 'translateY(-2px)',
-                boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)'
-              }
-            }}>
-              <CardContent sx={{ p: 3, height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <Card>
+            <CardContent>
+              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                 <Box>
-                  <Typography variant="h4" sx={{ 
-                    fontWeight: 700, 
-                    color: '#1a202c',
-                    mb: 0.5,
-                    fontSize: '2rem'
-                  }}>
-                    {stats?.resolved_reports || 0}
+                  <Typography color="text.secondary" gutterBottom>
+                    Pending
                   </Typography>
-                  <Typography variant="body2" sx={{ 
-                    color: '#4a5568',
-                    fontWeight: 500,
-                    fontSize: '0.875rem'
-                  }}>
-                    People Helped
-                  </Typography>
-                  <Typography variant="caption" sx={{ 
-                    color: '#10b981',
-                    fontWeight: 600,
-                    fontSize: '0.75rem'
-                  }}>
-                    +8% vs last week
+                  <Typography variant="h4" component="div" color="warning.main">
+                    {stats?.pending_reports || 0}
                   </Typography>
                 </Box>
-                <Box sx={{ 
-                  width: 48, 
-                  height: 48, 
-                  borderRadius: '50%', 
-                  background: '#f0fdf4',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center'
-                }}>
-                  <Security sx={{ fontSize: 24, color: '#10b981' }} />
+                <AccessTime sx={{ fontSize: 40, color: 'warning.main' }} />
                 </Box>
               </CardContent>
             </Card>
           </Grid>
 
           <Grid item xs={12} sm={6} md={3}>
-            <Card sx={{ 
-              background: 'white',
-              borderRadius: 2,
-              border: '1px solid #e2e8f0',
-              boxShadow: '0 1px 3px rgba(0, 0, 0, 0.1)',
-              transition: 'all 0.2s ease',
-              height: 120,
-              '&:hover': {
-                transform: 'translateY(-2px)',
-                boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)'
-              }
-            }}>
-              <CardContent sx={{ p: 3, height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <Card>
+            <CardContent>
+              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                 <Box>
-                  <Typography variant="h4" sx={{ 
-                    fontWeight: 700, 
-                    color: '#1a202c',
-                    mb: 0.5,
-                    fontSize: '2rem'
-                  }}>
+                  <Typography color="text.secondary" gutterBottom>
+                    Active
+                  </Typography>
+                  <Typography variant="h4" component="div" color="info.main">
                     {stats?.active_reports || 0}
                   </Typography>
-                  <Typography variant="body2" sx={{ 
-                    color: '#4a5568',
-                    fontWeight: 500,
-                    fontSize: '0.875rem'
-                  }}>
-                    Response Teams
-                  </Typography>
-                  <Typography variant="caption" sx={{ 
-                    color: '#10b981',
-                    fontWeight: 600,
-                    fontSize: '0.75rem'
-                  }}>
-                    100% vs last week
-                  </Typography>
                 </Box>
-                <Box sx={{ 
-                  width: 48, 
-                  height: 48, 
-                  borderRadius: '50%', 
-                  background: '#f0fdf4',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center'
-                }}>
-                  <Speed sx={{ fontSize: 24, color: '#10b981' }} />
+                <TrendingUp sx={{ fontSize: 40, color: 'info.main' }} />
                 </Box>
               </CardContent>
             </Card>
           </Grid>
 
           <Grid item xs={12} sm={6} md={3}>
-            <Card sx={{ 
-              background: 'white',
-              borderRadius: 2,
-              border: '1px solid #e2e8f0',
-              boxShadow: '0 1px 3px rgba(0, 0, 0, 0.1)',
-              transition: 'all 0.2s ease',
-              height: 120,
-              '&:hover': {
-                transform: 'translateY(-2px)',
-                boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)'
-              }
-            }}>
-              <CardContent sx={{ p: 3, height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <Card>
+            <CardContent>
+              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                 <Box>
-                  <Typography variant="h4" sx={{ 
-                    fontWeight: 700, 
-                    color: '#1a202c',
-                    mb: 0.5,
-                    fontSize: '2rem'
-                  }}>
-                    8.2 min
+                  <Typography color="text.secondary" gutterBottom>
+                    Resolved
                   </Typography>
-                  <Typography variant="body2" sx={{ 
-                    color: '#4a5568',
-                    fontWeight: 500,
-                    fontSize: '0.875rem'
-                  }}>
-                    Avg Response Time
-                  </Typography>
-                  <Typography variant="caption" sx={{ 
-                    color: '#ef4444',
-                    fontWeight: 600,
-                    fontSize: '0.75rem'
-                  }}>
-                    -15% vs last week
+                  <Typography variant="h4" component="div" color="success.main">
+                    {stats?.resolved_reports || 0}
                   </Typography>
                 </Box>
-                <Box sx={{ 
-                  width: 48, 
-                  height: 48, 
-                  borderRadius: '50%', 
-                  background: '#fef3c7',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center'
-                }}>
-                  <AccessTime sx={{ fontSize: 24, color: '#f59e0b' }} />
+                <Security sx={{ fontSize: 40, color: 'success.main' }} />
                 </Box>
               </CardContent>
             </Card>
           </Grid>
         </Grid>
-      </Box>
 
-      {/* Quick Actions Section */}
-      <Box sx={{ mb: 4 }}>
-        <Typography variant="h6" sx={{ 
-          fontWeight: 600, 
-          color: '#1a202c', 
-          mb: 2.5,
-          fontSize: '1.25rem'
-        }}>
-          Quick Actions
-        </Typography>
-        <Grid container spacing={2.5} justifyContent="center">
-          <Grid item xs={12} sm={6} md={3}>
-            <Card 
-              onClick={() => navigate('/reports')}
-              sx={{ 
-                background: 'white',
-                borderRadius: 2,
-                border: '1px solid #e2e8f0',
-                boxShadow: '0 1px 3px rgba(0, 0, 0, 0.1)',
-                transition: 'all 0.2s ease',
-                cursor: 'pointer',
-                height: 120,
-                '&:hover': {
-                  transform: 'translateY(-2px)',
-                  boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)'
-                }
-              }}
-            >
-              <CardContent sx={{ p: 2.5, textAlign: 'center', height: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
-                <Box sx={{
-                  width: 40,
-                  height: 40,
-                  borderRadius: 2,
-                  background: '#fef2f2',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  mb: 1.5,
-                  mx: 'auto'
-                }}>
-                  <Warning sx={{ fontSize: 20, color: '#ef4444' }} />
-                </Box>
-                <Typography variant="subtitle1" sx={{ 
-                  fontWeight: 600, 
-                  color: '#1a202c',
-                  mb: 0.5,
-                  fontSize: '0.875rem'
-                }}>
-                  Report Emergency
-                </Typography>
-                <Typography variant="body2" sx={{ 
-                  color: '#4a5568',
-                  fontSize: '0.75rem'
-                }}>
-                  Submit SOS report
-                </Typography>
-              </CardContent>
-            </Card>
-          </Grid>
-          
-          <Grid item xs={12} sm={6} md={3}>
-            <Card 
-              onClick={() => navigate('/map')}
-              sx={{ 
-                background: 'white',
-                borderRadius: 2,
-                border: '1px solid #e2e8f0',
-                boxShadow: '0 1px 3px rgba(0, 0, 0, 0.1)',
-                transition: 'all 0.2s ease',
-                cursor: 'pointer',
-                height: 120,
-                '&:hover': {
-                  transform: 'translateY(-2px)',
-                  boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)'
-                }
-              }}
-            >
-              <CardContent sx={{ p: 2.5, textAlign: 'center', height: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
-                <Box sx={{
-                  width: 40,
-                  height: 40,
-                  borderRadius: 2,
-                  background: '#eff6ff',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  mb: 1.5,
-                  mx: 'auto'
-                }}>
-                  <LocationOn sx={{ fontSize: 20, color: '#2563eb' }} />
-                </Box>
-                <Typography variant="subtitle1" sx={{ 
-                  fontWeight: 600, 
-                  color: '#1a202c',
-                  mb: 0.5,
-                  fontSize: '0.875rem'
-                }}>
-                  View Map
-                </Typography>
-                <Typography variant="body2" sx={{ 
-                  color: '#4a5568',
-                  fontSize: '0.75rem'
-                }}>
-                  Live disaster tracking
-                </Typography>
-              </CardContent>
-            </Card>
-          </Grid>
-          
-          <Grid item xs={12} sm={6} md={3}>
-            <Card 
-              onClick={() => navigate('/emergency-contacts')}
-              sx={{ 
-                background: 'white',
-                borderRadius: 2,
-                border: '1px solid #e2e8f0',
-                boxShadow: '0 1px 3px rgba(0, 0, 0, 0.1)',
-                transition: 'all 0.2s ease',
-                cursor: 'pointer',
-                height: 120,
-                '&:hover': {
-                  transform: 'translateY(-2px)',
-                  boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)'
-                }
-              }}
-            >
-              <CardContent sx={{ p: 2.5, textAlign: 'center', height: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
-                <Box sx={{
-                  width: 40,
-                  height: 40,
-                  borderRadius: 2,
-                  background: '#fef3c7',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  mb: 1.5,
-                  mx: 'auto'
-                }}>
-                  <Phone sx={{ fontSize: 20, color: '#f59e0b' }} />
-                </Box>
-                <Typography variant="subtitle1" sx={{ 
-                  fontWeight: 600, 
-                  color: '#1a202c',
-                  mb: 0.5,
-                  fontSize: '0.875rem'
-                }}>
-                  Emergency Contacts
-                </Typography>
-                <Typography variant="body2" sx={{ 
-                  color: '#4a5568',
-                  fontSize: '0.75rem'
-                }}>
-                  Helplines & shelters
-                </Typography>
-              </CardContent>
-            </Card>
-          </Grid>
-
-        </Grid>
-      </Box>
-
-      {/* Charts Section */}
-      <Box sx={{ mb: 4 }}>
-        <Typography variant="h6" sx={{ 
-          fontWeight: 600, 
-          color: '#0f172a', 
-          mb: 3,
-          fontSize: '1.1rem'
-        }}>
-          Analytics Overview
-        </Typography>
+      {/* Recent Reports */}
       <Grid container spacing={3}>
-        <Grid item xs={12} md={6}>
-            <Card sx={{ 
-              background: 'white',
-            borderRadius: 3,
-              border: '1px solid rgba(0, 0, 0, 0.05)',
-              boxShadow: '0 1px 3px rgba(0, 0, 0, 0.1)',
-              height: '100%'
-            }}>
-              <CardContent sx={{ p: 3 }}>
-                <Box sx={{ display: 'flex', alignItems: 'center', mb: 3 }}>
-                  <Box sx={{
-                    width: 40,
-                    height: 40,
-                    borderRadius: 2,
-                    background: 'linear-gradient(135deg, #2563eb, #1d4ed8)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    mr: 2
-                  }}>
-                    <Assessment sx={{ fontSize: 20, color: 'white' }} />
-                  </Box>
-                  <Typography variant="h6" sx={{ 
-                    fontWeight: 600, 
-                    color: '#0f172a',
-                    fontSize: '1.1rem'
-                  }}>
-                    Reports by Disaster Type
-            </Typography>
+        <Grid item xs={12} md={8}>
+          <Card>
+            <CardContent>
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+                <Typography variant="h6" component="h2">
+                  Recent Reports
+        </Typography>
+                <Button 
+                  variant="outlined" 
+              onClick={() => navigate('/reports')}
+                  size="small"
+                >
+                  View All
+                </Button>
                 </Box>
-                {pieData.length > 0 ? (
-                  <ResponsiveContainer width="100%" height={280}>
-                    <PieChart>
-                      <Pie
-                        data={pieData}
-                        cx="50%"
-                        cy="50%"
-                        labelLine={false}
-                        label={({ name, percent, value }) => {
-                          // Hide labels for 0% values or very small slices
-                          if (percent === 0 || percent < 0.05 || value === 0) return null;
-                          return `${name} ${(percent * 100).toFixed(0)}%`;
-                        }}
-                        outerRadius={80}
-                        fill="#8884d8"
-                        dataKey="value"
-                      >
-                        {pieData.map((entry, index) => (
-                              <Cell key={`cell-${index}`} fill={entry.color || COLORS[index % COLORS.length]} />
-                        ))}
-                      </Pie>
-                          <RechartsTooltip 
-                            contentStyle={{
-                              backgroundColor: 'white',
-                              border: '1px solid rgba(0, 0, 0, 0.1)',
-                              borderRadius: '8px',
-                              boxShadow: '0 4px 12px rgba(0, 0, 0, 0.1)'
-                            }}
-                          />
-                    </PieChart>
-                  </ResponsiveContainer>
-                ) : (
-                  <Box sx={{ 
-                    display: 'flex', 
-                    flexDirection: 'column', 
-                    alignItems: 'center', 
-                    justifyContent: 'center', 
-                    height: 280,
-                    color: '#6b7280'
-                  }}>
-                    <Typography variant="h6" sx={{ mb: 1, fontWeight: 'bold' }}>
-                      No Disaster Reports
-                    </Typography>
-                    <Typography variant="body2" sx={{ textAlign: 'center' }}>
-                      No disaster types with active reports to display
-                    </Typography>
-                  </Box>
-                )}
-              </CardContent>
-            </Card>
-        </Grid>
-
-        <Grid item xs={12} md={6}>
-            <Card sx={{ 
-              background: 'white',
-            borderRadius: 3,
-              border: '1px solid rgba(0, 0, 0, 0.05)',
-              boxShadow: '0 1px 3px rgba(0, 0, 0, 0.1)',
-              height: '100%'
-            }}>
-              <CardContent sx={{ p: 3 }}>
-                <Box sx={{ display: 'flex', alignItems: 'center', mb: 3 }}>
-                  <Box sx={{
-                    width: 40,
-                    height: 40,
-                    borderRadius: 2,
-                    background: 'linear-gradient(135deg, #10b981, #059669)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    mr: 2
-                  }}>
-                    <TrendingUp sx={{ fontSize: 20, color: 'white' }} />
-                  </Box>
-                  <Typography variant="h6" sx={{ 
-                    fontWeight: 600, 
-                    color: '#0f172a',
-                    fontSize: '1.1rem'
-                  }}>
-                    Reports by Priority
-            </Typography>
+              
+              {(!recentReports || !Array.isArray(recentReports) || recentReports.length === 0) ? (
+                <Box sx={{ textAlign: 'center', py: 4 }}>
+                  <Typography color="text.secondary">
+                    No reports found. Create your first emergency report!
+                  </Typography>
+                  <Button 
+                    variant="contained" 
+                    onClick={() => navigate('/reports')}
+                    sx={{ mt: 2 }}
+                  >
+                    Create Report
+                  </Button>
                 </Box>
-                {barData.length > 0 ? (
-                  <ResponsiveContainer width="100%" height={280}>
-                    <BarChart data={barData}>
-                          <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                          <XAxis 
-                            dataKey="name" 
-                            tick={{ fontSize: 12, fill: '#64748b' }}
-                            axisLine={{ stroke: '#e2e8f0' }}
+              ) : (
+                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                  {(Array.isArray(recentReports) ? recentReports : []).map((report) => (
+                    <Box 
+                      key={report.id}
+              sx={{ 
+                        p: 2, 
+                        border: 1, 
+                        borderColor: 'divider', 
+                        borderRadius: 1,
+                cursor: 'pointer',
+                        '&:hover': { backgroundColor: 'action.hover' }
+                      }}
+                      onClick={() => handleViewReport(report)}
+                    >
+                      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 1 }}>
+                        <Typography variant="subtitle1" sx={{ fontWeight: 'bold' }}>
+                          {report.disaster_type}
+                </Typography>
+                        <Box sx={{ display: 'flex', gap: 1 }}>
+                          <Chip 
+                            label={report.priority} 
+                            size="small" 
+                            color={getPriorityColor(report.priority)}
                           />
-                          <YAxis 
-                            tick={{ fontSize: 12, fill: '#64748b' }}
-                            axisLine={{ stroke: '#e2e8f0' }}
+                          <Chip 
+                            label={report.status} 
+                            size="small" 
+                            color={getStatusColor(report.status)}
                           />
-                          <RechartsTooltip 
-                            contentStyle={{
-                              backgroundColor: 'white',
-                              border: '1px solid rgba(0, 0, 0, 0.1)',
-                              borderRadius: '8px',
-                              boxShadow: '0 4px 12px rgba(0, 0, 0, 0.1)'
-                            }}
-                          />
-                          <Bar 
-                            dataKey="value" 
-                            fill="url(#colorGradient)"
-                            radius={[4, 4, 0, 0]}
-                          >
-                            {barData.map((entry, index) => (
-                              <Cell key={`cell-${index}`} fill={entry.color || COLORS[index % COLORS.length]} />
-                            ))}
-                          </Bar>
-                          <defs>
-                            <linearGradient id="colorGradient" x1="0" y1="0" x2="0" y2="1">
-                              <stop offset="5%" stopColor="#2563eb" stopOpacity={0.8}/>
-                              <stop offset="95%" stopColor="#1d4ed8" stopOpacity={0.8}/>
-                            </linearGradient>
-                          </defs>
-                    </BarChart>
-                  </ResponsiveContainer>
-                ) : (
-                  <Box sx={{ 
-                    display: 'flex', 
-                    flexDirection: 'column', 
-                    alignItems: 'center', 
-                    justifyContent: 'center', 
-                    height: 280,
-                    color: '#6b7280'
-                  }}>
-                    <Typography variant="h6" sx={{ mb: 1, fontWeight: 'bold' }}>
-                      No Priority Reports
-                    </Typography>
-                    <Typography variant="body2" sx={{ textAlign: 'center' }}>
-                      No priority levels with active reports to display
-                    </Typography>
-                  </Box>
-                )}
-              </CardContent>
-            </Card>
-          </Grid>
-        </Grid>
+                        </Box>
       </Box>
 
-      {/* User Reports Section - Only show for regular users */}
-      {user && !isAdmin && !isManager && userReports.length > 0 && (
-        <Box sx={{ mb: 4 }}>
-          <Typography variant="h6" sx={{ 
-            fontWeight: 600, 
-            color: '#1a202c', 
-            mb: 3,
-            fontSize: '1.25rem'
-          }}>
-            📋 Your Reports
-          </Typography>
-          <Grid container spacing={3}>
-            {userReports.map((report) => (
-              <Grid item xs={12} md={6} key={report.id}>
-                <Card sx={{
-                  background: 'white',
-                  borderRadius: 2,
-                  border: '1px solid #e2e8f0',
-                  boxShadow: '0 1px 3px rgba(0, 0, 0, 0.1)',
-                  transition: 'all 0.2s ease',
-                  '&:hover': {
-                    transform: 'translateY(-2px)',
-                    boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)'
-                  }
-                }}>
-                  <CardContent sx={{ p: 3 }}>
-                    <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
-                      <Typography variant="h6" sx={{ fontSize: '1.5rem', mr: 1 }}>
-                        {getDisasterIcon(report.disaster_type)}
+                      <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                        {report.description}
+        </Typography>
+                      
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, color: 'text.secondary' }}>
+                        <LocationOn sx={{ fontSize: 16 }} />
+                        <Typography variant="caption">
+                          {report.address}
+            </Typography>
+                        <Typography variant="caption" sx={{ ml: 'auto' }}>
+                          {formatTimeAgo(report.created_at)}
+            </Typography>
+                </Box>
+                  </Box>
+                  ))}
+                  </Box>
+                )}
+              </CardContent>
+            </Card>
+        </Grid>
+
+        {/* User Reports (if not admin/manager) */}
+        {user && !isAdmin && !isManager && (
+          <Grid item xs={12} md={4}>
+            <Card>
+              <CardContent>
+                <Typography variant="h6" component="h2" sx={{ mb: 2 }}>
+                  My Reports
+            </Typography>
+                
+                {(!userReports || !Array.isArray(userReports) || userReports.length === 0) ? (
+                  <Box sx={{ textAlign: 'center', py: 2 }}>
+                    <Typography color="text.secondary" variant="body2">
+                      You haven't created any reports yet.
                       </Typography>
-                      <Typography variant="h6" sx={{ 
-                        fontWeight: 600, 
-                        color: '#1a202c',
-                        flex: 1
-                      }}>
+                    <Button 
+                      variant="outlined" 
+                      onClick={() => navigate('/reports')}
+                      size="small"
+                      sx={{ mt: 1 }}
+                    >
+                      Create Report
+                    </Button>
+                </Box>
+                ) : (
+                  <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                    {(Array.isArray(userReports) ? userReports : []).slice(0, 5).map((report) => (
+                      <Box 
+                        key={report.id}
+                        sx={{ 
+                          p: 1.5, 
+                          border: 1, 
+                          borderColor: 'divider', 
+                          borderRadius: 1,
+                          cursor: 'pointer',
+                          '&:hover': { backgroundColor: 'action.hover' }
+                        }}
+                        onClick={() => handleViewReport(report)}
+                      >
+                        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 0.5 }}>
+                          <Typography variant="subtitle2" sx={{ fontWeight: 'bold' }}>
                         {report.disaster_type}
-                      </Typography>
+                    </Typography>
                       <Chip
                         label={report.status}
                         size="small"
-                        sx={{
-                          backgroundColor: getStatusColor(report.status),
-                          color: 'white',
-                          fontWeight: 600
-                        }}
+                            color={getStatusColor(report.status)}
                       />
                     </Box>
-                    
-                    <Typography variant="body2" sx={{ 
-                      color: '#4a5568',
-                      mb: 1
-                    }}>
-                      📍 {report.address}
+                        <Typography variant="caption" color="text.secondary">
+                          {formatTimeAgo(report.created_at)}
                     </Typography>
-                    
-                    <Typography variant="body2" sx={{ 
-                      color: '#6b7280',
-                      mb: 2,
-                      fontStyle: 'italic'
-                    }}>
-                      "{report.description}"
-                    </Typography>
-                    
-                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    </Box>
+            ))}
+                  </Box>
+                )}
+              </CardContent>
+            </Card>
+          </Grid>
+          )}
+        </Grid>
+
+      {/* Report Details Dialog */}
+      <Dialog
+        open={viewDialogOpen}
+        onClose={() => setViewDialogOpen(false)}
+        maxWidth="lg"
+        fullWidth
+        PaperProps={{
+          sx: {
+            borderRadius: 4,
+            boxShadow: '0 20px 60px rgba(0,0,0,0.2)'
+          }
+        }}
+      >
+        <DialogTitle sx={{ 
+          background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+          color: 'white',
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center'
+        }}>
+          <Typography variant="h6" sx={{ fontWeight: 'bold' }}>
+            📋 Emergency Report Details
+          </Typography>
+          <IconButton 
+            onClick={() => setViewDialogOpen(false)}
+            sx={{ color: 'white' }}
+          >
+            <Close />
+          </IconButton>
+        </DialogTitle>
+        
+        <DialogContent sx={{ p: 3 }}>
+          {selectedReport && (
+          <Grid container spacing={3}>
+              {/* Report Header */}
+              <Grid item xs={12}>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 2 }}>
+                  <Box>
+                    <Typography variant="h5" sx={{ fontWeight: 'bold', mb: 1 }}>
+                      {selectedReport.disaster_type}
+                      </Typography>
+                    <Box sx={{ display: 'flex', gap: 1, mb: 2 }}>
                       <Chip
-                        label={report.priority}
+                        label={selectedReport.priority} 
+                        color={getPriorityColor(selectedReport.priority)}
                         size="small"
-                        sx={{
-                          backgroundColor: getPriorityColor(report.priority),
-                          color: 'white',
-                          fontWeight: 600
-                        }}
                       />
-                      <Typography variant="caption" sx={{ color: '#6b7280' }}>
-                        {new Date(report.created_at).toLocaleString()}
+                      <Chip
+                        label={selectedReport.status} 
+                        color={getStatusColor(selectedReport.status)}
+                        size="small"
+                      />
+                    </Box>
+                  </Box>
+                  <Typography variant="caption" color="text.secondary">
+                    {formatTimeAgo(selectedReport.created_at)}
                       </Typography>
                     </Box>
-                  </CardContent>
-                </Card>
               </Grid>
-            ))}
-          </Grid>
-        </Box>
-      )}
 
-      {/* Emergency Alerts Section */}
-      <Box sx={{ mb: 4 }}>
-        <Typography variant="h6" sx={{ 
-          fontWeight: 600, 
-          color: '#1a202c', 
-          mb: 3,
-          fontSize: '1.25rem'
-        }}>
-          Emergency Alerts
+              {/* Report Description */}
+              <Grid item xs={12}>
+                <Typography variant="subtitle1" color="text.secondary" gutterBottom sx={{ fontWeight: 'bold' }}>
+                  Description
         </Typography>
-        <Grid container spacing={3}>
-          {recentReports.length === 0 ? (
-            <Grid item xs={12}>
-              <Card sx={{ 
-                background: 'white',
-                borderRadius: 2,
-                border: '1px solid #e2e8f0',
-                boxShadow: '0 1px 3px rgba(0, 0, 0, 0.1)',
-                p: 4,
-                textAlign: 'center'
-              }}>
-                <Typography variant="body1" color="textSecondary">
-                  No recent emergency alerts
+                <Typography variant="body1" sx={{ mb: 2 }}>
+                  {selectedReport.description}
                 </Typography>
-              </Card>
+              </Grid>
+
+              {/* Location */}
+            <Grid item xs={12}>
+                <Typography variant="subtitle1" color="text.secondary" gutterBottom sx={{ fontWeight: 'bold' }}>
+                  Location
+                </Typography>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                  <LocationOn sx={{ color: '#2196F3' }} />
+                  <Typography variant="body1">
+                    {selectedReport.address}
+                  </Typography>
+                </Box>
             </Grid>
-          ) : (
-            recentReports.slice(0, 2).map((report, index) => (
-              <Grid item xs={12} md={6} key={report.id}>
-                <Card sx={{ 
-                  background: 'white',
+
+              {/* Photos */}
+              {selectedReport.media && selectedReport.media.length > 0 && (
+                <Grid item xs={12}>
+                  <Typography variant="subtitle1" color="text.secondary" gutterBottom sx={{ fontWeight: 'bold' }}>
+                    📸 Report Photos ({selectedReport.media.length})
+                  </Typography>
+                  <Grid container spacing={2}>
+                    {selectedReport.media.map((media, index) => (
+                      <Grid item xs={12} sm={6} md={4} key={index}>
+                        <Box sx={{ 
+                          position: 'relative',
                   borderRadius: 2,
-                  border: '1px solid #e2e8f0',
-                  boxShadow: '0 1px 3px rgba(0, 0, 0, 0.1)',
-                  transition: 'all 0.2s ease',
+                          overflow: 'hidden',
+                          boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
                   '&:hover': {
-                    transform: 'translateY(-2px)',
-                    boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)'
-                  }
-                }}>
-                  <CardContent sx={{ p: 3 }}>
-                    <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 2 }}>
+                            transform: 'scale(1.02)',
+                            transition: 'transform 0.2s ease'
+                          }
+                        }}>
+                          <img
+                            src={media.file_url || media.image_url}
+                            alt={`Report photo ${index + 1}`}
+                            style={{
+                              width: '100%',
+                              height: 200,
+                              objectFit: 'cover',
+                              cursor: 'pointer'
+                            }}
+                            onClick={() => {
+                              window.open(media.file_url || media.image_url, '_blank');
+                            }}
+                          />
                       <Box sx={{
-                        width: 40,
-                        height: 40,
-                        borderRadius: '50%',
-                        background: '#fef2f2',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        flexShrink: 0
-                      }}>
-                        <Warning sx={{ fontSize: 20, color: '#ef4444' }} />
-                      </Box>
-                      <Box sx={{ flexGrow: 1 }}>
-                        <Typography variant="h6" sx={{ 
-                          fontWeight: 600, 
-                          color: '#1a202c',
-                          mb: 1,
-                          fontSize: '1rem'
-                        }}>
-                          {report.disaster_type} Warning
-                        </Typography>
-                        <Typography variant="body2" sx={{ 
-                          color: '#4a5568',
-                          mb: 2,
-                          lineHeight: 1.5
-                        }}>
-                          {report.description}
-                        </Typography>
-                        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                          <Typography variant="caption" sx={{ 
-                            color: '#6b7280',
-                            fontWeight: 500
+                            position: 'absolute',
+                            bottom: 0,
+                            left: 0,
+                            right: 0,
+                            background: 'linear-gradient(transparent, rgba(0,0,0,0.7))',
+                            color: 'white',
+                            p: 1.5
                           }}>
-                            {report.address}
-                          </Typography>
-                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                            <Box sx={{
-                              width: 6,
-                              height: 6,
-                              borderRadius: '50%',
-                              background: '#f59e0b'
-                            }} />
-                            <Typography variant="caption" sx={{ 
-                              color: '#6b7280',
-                              fontWeight: 500
-                            }}>
-                              Active
+                            <Typography variant="body2" sx={{ fontWeight: 'bold' }}>
+                              Photo {index + 1}
                             </Typography>
                           </Box>
                         </Box>
-                      </Box>
-                    </Box>
-                  </CardContent>
-                </Card>
               </Grid>
-            ))
-          )}
+                    ))}
         </Grid>
-      </Box>
+                </Grid>
+              )}
 
-      {/* Real-time Activity Feed Section */}
-      <Box sx={{ mb: 4 }}>
-        <Typography variant="h6" sx={{ 
-          fontWeight: 600, 
-          color: '#1a202c', 
-          mb: 3,
-          fontSize: '1.25rem'
-        }}>
-          Real-time Activity Feed
+              {/* Comments Section */}
+              <Grid item xs={12}>
+                <Divider sx={{ my: 2 }} />
+                <Typography variant="h6" sx={{ fontWeight: 'bold', mb: 2 }}>
+                  💬 Comments ({comments.length})
         </Typography>
-        <Card sx={{ 
-          background: 'white',
-          borderRadius: 2,
-          border: '1px solid #e2e8f0',
-          boxShadow: '0 1px 3px rgba(0, 0, 0, 0.1)',
-          maxHeight: 300,
-          overflow: 'auto'
-        }}>
-          <CardContent sx={{ p: 3 }}>
-            <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 2, mb: 3 }}>
-              <Box sx={{
-                width: 40,
-                height: 40,
-                borderRadius: '50%',
-                background: '#f0fdf4',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                flexShrink: 0
-              }}>
-                <Security sx={{ fontSize: 20, color: '#10b981' }} />
+                
+                {/* Add Comment */}
+                <Box sx={{ display: 'flex', gap: 1, mb: 3 }}>
+                  <TextField
+                    fullWidth
+                    placeholder="Add a comment..."
+                    value={newComment}
+                    onChange={(e) => setNewComment(e.target.value)}
+                    size="small"
+                  />
+                  <Button
+                    variant="contained"
+                    onClick={handleAddComment}
+                    disabled={!newComment.trim()}
+                    startIcon={<Send />}
+                    sx={{ borderRadius: 2 }}
+                  >
+                    Send
+                  </Button>
               </Box>
-              <Box sx={{ flexGrow: 1 }}>
-                <Typography variant="h6" sx={{ 
-                  fontWeight: 600, 
-                  color: '#1a202c',
-                  mb: 1,
-                  fontSize: '1rem'
-                }}>
-                  Rescue Operation Completed
-                </Typography>
-                <Typography variant="body2" sx={{ 
-                  color: '#4a5568',
-                  mb: 1,
-                  lineHeight: 1.5
-                }}>
-                  45 people evacuated from flood zone
-                </Typography>
-                <Typography variant="caption" sx={{ 
-                  color: '#6b7280',
-                  fontWeight: 500
-                }}>
-                  Kochi, Kerala • 5 min ago
-                </Typography>
-              </Box>
-            </Box>
 
-            <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 2 }}>
-              <Box sx={{
-                width: 40,
-                height: 40,
-                borderRadius: '50%',
-                background: '#fef2f2',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                flexShrink: 0
-              }}>
-                <Warning sx={{ fontSize: 20, color: '#ef4444' }} />
-              </Box>
-              <Box sx={{ flexGrow: 1 }}>
-                <Typography variant="h6" sx={{ 
-                  fontWeight: 600, 
-                  color: '#1a202c',
-                  mb: 1,
-                  fontSize: '1rem'
-                }}>
-                  Medical Team Deployed
+                {/* Comments List */}
+                {comments.length > 0 ? (
+                  <List>
+                    {comments.map((comment, index) => (
+                      <ListItem key={index} sx={{ px: 0 }}>
+                        <ListItemAvatar>
+                          <Avatar sx={{ bgcolor: 'primary.main' }}>
+                            <Comment />
+                          </Avatar>
+                        </ListItemAvatar>
+                        <ListItemText
+                          primary={
+                            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                              <Typography variant="subtitle2" sx={{ fontWeight: 'bold' }}>
+                                {comment.user?.username || 'Anonymous'}
                 </Typography>
-                <Typography variant="body2" sx={{ 
-                  color: '#4a5568',
-                  mb: 1,
-                  lineHeight: 1.5
-                }}>
-                  Emergency medical assistance dispatched
-                </Typography>
-                <Typography variant="caption" sx={{ 
-                  color: '#6b7280',
-                  fontWeight: 500
-                }}>
-                  Dehradun, Uttarakhand • 18 min ago
+                              <Typography variant="caption" color="text.secondary">
+                                {formatTimeAgo(comment.created_at)}
                 </Typography>
               </Box>
-            </Box>
-          </CardContent>
-        </Card>
-      </Box>
-
+                          }
+                          secondary={
+                            <Typography variant="body2" sx={{ mt: 0.5 }}>
+                              {comment.message}
+                </Typography>
+                          }
+                        />
+                      </ListItem>
+                    ))}
+                  </List>
+                ) : (
+                  <Typography variant="body2" color="text.secondary" sx={{ textAlign: 'center', py: 2 }}>
+                    No comments yet. Be the first to comment!
+                </Typography>
+                )}
+              </Grid>
+            </Grid>
+          )}
+        </DialogContent>
+      </Dialog>
     </Box>
   );
 };

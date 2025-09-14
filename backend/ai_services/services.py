@@ -253,6 +253,114 @@ class AIVerificationService:
         else:
             return self._fallback_enhancement(user_description)
     
+    def generate_description_from_context(self, disaster_type, location, priority='MEDIUM'):
+        """
+        Generate AI description from disaster type and location context
+        """
+        try:
+            # Use Gemini AI if available
+            if self.gemini_service:
+                try:
+                    # Create a context prompt for description generation
+                    context_prompt = f"Generate a detailed emergency report description for a {disaster_type} incident at {location} with {priority} priority. Include specific details about the situation, potential risks, and response needs."
+                    
+                    gemini_result = self.gemini_service.generate_description_from_text(
+                        context_prompt, disaster_type, location
+                    )
+                    
+                    if gemini_result.get('success', False):
+                        return {
+                            'success': True,
+                            'description': gemini_result.get('description'),
+                            'confidence': gemini_result.get('confidence', 0.8),
+                            'source': 'gemini_ai'
+                        }
+                except Exception as e:
+                    print(f"Gemini description generation failed: {e}")
+            
+            # Fallback to template-based generation
+            return self._generate_template_description(disaster_type, location, priority)
+            
+        except Exception as e:
+            print(f"Error generating description from context: {e}")
+            return self._fallback_context_description(disaster_type, location, priority)
+    
+    def _generate_template_description(self, disaster_type, location, priority):
+        """
+        Generate description using predefined templates
+        """
+        try:
+            # Get disaster-specific template
+            template = self._get_disaster_template(disaster_type)
+            
+            # Customize based on priority
+            priority_context = self._get_priority_context(priority)
+            
+            # Generate description
+            description = template.format(
+                disaster_type=disaster_type.lower(),
+                location=location,
+                priority=priority.lower(),
+                priority_context=priority_context
+            )
+            
+            return {
+                'success': True,
+                'description': description,
+                'confidence': 0.7,
+                'source': 'template_generation'
+            }
+            
+        except Exception as e:
+            print(f"Error in template generation: {e}")
+            return self._fallback_context_description(disaster_type, location, priority)
+    
+    def _get_disaster_template(self, disaster_type):
+        """
+        Get disaster-specific description template
+        """
+        templates = {
+            'FLOOD': "Emergency {disaster_type} situation reported at {location}. Water levels are rising rapidly with significant flooding observed. This is a {priority} priority incident requiring immediate attention. Multiple areas are affected with potential for structural damage and safety risks. Evacuation may be necessary for affected residents. Emergency services have been notified and are responding to the scene. The situation is developing and poses significant risk to public safety and property.",
+            
+            'FIRE': "Emergency {disaster_type} incident reported at {location}. Flames and smoke are visible with potential for rapid spread. This is a {priority} priority incident requiring immediate response. The fire poses significant risk to nearby structures and individuals. Evacuation of affected and surrounding areas may be necessary. Fire department and emergency services are responding. The situation requires immediate attention due to {priority_context}.",
+            
+            'EARTHQUAKE': "Emergency {disaster_type} event reported at {location}. Significant ground movement and structural damage have been observed. This is a {priority} priority incident with potential for casualties and further damage. Aftershocks are possible and pose ongoing risks. Immediate assessment of structural integrity and evacuation of affected buildings is required. Emergency services are responding to assess damage and provide assistance. The situation requires urgent attention due to {priority_context}.",
+            
+            'MEDICAL': "Medical emergency reported at {location}. Multiple casualties with varying degrees of injury severity. This is a {priority} priority incident requiring immediate medical response. Emergency medical services and ambulances are needed urgently. The situation requires immediate attention due to {priority_context}. Medical personnel and equipment are being dispatched to the scene. Patient stabilization and transport to medical facilities is the priority.",
+            
+            'ACCIDENT': "Traffic accident reported at {location}. Vehicle damage and potential casualties have been observed. This is a {priority} priority incident requiring immediate response. Road access may be affected and traffic control measures are needed. Emergency medical services and law enforcement are responding. The situation requires immediate attention due to {priority_context}. Rescue operations and medical assistance are being coordinated.",
+            
+            'CYCLONE': "Cyclone emergency reported at {location}. High winds and severe weather conditions are affecting the area. This is a {priority} priority incident with potential for significant damage. Evacuation of affected areas may be necessary for safety. Emergency services are responding to multiple incidents. The situation requires immediate attention due to {priority_context}. Weather conditions are deteriorating and pose ongoing risks.",
+            
+            'LANDSLIDE': "Landslide emergency reported at {location}. Significant ground movement and debris flow have been observed. This is a {priority} priority incident with potential for structural damage and safety risks. Evacuation of affected areas is recommended. Emergency services are responding to assess the situation and provide assistance. The situation requires immediate attention due to {priority_context}. Geological assessment and safety measures are being implemented."
+        }
+        
+        return templates.get(disaster_type, "Emergency {disaster_type} situation reported at {location}. This is a {priority} priority incident requiring immediate attention. The situation is developing and poses potential risk to public safety. Emergency services have been notified and are responding to the scene. The situation requires immediate attention due to {priority_context}.")
+    
+    def _get_priority_context(self, priority):
+        """
+        Get priority-specific context
+        """
+        priority_contexts = {
+            'CRITICAL': 'the critical nature and immediate threat to life and safety',
+            'HIGH': 'the high risk and urgent response requirements',
+            'MEDIUM': 'the moderate risk and timely response needs',
+            'LOW': 'the need for appropriate monitoring and response'
+        }
+        
+        return priority_contexts.get(priority, 'the need for appropriate response and monitoring')
+    
+    def _fallback_context_description(self, disaster_type, location, priority):
+        """
+        Fallback description when all generation methods fail
+        """
+        return {
+            'success': False,
+            'description': f"Emergency {disaster_type} situation reported at {location}. This is a {priority} priority incident requiring immediate attention. The situation is developing and poses potential risk to public safety. Emergency services have been notified and are responding to the scene.",
+            'confidence': 0.5,
+            'source': 'fallback'
+        }
+    
     def _traditional_analysis(self, text_description=None, image_paths=None, disaster_type=None, location=None):
         """
         Traditional analysis using keyword matching and heuristics

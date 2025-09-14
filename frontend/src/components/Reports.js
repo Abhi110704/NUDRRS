@@ -1,15 +1,22 @@
 import React, { useState, useEffect } from 'react';
 import {
-  Grid, Paper, Typography, Box, Card, CardContent,
-  Table, TableBody, TableCell, TableContainer, TableHead, TableRow,
+  Grid, Paper, Typography, Box, Card, CardContent, CardMedia,
   Chip, IconButton, Button, TextField, MenuItem, Select, FormControl, InputLabel,
-  Container, Avatar, Badge, Fade, Zoom, Slide, Tooltip, Fab,
-  Dialog, DialogTitle, DialogContent, DialogActions, Alert, Snackbar
+  Container, Avatar, Badge, Tooltip, Fab, Divider, List, ListItem, ListItemText, ListItemAvatar,
+  Dialog, DialogTitle, DialogContent, DialogActions, Alert, Snackbar, Rating, LinearProgress,
+  CardActions, CardHeader, Stack, ToggleButton, ToggleButtonGroup, ImageList, ImageListItem,
+  Modal, Backdrop, Fade, Zoom, Slide, Collapse
 } from '@mui/material';
 import {
   Visibility, Edit, Delete, Add, FilterList, Search, LocalHospital as Emergency, 
   LocationOn, Phone, Schedule, Security, Speed, Warning, CheckCircle, Close,
-  CloudUpload, Image as ImageIcon, Delete as DeleteIcon, AutoAwesome, Psychology
+  CloudUpload, Image as ImageIcon, Delete as DeleteIcon, AutoAwesome, Comment, 
+  ThumbUp, ThumbDown, Share, Bookmark, BookmarkBorder, Person, AccessTime,
+  PriorityHigh, CrisisAlert, Fireplace, Water, Terrain, LocalFireDepartment,
+  MedicalServices, DirectionsCar, MoreVert, ExpandMore, ExpandLess, HowToVote,
+  CheckCircleOutline, CancelOutlined, ReportProblem, PhotoCamera, AttachFile,
+  PlayArrow, Fullscreen, ZoomIn, Favorite, FavoriteBorder, TrendingUp, 
+  People, Timer, Verified, Flag, Star, StarBorder, ArrowBack, ArrowForward
 } from '@mui/icons-material';
 import axios from 'axios';
 import { useAuth } from '../contexts/AuthContext';
@@ -17,3622 +24,2375 @@ import { useAuth } from '../contexts/AuthContext';
 const Reports = () => {
   const { user, isAdmin } = useAuth();
   
-  // Get or create current user session for demo purposes
-  const getCurrentUser = () => {
-    try {
-      let currentUser = localStorage.getItem('nudrrs_current_user');
-      if (!currentUser) {
-        currentUser = {
-          id: 999, // Fixed ID for demo purposes
-          username: 'current_user',
-          first_name: 'Current',
-          last_name: 'User'
-        };
-        localStorage.setItem('nudrrs_current_user', JSON.stringify(currentUser));
-      } else {
-        currentUser = JSON.parse(currentUser);
-      }
-      return currentUser;
-    } catch (error) {
-      console.error('Error getting current user:', error);
-      return {
-        id: 999, // Fixed ID for demo purposes
-        username: 'current_user',
-        first_name: 'Current',
-        last_name: 'User'
-      };
-    }
-  };
-
-  // Check if current user can edit a report (admin or report owner)
-  const canEditReport = (report) => {
-    try {
-      const currentUser = getCurrentUser();
-      if (!currentUser || !report || !report.user) {
-        return false;
-      }
-      return (isAdmin === true) || (report.user && report.user.id === currentUser.id);
-    } catch (error) {
-      console.error('Error checking edit permissions:', error);
-      return false;
-    }
-  };
-
-  // Check if current user can upload images to a report (anyone can upload images)
-  const canUploadImages = (report) => {
-    return true; // Anyone can upload images to any report
-  };
-
-  // Check if current user can delete a report (admin or report owner)
-  const canDeleteReport = (report) => {
-    try {
-      const currentUser = getCurrentUser();
-      if (!currentUser || !report || !report.user) {
-        return false;
-      }
-      return (isAdmin === true) || (report.user && report.user.id === currentUser.id);
-    } catch (error) {
-      console.error('Error checking delete permissions:', error);
-      return false;
-    }
-  };
   const [reports, setReports] = useState([]);
-  const [filteredReports, setFilteredReports] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [filter, setFilter] = useState('ALL');
-  const [searchTerm, setSearchTerm] = useState('');
-  const [lastUpdate, setLastUpdate] = useState(new Date()); // Track last update
-  const [updateStatus, setUpdateStatus] = useState('idle'); // Update status: idle, updating, success, error
-  const [liveUpdates, setLiveUpdates] = useState([]); // Store live updates
-  
-  // Modal states
-  const [newReportDialog, setNewReportDialog] = useState(false);
-  const [viewReportDialog, setViewReportDialog] = useState(false);
-  const [editReportDialog, setEditReportDialog] = useState(false);
-  const [addImagesDialog, setAddImagesDialog] = useState(false);
-  const [deleteConfirmDialog, setDeleteConfirmDialog] = useState(false);
+  const [filteredReports, setFilteredReports] = useState([]);
+  const [filters, setFilters] = useState({
+    disaster_type: '',
+    priority: '',
+    status: '',
+    search: ''
+  });
   const [selectedReport, setSelectedReport] = useState(null);
-  
-  // Form states
+  const [viewDialogOpen, setViewDialogOpen] = useState(false);
+  const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [newReportForm, setNewReportForm] = useState({
     disaster_type: '',
     priority: 'MEDIUM',
     description: '',
+    latitude: '',
+    longitude: '',
     address: '',
-    countryCode: '+91',
-    phone_number: ''
+    phone_number: '',
+    photos: []
   });
+  const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'info' });
+  const [updateStatus, setUpdateStatus] = useState('idle');
+  const [liveUpdates, setLiveUpdates] = useState([]);
+  const [comments, setComments] = useState([]);
+  const [newComment, setNewComment] = useState('');
+  const [expandedCards, setExpandedCards] = useState(new Set());
+  const [voting, setVoting] = useState({});
+  const [photoGalleryOpen, setPhotoGalleryOpen] = useState(false);
+  const [selectedPhotos, setSelectedPhotos] = useState([]);
+  const [photoModalOpen, setPhotoModalOpen] = useState(false);
+  const [selectedPhotoIndex, setSelectedPhotoIndex] = useState(0);
 
-  // Image upload states
-  const [selectedImages, setSelectedImages] = useState([]);
-  const [imagePreview, setImagePreview] = useState([]);
-  const [uploadingImages, setUploadingImages] = useState(false);
-
-  // Location autocomplete states
-  const [locationSuggestions, setLocationSuggestions] = useState([]);
-  const [showLocationSuggestions, setShowLocationSuggestions] = useState(false);
-  const [locationLoading, setLocationLoading] = useState(false);
-
-  // AI Description states
-  const [aiDescriptionLoading, setAiDescriptionLoading] = useState(false);
-  const [aiEnhancedDescription, setAiEnhancedDescription] = useState('');
-  const [showAiDescription, setShowAiDescription] = useState(false);
-  const [descriptionSuggestions, setDescriptionSuggestions] = useState(null);
-  const [showSuggestions, setShowSuggestions] = useState(false);
-
-  // Close suggestions when clicking outside
-  useEffect(() => {
-    const handleClickOutside = (event) => {
-      if (showLocationSuggestions && !event.target.closest('.location-autocomplete')) {
-        setShowLocationSuggestions(false);
-      }
-    };
-
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-    };
-  }, [showLocationSuggestions]);
-
-  // Country codes for phone numbers
-  const countryCodes = [
-    { code: '+91', country: 'India', flag: '🇮🇳', display: 'India (+91)' },
-    { code: '+1', country: 'USA', flag: '🇺🇸', display: 'United States (+1)' },
-    { code: '+44', country: 'UK', flag: '🇬🇧', display: 'United Kingdom (+44)' },
-    { code: '+86', country: 'China', flag: '🇨🇳', display: 'China (+86)' },
-    { code: '+81', country: 'Japan', flag: '🇯🇵', display: 'Japan (+81)' },
-    { code: '+49', country: 'Germany', flag: '🇩🇪', display: 'Germany (+49)' },
-    { code: '+33', country: 'France', flag: '🇫🇷', display: 'France (+33)' },
-    { code: '+61', country: 'Australia', flag: '🇦🇺', display: 'Australia (+61)' },
-    { code: '+55', country: 'Brazil', flag: '🇧🇷', display: 'Brazil (+55)' },
-    { code: '+7', country: 'Russia', flag: '🇷🇺', display: 'Russia (+7)' },
-    { code: '+971', country: 'UAE', flag: '🇦🇪', display: 'UAE (+971)' },
-    { code: '+966', country: 'Saudi Arabia', flag: '🇸🇦', display: 'Saudi Arabia (+966)' },
-    { code: '+92', country: 'Pakistan', flag: '🇵🇰', display: 'Pakistan (+92)' },
-    { code: '+880', country: 'Bangladesh', flag: '🇧🇩', display: 'Bangladesh (+880)' },
-    { code: '+94', country: 'Sri Lanka', flag: '🇱🇰', display: 'Sri Lanka (+94)' },
-    { code: '+977', country: 'Nepal', flag: '🇳🇵', display: 'Nepal (+977)' },
-    { code: '+975', country: 'Bhutan', flag: '🇧🇹', display: 'Bhutan (+975)' },
-  ];
-  
-  // Notification states
-  const [snackbar, setSnackbar] = useState({
-    open: false,
-    message: '',
-    severity: 'success'
-  });
-
-  useEffect(() => {
-    fetchReports();
-  }, []);
-
-  useEffect(() => {
-    addLiveUpdate('Live mode activated - connecting to backend', 'success');
-    const cleanup = startLiveUpdates();
-    return cleanup;
-  }, []);
-
-  useEffect(() => {
-    filterReports();
-  }, [reports, filter, searchTerm]);
-
-  // Live update function
   const addLiveUpdate = (message, type = 'info') => {
     const update = {
       id: Date.now(),
       message,
       type,
-      timestamp: new Date(),
-      isNew: true
+      timestamp: new Date()
     };
-    
-    setLiveUpdates(prev => [update, ...prev.slice(0, 9)]); // Keep last 10 updates
-    
-    // Remove "new" status after 3 seconds
+    setLiveUpdates(prev => [update, ...prev.slice(0, 4)]);
     setTimeout(() => {
-      setLiveUpdates(prev => 
-        prev.map(u => u.id === update.id ? { ...u, isNew: false } : u)
-      );
-    }, 3000);
+      setLiveUpdates(prev => prev.filter(u => u.id !== update.id));
+    }, 5000);
   };
 
-  // Auto-refresh function for live mode
-  const startLiveUpdates = () => {
-    const interval = setInterval(() => {
+  useEffect(() => {
       fetchReports();
-      setLastUpdate(new Date());
-      addLiveUpdate('Data refreshed from backend', 'success');
-    }, 30000); // Refresh every 30 seconds
-    
+    const interval = setInterval(fetchReports, 30000);
     return () => clearInterval(interval);
-  };
+  }, []);
 
-  // Helper function to get demo reports
-  const getDemoReports = () => {
-    return [
-      {
-        id: 1,
-        user: { id: 999, username: 'current_user', first_name: 'Current', last_name: 'User' },
-        disaster_type: 'FLOOD',
-        priority: 'HIGH',
-        status: 'PENDING',
-        description: 'Heavy rainfall causing severe waterlogging in residential areas. Water level rising rapidly, multiple families trapped and need immediate evacuation. Roads completely submerged.',
-        address: 'Sector 15, Chandigarh, Punjab',
-        phone_number: '+91-9876543210',
-        created_at: new Date().toISOString(),
-        ai_confidence: 0.92,
-        media: [
-          {
-            id: 1,
-            file: 'https://images.unsplash.com/photo-1544551763-46a013bb70d5?w=400&h=300&fit=crop',
-            file_type: 'image'
-          },
-          {
-            id: 2,
-            file: 'https://images.unsplash.com/photo-1574263867122-4a1b0b0b0b0b?w=400&h=300&fit=crop',
-            file_type: 'image'
-          }
-        ]
-      },
-      {
-        id: 2,
-        user: { username: 'citizen2', first_name: 'Priya', last_name: 'Sharma' },
-        disaster_type: 'FIRE',
-        priority: 'CRITICAL',
-        status: 'IN_PROGRESS',
-        description: 'Massive factory fire spreading rapidly across multiple buildings. Thick black smoke visible from 5km away. Fire department on site but need additional resources and evacuation support.',
-        address: 'Industrial Area, Gurgaon, Haryana',
-        phone_number: '+91-9876543211',
-        created_at: new Date(Date.now() - 3600000).toISOString(),
-        ai_confidence: 0.98,
-        media: [
-          {
-            id: 3,
-            file: 'https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=400&h=300&fit=crop',
-            file_type: 'image'
-          }
-        ]
-      },
-      {
-        id: 3,
-        user: { username: 'citizen3', first_name: 'Amit', last_name: 'Singh' },
-        disaster_type: 'EARTHQUAKE',
-        priority: 'MEDIUM',
-        status: 'VERIFIED',
-        description: 'Moderate earthquake (5.2 magnitude) reported. Several old buildings showing cracks, checking for structural damages. No casualties reported yet but residents evacuated as precaution.',
-        address: 'Hill Station Road, Shimla, Himachal Pradesh',
-        phone_number: '+91-9876543212',
-        created_at: new Date(Date.now() - 7200000).toISOString(),
-        ai_confidence: 0.85,
-        media: [
-          {
-            id: 4,
-            file: 'https://images.unsplash.com/photo-1574263867122-4a1b0b0b0b0b?w=400&h=300&fit=crop',
-            file_type: 'image'
-          }
-        ]
-      },
-      {
-        id: 4,
-        user: { username: 'citizen4', first_name: 'Suresh', last_name: 'Yadav' },
-        disaster_type: 'LANDSLIDE',
-        priority: 'HIGH',
-        status: 'PENDING',
-        description: 'Heavy rainfall triggered landslide blocking main highway. Multiple vehicles trapped, rescue operations underway. Road completely blocked for next 24-48 hours.',
-        address: 'Mountain View, Dehradun, Uttarakhand',
-        phone_number: '+91-9876543213',
-        created_at: new Date(Date.now() - 1800000).toISOString(),
-        ai_confidence: 0.89,
-        media: [
-          {
-            id: 5,
-            file: 'https://images.unsplash.com/photo-1574263867122-4a1b0b0b0b0b?w=400&h=300&fit=crop',
-            file_type: 'image'
-          }
-        ]
-      },
-      {
-        id: 5,
-        user: { username: 'citizen5', first_name: 'Lakshmi', last_name: 'Patel' },
-        disaster_type: 'CYCLONE',
-        priority: 'CRITICAL',
-        status: 'IN_PROGRESS',
-        description: 'Cyclone warning issued. Wind speed increasing rapidly, heavy rainfall expected. Coastal areas being evacuated. Emergency shelters activated.',
-        address: 'Coastal Area, Puri, Odisha',
-        phone_number: '+91-9876543214',
-        created_at: new Date(Date.now() - 900000).toISOString(),
-        ai_confidence: 0.95,
-        media: [
-          {
-            id: 6,
-            file: 'https://images.unsplash.com/photo-1574263867122-4a1b0b0b0b0b?w=400&h=300&fit=crop',
-            file_type: 'image'
-          }
-        ]
-      },
-      {
-        id: 6,
-        user: { username: 'citizen6', first_name: 'Meera', last_name: 'Joshi' },
-        disaster_type: 'MEDICAL',
-        priority: 'HIGH',
-        status: 'IN_PROGRESS',
-        description: 'Medical emergency - multiple casualties from building collapse. Ambulance services dispatched, need additional medical support and rescue teams.',
-        address: 'Old City, Ahmedabad, Gujarat',
-        phone_number: '+91-9876543215',
-        created_at: new Date(Date.now() - 5400000).toISOString(),
-        ai_confidence: 0.91,
-        media: [
-          {
-            id: 7,
-            file: 'https://images.unsplash.com/photo-1574263867122-4a1b0b0b0b0b?w=400&h=300&fit=crop',
-            file_type: 'image'
-          }
-        ]
-      },
-      {
-        id: 7,
-        user: { username: 'citizen7', first_name: 'Vikram', last_name: 'Reddy' },
-        disaster_type: 'DROUGHT',
-        priority: 'MEDIUM',
-        status: 'VERIFIED',
-        description: 'Severe water shortage in rural areas. Wells dried up, crops failing. Need immediate water supply and relief measures.',
-        address: 'Rural District, Telangana',
-        phone_number: '+91-9876543216',
-        created_at: new Date(Date.now() - 86400000).toISOString(),
-        ai_confidence: 0.87,
-        media: [
-          {
-            id: 8,
-            file: 'https://images.unsplash.com/photo-1574263867122-4a1b0b0b0b0b?w=400&h=300&fit=crop',
-            file_type: 'image'
-          }
-        ]
-      },
-      {
-        id: 8,
-        user: { username: 'citizen8', first_name: 'Anita', last_name: 'Desai' },
-        disaster_type: 'STORM',
-        priority: 'HIGH',
-        status: 'PENDING',
-        description: 'Severe thunderstorm with hailstorm causing damage to crops and property. Trees uprooted, power lines down.',
-        address: 'Agricultural Area, Maharashtra',
-        phone_number: '+91-9876543217',
-        created_at: new Date(Date.now() - 2700000).toISOString(),
-        ai_confidence: 0.93,
-        media: [
-          {
-            id: 9,
-            file: 'https://images.unsplash.com/photo-1574263867122-4a1b0b0b0b0b?w=400&h=300&fit=crop',
-            file_type: 'image'
-          }
-        ]
-      }
-    ];
-  };
+  useEffect(() => {
+    filterReports();
+  }, [reports, filters]);
 
   const fetchReports = async () => {
     try {
-      let currentReports = [];
-      
+      setLoading(true);
       setUpdateStatus('updating');
-      // Try to fetch live data from backend
-      try {
+      
         const response = await axios.get('http://localhost:8000/api/sos_reports/sos_reports/');
         const reportsData = response.data.results || response.data || [];
         
-        // Transform the data to ensure proper structure and fix media URLs
-        currentReports = reportsData.map(report => ({
-          ...report,
-          disaster_type: report.disaster_type || report.properties?.disaster_type,
-          status: report.status || report.properties?.status,
-          priority: report.priority || report.properties?.priority,
-          address: report.address || report.properties?.address,
-          description: report.description || report.properties?.description,
-          user: report.user ? {
-            id: report.user.id,
-            first_name: report.user.first_name || 'Anonymous',
-            last_name: report.user.last_name || 'User',
-            username: report.user.username || 'anonymous'
-          } : { id: null, first_name: 'Anonymous', last_name: 'User', username: 'anonymous' },
-          ai_confidence: report.ai_confidence || 0.85,
-          ai_fraud_score: report.ai_fraud_score || 0.0,
-          ai_analysis_data: report.ai_analysis_data || {},
-          media: (report.media || []).map(media => {
-            console.log('🔍 Processing media:', media);
-            let fileUrl = media.file_url || media.file;
-            
-            // If it's a relative path, make it absolute
-            if (fileUrl && !fileUrl.startsWith('http') && !fileUrl.startsWith('blob:')) {
-              fileUrl = `http://localhost:8000${fileUrl}`;
-            }
-            
-            console.log('🔍 Final file URL:', fileUrl);
-            
-            return {
-              ...media,
-              file: fileUrl
-            };
-          })
-        }));
-        
-        console.log('✅ Live data loaded from backend:', currentReports);
-        console.log('🔍 Media data sample:', currentReports[0]?.media);
+      setReports(reportsData);
         setUpdateStatus('success');
-        addLiveUpdate(`✅ Live data loaded: ${currentReports.length} reports`, 'success');
-      } catch (apiError) {
-        console.log('Backend not available, falling back to demo data');
-        setUpdateStatus('error');
-        addLiveUpdate('⚠️ Backend connection failed - using demo data', 'error');
-        // Fallback to demo data if backend is not available
-        currentReports = getDemoReports();
-      }
-
-      setReports(currentReports);
-      setLoading(false);
+      addLiveUpdate(`✅ Live data loaded: ${reportsData.length} reports`, 'success');
     } catch (error) {
       console.error('Error fetching reports:', error);
       setUpdateStatus('error');
-      addLiveUpdate('Error loading reports', 'error');
+      addLiveUpdate('⚠️ Failed to load reports from backend', 'error');
+      setReports([]);
+    } finally {
       setLoading(false);
     }
+  };
+
+  const fetchComments = async (reportId) => {
+    try {
+      const response = await axios.get(`http://localhost:8000/api/sos_reports/sos_reports/${reportId}/updates/`);
+      setComments(response.data || []);
+    } catch (error) {
+      console.error('Error fetching comments:', error);
+      setComments([]);
+    }
+  };
+
+  const addComment = async (reportId) => {
+    if (!newComment.trim()) return;
+
+    try {
+      const response = await axios.post(`http://localhost:8000/api/sos_reports/sos_reports/${reportId}/updates/`, {
+        message: newComment.trim()
+      }, {
+        headers: {
+          'Authorization': `Token ${localStorage.getItem('token')}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      setNewComment('');
+      fetchComments(reportId);
+      setSnackbar({
+        open: true,
+        message: 'Comment added successfully!',
+        severity: 'success'
+      });
+    } catch (error) {
+      console.error('Error adding comment:', error);
+      setSnackbar({
+        open: true,
+        message: 'Failed to add comment. Please try again.',
+        severity: 'error'
+      });
+    }
+  };
+    
+  const handleVote = async (reportId, voteType) => {
+    if (!user) {
+      setSnackbar({
+        open: true,
+        message: 'Please login to vote',
+        severity: 'warning'
+      });
+      return;
+    }
+
+    setVoting(prev => ({ ...prev, [reportId]: true }));
+
+    try {
+      const response = await axios.post(`http://localhost:8000/api/sos_reports/sos_reports/${reportId}/votes/`, {
+        vote_type: voteType
+      }, {
+          headers: {
+          'Authorization': `Token ${localStorage.getItem('token')}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      
+      setSnackbar({
+        open: true,
+        message: `Vote recorded: ${voteType.replace('_', ' ')}`,
+        severity: 'success'
+      });
+        
+      // Refresh reports to get updated vote counts
+      fetchReports();
+    } catch (error) {
+      console.error('Error voting:', error);
+      setSnackbar({
+        open: true,
+        message: 'Failed to vote. Please try again.',
+        severity: 'error'
+      });
+    } finally {
+      setVoting(prev => ({ ...prev, [reportId]: false }));
+    }
+  };
+
+  const handlePhotoUpload = (event) => {
+    const files = Array.from(event.target.files);
+    if (files.length + newReportForm.photos.length > 5) {
+      setSnackbar({
+        open: true,
+        message: 'Maximum 5 photos allowed',
+        severity: 'warning'
+      });
+      return;
+    }
+
+    const newPhotos = files.map(file => ({
+      file,
+      preview: URL.createObjectURL(file),
+      name: file.name
+    }));
+
+    setNewReportForm(prev => ({
+      ...prev,
+      photos: [...prev.photos, ...newPhotos]
+    }));
+  };
+
+  const removePhoto = (index) => {
+    setNewReportForm(prev => ({
+      ...prev,
+      photos: prev.photos.filter((_, i) => i !== index)
+    }));
   };
 
   const filterReports = () => {
     let filtered = reports;
-    
-    if (filter !== 'ALL') {
-      filtered = filtered.filter(report => report.status === filter);
+
+    if (filters.disaster_type) {
+      filtered = filtered.filter(report => report.disaster_type === filters.disaster_type);
     }
-    
-    if (searchTerm) {
-      filtered = filtered.filter(report =>
-        report.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        report.address.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        report.disaster_type.toLowerCase().includes(searchTerm.toLowerCase())
+
+    if (filters.priority) {
+      filtered = filtered.filter(report => report.priority === filters.priority);
+    }
+
+    if (filters.status) {
+      filtered = filtered.filter(report => report.status === filters.status);
+    }
+
+    if (filters.search) {
+      const searchLower = filters.search.toLowerCase();
+      filtered = filtered.filter(report => 
+        report.description?.toLowerCase().includes(searchLower) ||
+        report.address?.toLowerCase().includes(searchLower) ||
+        report.disaster_type?.toLowerCase().includes(searchLower)
       );
     }
-    
+
     setFilteredReports(filtered);
   };
 
-  const getStatusColor = (status) => {
-    const colors = {
-      'PENDING': 'warning',
-      'VERIFIED': 'info',
-      'IN_PROGRESS': 'primary',
-      'RESOLVED': 'success',
-      'FALSE_ALARM': 'error'
-    };
-    return colors[status] || 'default';
-  };
-
-  const getPriorityColor = (priority) => {
-    const colors = {
-      'LOW': 'success',
-      'MEDIUM': 'warning',
-      'HIGH': 'error',
-      'CRITICAL': 'error'
-    };
-    return colors[priority] || 'default';
-  };
-
-  // Location autocomplete function
-  const handleLocationSearch = async (query) => {
-    if (query.length < 3) {
-      setLocationSuggestions([]);
-      setShowLocationSuggestions(false);
+  const handleCreateReport = async () => {
+    try {
+      // Basic validation
+      if (!newReportForm.disaster_type) {
+      setSnackbar({
+        open: true,
+          message: 'Please select a disaster type.',
+          severity: 'error'
+      });
       return;
     }
 
-    setLocationLoading(true);
-    try {
-      // Using a free geocoding service (you can replace with your preferred service)
-      const response = await fetch(
-        `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=5&countrycodes=in`
-      );
-      const data = await response.json();
+      if (!newReportForm.description || newReportForm.description.trim().length < 10) {
+        setSnackbar({
+          open: true,
+          message: 'Please provide a description with at least 10 characters.',
+          severity: 'error'
+        });
+        return;
+      }
       
-      const suggestions = data.map(item => ({
-        display_name: item.display_name,
-        lat: parseFloat(item.lat),
-        lon: parseFloat(item.lon),
-        address: item.display_name.split(',')[0] + ', ' + item.display_name.split(',')[1]
-      }));
+      if (!newReportForm.address || newReportForm.address.trim().length < 5) {
+        setSnackbar({
+          open: true,
+          message: 'Please provide a valid address.',
+          severity: 'error'
+        });
+        return;
+      }
       
-      setLocationSuggestions(suggestions);
-      setShowLocationSuggestions(true);
-    } catch (error) {
-      console.error('Location search error:', error);
-      setLocationSuggestions([]);
-    } finally {
-      setLocationLoading(false);
-    }
-  };
-
-  const handleLocationSelect = (suggestion) => {
-    setNewReportForm({
-      ...newReportForm,
-      address: suggestion.display_name
-    });
-    setShowLocationSuggestions(false);
-    setLocationSuggestions([]);
-  };
-
-  // Image handling functions
-  const handleImageSelect = (event) => {
-    const files = Array.from(event.target.files);
-    console.log('📁 Files selected:', files);
-    
-    // Filter for image files only
-    const imageFiles = files.filter(file => {
-      const isImage = file.type.startsWith('image/');
-      const isValidSize = file.size <= 10 * 1024 * 1024; // 10MB limit
-      console.log(`📷 File: ${file.name}, Type: ${file.type}, Size: ${file.size}, Valid: ${isImage && isValidSize}`);
-      return isImage && isValidSize;
-    });
-    
-    // Check for invalid files
-    const invalidFiles = files.filter(file => !file.type.startsWith('image/'));
-    const oversizedFiles = files.filter(file => file.type.startsWith('image/') && file.size > 10 * 1024 * 1024);
-    
-    if (invalidFiles.length > 0) {
+      if (!newReportForm.latitude || !newReportForm.longitude) {
       setSnackbar({
         open: true,
-        message: `⚠️ ${invalidFiles.length} non-image file(s) were skipped`,
-        severity: 'warning'
+          message: 'Please provide location coordinates.',
+        severity: 'error'
       });
-    }
-    
-    if (oversizedFiles.length > 0) {
-      setSnackbar({
-        open: true,
-        message: `⚠️ ${oversizedFiles.length} image(s) were too large (max 10MB)`,
-        severity: 'warning'
+        return;
+      }
+
+          const formData = new FormData();
+      
+      // Add basic report data
+          formData.append('disaster_type', newReportForm.disaster_type);
+          formData.append('priority', newReportForm.priority);
+      formData.append('description', newReportForm.description);
+      formData.append('latitude', parseFloat(newReportForm.latitude));
+      formData.append('longitude', parseFloat(newReportForm.longitude));
+      formData.append('address', newReportForm.address);
+      formData.append('phone_number', newReportForm.phone_number);
+
+      // Add photos
+      newReportForm.photos.forEach((photo, index) => {
+        formData.append('files', photo.file);
       });
-    }
-    
-    if (imageFiles.length > 0) {
-      console.log('✅ Valid images to add:', imageFiles);
-      setSelectedImages(prev => [...prev, ...imageFiles]);
+
+      let response;
+      const isEditMode = selectedReport && selectedReport.id;
       
-      // Create preview URLs
-      const newPreviews = imageFiles.map(file => ({
-        file,
-        url: URL.createObjectURL(file),
-        name: file.name
-      }));
-      setImagePreview(prev => [...prev, ...newPreviews]);
-      
+      if (isEditMode) {
+        // Update existing report
+        response = await axios.put(`http://localhost:8000/api/sos_reports/sos_reports/${selectedReport.id}/`, formData, {
+            headers: {
+            'Authorization': `Token ${localStorage.getItem('token')}`,
+            'Content-Type': 'multipart/form-data'
+          }
+          });
+        } else {
+        // Create new report
+        response = await axios.post('http://localhost:8000/api/sos_reports/sos_reports/', formData, {
+        headers: {
+            'Authorization': `Token ${localStorage.getItem('token')}`,
+            'Content-Type': 'multipart/form-data'
+          }
+        });
+      }
+
       setSnackbar({
         open: true,
-        message: `✅ ${imageFiles.length} image(s) added successfully`,
+        message: isEditMode ? 'Report updated successfully!' : 'Report created successfully!',
         severity: 'success'
       });
-    } else if (files.length > 0) {
-      setSnackbar({
-        open: true,
-        message: '❌ No valid images were selected',
+        
+      setCreateDialogOpen(false);
+      setSelectedReport(null);
+      setNewReportForm({
+        disaster_type: '',
+        priority: 'MEDIUM',
+        description: '',
+        latitude: '',
+        longitude: '',
+        address: '',
+        phone_number: '',
+        photos: []
+      });
+
+      fetchReports();
+    } catch (error) {
+      console.error('Error saving report:', error);
+      
+      let errorMessage = 'Failed to save report. Please try again.';
+      
+      if (error.response) {
+        // Server responded with error status
+        if (error.response.status === 400) {
+          // Show specific validation errors
+          const errorData = error.response.data;
+          if (typeof errorData === 'object' && errorData !== null) {
+            const errorMessages = [];
+            for (const [field, messages] of Object.entries(errorData)) {
+              if (Array.isArray(messages)) {
+                errorMessages.push(`${field}: ${messages.join(', ')}`);
+        } else {
+                errorMessages.push(`${field}: ${messages}`);
+              }
+            }
+            errorMessage = `Validation errors: ${errorMessages.join('; ')}`;
+          } else {
+            errorMessage = `Validation error: ${errorData}`;
+          }
+        } else if (error.response.status === 401) {
+          errorMessage = 'Please log in again to continue.';
+        } else if (error.response.status === 403) {
+          errorMessage = 'You do not have permission to perform this action.';
+        } else if (error.response.status >= 500) {
+          errorMessage = 'Server error. Please try again later.';
+        }
+      } else if (error.request) {
+        // Network error
+        errorMessage = 'Network error. Please check your connection.';
+      }
+      
+        setSnackbar({
+          open: true,
+        message: errorMessage,
         severity: 'error'
       });
     }
-    
-    // Clear the input value to allow selecting the same file again
-    event.target.value = '';
   };
 
-  const removeImage = (index) => {
-    setSelectedImages(prev => prev.filter((_, i) => i !== index));
-    setImagePreview(prev => {
-      const newPreviews = prev.filter((_, i) => i !== index);
-      // Revoke the URL to free memory
-      URL.revokeObjectURL(prev[index].url);
-      return newPreviews;
-    });
-  };
+  const handleDeleteReport = async (reportId) => {
+    if (!window.confirm('Are you sure you want to delete this report?')) {
+      return;
+    }
 
-  const clearAllImages = () => {
-    // Revoke all URLs to free memory
-    imagePreview.forEach(preview => URL.revokeObjectURL(preview.url));
-    setSelectedImages([]);
-    setImagePreview([]);
-  };
+    try {
+      await axios.delete(`http://localhost:8000/api/sos_reports/sos_reports/${reportId}/`, {
+        headers: {
+          'Authorization': `Token ${localStorage.getItem('token')}`
+        }
+      });
 
-  // Handler functions
-  const handleNewReport = () => {
-    setNewReportDialog(true);
-    setNewReportForm({
-      disaster_type: '',
-      priority: 'MEDIUM',
-      description: '',
-      address: '',
-      countryCode: '+91',
-      phone_number: ''
-    });
-    setLocationSuggestions([]);
-    setShowLocationSuggestions(false);
-    clearAllImages();
-  };
+        setSnackbar({
+          open: true,
+        message: 'Report deleted successfully!',
+          severity: 'success'
+        });
 
-  const handleViewReport = (report) => {
-    setSelectedReport(report);
-    setViewReportDialog(true);
+      fetchReports();
+    } catch (error) {
+      console.error('Error deleting report:', error);
+      setSnackbar({
+        open: true,
+        message: 'Failed to delete report. Please try again.',
+        severity: 'error'
+      });
+    }
   };
 
   const handleEditReport = (report) => {
-    setSelectedReport(report);
-    
-    // Parse country code from existing phone number
-    const phoneNumber = report.phone_number || '';
-    let countryCode = '+91';
-    let phoneNumberOnly = phoneNumber;
-    
-    // Handle different phone number formats
-    if (phoneNumber.startsWith('+')) {
-      // Find the longest matching country code
-      const sortedCodes = countryCodes.sort((a, b) => b.code.length - a.code.length);
-      for (const country of sortedCodes) {
-        if (phoneNumber.startsWith(country.code)) {
-          countryCode = country.code;
-          phoneNumberOnly = phoneNumber.substring(country.code.length);
-          break;
-        }
-      }
-    } else if (phoneNumber.includes('-')) {
-      // Handle format like "+91-9876543210"
-      const parts = phoneNumber.split('-');
-      if (parts.length === 2) {
-        countryCode = parts[0];
-        phoneNumberOnly = parts[1];
-      }
-    }
-    
+    // Set the form data to the selected report
     setNewReportForm({
       disaster_type: report.disaster_type,
       priority: report.priority,
       description: report.description,
+      latitude: report.latitude,
+      longitude: report.longitude,
       address: report.address,
-      countryCode: countryCode,
-      phone_number: phoneNumberOnly
+      phone_number: report.phone_number,
+      photos: []
     });
-    setEditReportDialog(true);
-  };
-
-  const handleAddImages = (report) => {
+    
+    // Set the report to edit
     setSelectedReport(report);
-    setAddImagesDialog(true);
-  };
-
-  const submitImagesOnly = async () => {
-    if (selectedImages.length === 0) {
-      setSnackbar({
-        open: true,
-        message: 'Please select at least one image to upload',
-        severity: 'warning'
-      });
-      return;
-    }
-
-    try {
-      setUploadingImages(true);
-      
-      // Try to upload to backend first
-      try {
-        const formData = new FormData();
-        formData.append('phone_number', selectedReport.phone_number);
-        formData.append('latitude', selectedReport.latitude);
-        formData.append('longitude', selectedReport.longitude);
-        formData.append('address', selectedReport.address);
-        formData.append('disaster_type', selectedReport.disaster_type);
-        formData.append('description', selectedReport.description);
-        formData.append('priority', selectedReport.priority);
-        
-        // Add new image files
-        selectedImages.forEach((file, index) => {
-          formData.append('files', file);
-        });
-        
-        const response = await axios.put(`http://localhost:8000/api/sos_reports/sos_reports/${selectedReport.id}/`, formData, {
-          headers: {
-            'Content-Type': 'multipart/form-data',
-          },
-        });
-        
-        console.log('✅ Images uploaded to backend, response:', response.data);
-        console.log('🔍 Response media:', response.data.media);
-        
-        // Refresh data from backend to get the properly updated report with backend URLs
-        await fetchReports();
-        
-        setAddImagesDialog(false);
-        clearAllImages();
-        setSnackbar({
-          open: true,
-          message: `✅ ${selectedImages.length} image(s) uploaded to backend successfully!`,
-          severity: 'success'
-        });
-        
-      } catch (apiError) {
-        console.log('Backend upload failed, saving locally:', apiError.message);
-        
-        // Fallback to local storage
-        const newMediaArray = selectedImages.map((file, index) => ({
-          id: Date.now() + index,
-          file: URL.createObjectURL(file),
-          file_type: 'image',
-          name: file.name,
-          size: file.size
-        }));
-        
-        // Combine existing media with new media
-        const combinedMedia = [...(selectedReport.media || []), ...newMediaArray];
-        
-        // Update local state
-        const updatedReports = reports.map(report => 
-          report.id === selectedReport.id 
-            ? { 
-                ...report, 
-                media: combinedMedia
-              }
-            : report
-        );
-        
-        setReports(updatedReports);
-        
-        // Save to localStorage for persistence
-        localStorage.setItem('nudrrs_reports', JSON.stringify(updatedReports));
-        
-        setAddImagesDialog(false);
-        clearAllImages();
-        setSnackbar({
-          open: true,
-          message: `⚠️ ${selectedImages.length} image(s) saved locally (backend unavailable)`,
-          severity: 'warning'
-        });
-      }
-      
-    } catch (error) {
-      console.error('Error adding images:', error);
-      setSnackbar({
-        open: true,
-        message: '❌ Error adding images. Please try again.',
-        severity: 'error'
-      });
-    } finally {
-      setUploadingImages(false);
-    }
-  };
-
-  const handleDeleteReport = (report) => {
-    setSelectedReport(report);
-    setDeleteConfirmDialog(true);
-  };
-
-  const submitNewReport = async () => {
-    // Get user's current location or use default coordinates
-    let latitude = 28.6139; // Default to Delhi coordinates
-    let longitude = 77.2090;
     
-    if (navigator.geolocation) {
-      try {
-        const position = await new Promise((resolve, reject) => {
-          navigator.geolocation.getCurrentPosition(resolve, reject, {
-            timeout: 5000,
-            enableHighAccuracy: false
-          });
-        });
-        latitude = position.coords.latitude;
-        longitude = position.coords.longitude;
-      } catch (error) {
-        console.log('Could not get location, using default coordinates');
-      }
-    }
-
-    const currentUser = getCurrentUser();
+    // Open the create dialog in edit mode
+    setCreateDialogOpen(true);
     
-    // Create media array from selected images
-    const mediaArray = selectedImages.map((file, index) => ({
-      id: Date.now() + index,
-      file: URL.createObjectURL(file), // Create object URL for preview
-      file_type: 'image',
-      name: file.name,
-      size: file.size
-    }));
-    
-    const newReport = {
-      id: Date.now(), // Generate unique ID
-      user: currentUser,
-      ...newReportForm,
-      phone_number: `${newReportForm.countryCode}${newReportForm.phone_number}`,
-      latitude: latitude,
-      longitude: longitude,
-      status: 'PENDING',
-      created_at: new Date().toISOString(),
-      ai_confidence: Math.random() * 0.3 + 0.7, // Random AI confidence between 0.7-1.0
-      media: mediaArray // Add the media array
-    };
-
-    // Try to send to backend first
-    try {
-      setUploadingImages(true);
-      
-      // Create FormData for file upload
-      const formData = new FormData();
-      formData.append('phone_number', newReport.phone_number);
-      formData.append('latitude', newReport.latitude);
-      formData.append('longitude', newReport.longitude);
-      formData.append('address', newReport.address);
-      formData.append('disaster_type', newReport.disaster_type);
-      formData.append('description', newReport.description);
-      formData.append('priority', newReport.priority || 'MEDIUM');
-      
-      // Add image files
-      selectedImages.forEach((file, index) => {
-        formData.append('files', file);
-      });
-      
-      const response = await axios.post('http://localhost:8000/api/sos_reports/sos_reports/', formData, {
-        headers: {
-          'Content-Type': 'multipart/form-data',
-        },
-      });
-      
-      console.log('✅ Report with images sent to backend:', response.data);
-      console.log('🔍 Backend response media:', response.data.media);
-      setUploadingImages(false);
-      
-      // Refresh data from backend to get the properly saved report with backend URLs
-      await fetchReports();
-      setSnackbar({
-        open: true,
-        message: `✅ Emergency report with ${selectedImages.length} image(s) sent to backend successfully!`,
-        severity: 'success'
-      });
-      addLiveUpdate(`✅ New report with ${selectedImages.length} image(s) added to backend`, 'success');
-    } catch (error) {
-      console.error('Backend error, saving locally:', error);
-      setUploadingImages(false);
-      // Fallback to local storage only when backend fails
-      const updatedReports = [newReport, ...reports];
-      setReports(updatedReports);
-      localStorage.setItem('nudrrs_reports', JSON.stringify(updatedReports));
-      setSnackbar({
-        open: true,
-        message: '⚠️ Report saved locally (backend unavailable)',
-        severity: 'warning'
-      });
-      addLiveUpdate('⚠️ Report saved locally - backend unavailable', 'warning');
-    }
-    
-    setNewReportDialog(false);
-  };
-
-  const submitEditReport = async () => {
-    try {
-      // Try to update via backend API first
-      try {
-        setUploadingImages(true);
-        
-        // Create FormData for file upload if there are new images
-        if (selectedImages.length > 0) {
-          const formData = new FormData();
-          formData.append('phone_number', `${newReportForm.countryCode}${newReportForm.phone_number}`);
-          formData.append('latitude', selectedReport.latitude);
-          formData.append('longitude', selectedReport.longitude);
-          formData.append('address', newReportForm.address);
-          formData.append('disaster_type', newReportForm.disaster_type);
-          formData.append('description', newReportForm.description);
-          formData.append('priority', newReportForm.priority);
-          
-          // Add new image files
-          selectedImages.forEach((file, index) => {
-            formData.append('files', file);
-          });
-          
-          await axios.put(`http://localhost:8000/api/sos_reports/sos_reports/${selectedReport.id}/`, formData, {
-            headers: {
-              'Content-Type': 'multipart/form-data',
-            },
-          });
-        } else {
-          // No new images, just update the report data
-          const updatedReportData = {
-            phone_number: `${newReportForm.countryCode}${newReportForm.phone_number}`,
-            latitude: selectedReport.latitude,
-            longitude: selectedReport.longitude,
-            address: newReportForm.address,
-            disaster_type: newReportForm.disaster_type,
-            description: newReportForm.description,
-            priority: newReportForm.priority
-          };
-
-          await axios.put(`http://localhost:8000/api/sos_reports/sos_reports/${selectedReport.id}/`, updatedReportData);
-        }
-        
-        setUploadingImages(false);
-        
-        // Refresh data from backend to get the properly updated report with backend URLs
-        await fetchReports();
-        
-        setEditReportDialog(false);
-        clearAllImages(); // Clear selected images after successful update
-        setSnackbar({
-          open: true,
-          message: selectedImages.length > 0 
-            ? `Report updated successfully with ${selectedImages.length} new image(s)!`
-            : 'Report updated successfully!',
-          severity: 'success'
-        });
-        
-      } catch (apiError) {
-        console.log('Backend update failed, updating locally:', apiError.message);
-        setUploadingImages(false);
-        
-        // Create media array from new selected images for fallback
-        const newMediaArray = selectedImages.map((file, index) => ({
-          id: Date.now() + index,
-          file: URL.createObjectURL(file),
-          file_type: 'image',
-          name: file.name,
-          size: file.size
-        }));
-        
-        // Combine existing media with new media for fallback
-        const combinedMedia = [...(selectedReport.media || []), ...newMediaArray];
-        
-        // Fallback to local update
-        const updatedReports = reports.map(report => 
-          report.id === selectedReport.id 
-            ? { 
-                ...report, 
-                ...newReportForm, 
-                phone_number: `${newReportForm.countryCode}${newReportForm.phone_number}`,
-                media: combinedMedia
-              }
-            : report
-        );
-        
-        setReports(updatedReports);
-        
-        // Save to localStorage for persistence
-        localStorage.setItem('nudrrs_reports', JSON.stringify(updatedReports));
-        
-        setEditReportDialog(false);
-        clearAllImages(); // Clear selected images after successful update
-        setSnackbar({
-          open: true,
-          message: selectedImages.length > 0 
-            ? `Report updated locally with ${selectedImages.length} new image(s)!`
-            : 'Report updated locally!',
-          severity: 'success'
-        });
-      }
-    } catch (error) {
-      console.error('Error updating report:', error);
-      setSnackbar({
-        open: true,
-        message: 'Failed to update report',
-        severity: 'error'
-      });
-    }
-  };
-
-  const confirmDeleteReport = () => {
-    setReports(prev => prev.filter(report => report.id !== selectedReport.id));
-    setDeleteConfirmDialog(false);
     setSnackbar({
       open: true,
-      message: 'Report deleted successfully!',
-      severity: 'success'
+      message: 'Edit mode activated. Modify the report details below.',
+      severity: 'info'
     });
   };
 
-  // AI Description Generation Functions
-  const generateAiDescription = async () => {
-    if (selectedImages.length === 0) {
+  const getCurrentLocation = () => {
+    if (!navigator.geolocation) {
       setSnackbar({
         open: true,
-        message: 'Please upload an image first to generate AI description',
+        message: 'Geolocation is not supported by this browser.',
+        severity: 'error'
+      });
+      return;
+    }
+
+    setSnackbar({
+      open: true,
+      message: 'Getting your current location...',
+      severity: 'info'
+    });
+
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        const { latitude, longitude } = position.coords;
+        setNewReportForm(prev => ({
+          ...prev,
+          latitude: latitude.toString(),
+          longitude: longitude.toString()
+        }));
+        
+        // Reverse geocoding to get address
+        fetch(`https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${latitude}&longitude=${longitude}&localityLanguage=en`)
+          .then(response => response.json())
+          .then(data => {
+            const address = `${data.locality || ''} ${data.city || ''} ${data.principalSubdivision || ''} ${data.countryName || ''}`.trim();
+            setNewReportForm(prev => ({
+              ...prev,
+              address: address || `${latitude}, ${longitude}`
+            }));
+          })
+          .catch(() => {
+            setNewReportForm(prev => ({
+              ...prev,
+              address: `${latitude}, ${longitude}`
+            }));
+          });
+
+        setSnackbar({
+          open: true,
+          message: 'Location obtained successfully!',
+          severity: 'success'
+        });
+      },
+      (error) => {
+        console.error('Error getting location:', error);
+        setSnackbar({
+          open: true,
+          message: 'Unable to get your location. Please enter it manually.',
+          severity: 'error'
+        });
+      }
+    );
+  };
+
+  const generateAIDescription = async () => {
+    if (!newReportForm.disaster_type || !newReportForm.address) {
+      setSnackbar({
+        open: true,
+        message: 'Please select disaster type and location first.',
         severity: 'warning'
       });
       return;
     }
 
-    setAiDescriptionLoading(true);
-    try {
-      const formData = new FormData();
-      formData.append('image', selectedImages[0]);
-      formData.append('disaster_type', newReportForm.disaster_type);
-      formData.append('location', newReportForm.address);
+    setSnackbar({
+      open: true,
+      message: 'Generating AI description...',
+      severity: 'info'
+    });
 
-      const response = await axios.post('http://localhost:8000/api/ai_services/generate-ai-description/', formData, {
+    try {
+      const response = await axios.post('http://localhost:8000/api/ai/generate-description/', {
+        disaster_type: newReportForm.disaster_type,
+        location: newReportForm.address,
+        priority: newReportForm.priority
+      }, {
         headers: {
-          'Content-Type': 'multipart/form-data',
-        },
+          'Authorization': `Token ${localStorage.getItem('token')}`,
+          'Content-Type': 'application/json'
+        }
       });
 
-      if (response.data.success) {
-        setAiEnhancedDescription(response.data.description);
-        setShowAiDescription(true);
+      if (response.data && response.data.description) {
+        setNewReportForm(prev => ({
+          ...prev,
+          description: response.data.description
+        }));
+        
         setSnackbar({
           open: true,
           message: 'AI description generated successfully!',
           severity: 'success'
         });
       } else {
-        setSnackbar({
-          open: true,
-          message: 'Failed to generate AI description',
-          severity: 'error'
-        });
+        throw new Error('No description generated');
       }
     } catch (error) {
       console.error('Error generating AI description:', error);
-      setSnackbar({
-        open: true,
-        message: 'Error generating AI description. Please try again.',
-        severity: 'error'
-      });
-    } finally {
-      setAiDescriptionLoading(false);
-    }
-  };
-
-  const enhanceDescription = async () => {
-    if (!newReportForm.description.trim()) {
-      setSnackbar({
-        open: true,
-        message: 'Please enter a description first to enhance it',
-        severity: 'warning'
-      });
-      return;
-    }
-
-    setAiDescriptionLoading(true);
-    try {
-      const response = await axios.post('http://localhost:8000/api/ai_services/enhance-description/', {
-        description: newReportForm.description,
-        disaster_type: newReportForm.disaster_type,
-        location: newReportForm.address
-      });
-
-      if (response.data.success) {
-        setAiEnhancedDescription(response.data.description);
-        setShowAiDescription(true);
-        setSnackbar({
-          open: true,
-          message: 'Description enhanced successfully!',
-          severity: 'success'
-        });
-      } else {
-        setSnackbar({
-          open: true,
-          message: 'Failed to enhance description',
-          severity: 'error'
-        });
-      }
-    } catch (error) {
-      console.error('Error enhancing description:', error);
-      setSnackbar({
-        open: true,
-        message: 'Error enhancing description. Please try again.',
-        severity: 'error'
-      });
-    } finally {
-      setAiDescriptionLoading(false);
-    }
-  };
-
-  const useAiDescription = () => {
+      
+      // Fallback: Generate a basic description locally
+      const disasterType = newReportForm.disaster_type.toLowerCase();
+      const location = newReportForm.address;
+      const priority = newReportForm.priority.toLowerCase();
+      
+      const basicDescription = `Emergency ${disasterType} situation reported at ${location}. This is a ${priority} priority incident requiring immediate attention. The situation is developing and poses potential risk to public safety. Emergency services have been notified and are responding to the scene.`;
+      
     setNewReportForm(prev => ({
       ...prev,
-      description: aiEnhancedDescription
-    }));
-    setShowAiDescription(false);
-    setSnackbar({
-      open: true,
-      message: 'AI description applied to form!',
-      severity: 'success'
-    });
-  };
-
-  const fetchDescriptionSuggestions = async () => {
-    if (!newReportForm.disaster_type) {
+        description: basicDescription
+      }));
+      
       setSnackbar({
         open: true,
-        message: 'Please select a disaster type first',
+        message: 'Using fallback description. AI service unavailable.',
         severity: 'warning'
       });
-      return;
-    }
-
-    try {
-      const response = await axios.get('http://localhost:8000/api/ai_services/description-suggestions/', {
-        params: {
-          disaster_type: newReportForm.disaster_type,
-          location: newReportForm.address
-        }
-      });
-
-      setDescriptionSuggestions(response.data);
-      setShowSuggestions(true);
-      setSnackbar({
-        open: true,
-        message: 'Description suggestions loaded!',
-        severity: 'success'
-      });
-    } catch (error) {
-      console.error('Error fetching description suggestions:', error);
-      
-      // Provide demo suggestions when backend is not available
-      const location = newReportForm.address || 'the area';
-      
-      // Determine location type for more specific suggestions
-      const isUrban = location.toLowerCase().includes('city') || location.toLowerCase().includes('sector') || 
-                     location.toLowerCase().includes('street') || location.toLowerCase().includes('road');
-      const isRural = location.toLowerCase().includes('village') || location.toLowerCase().includes('rural') || 
-                     location.toLowerCase().includes('district');
-      const isCoastal = location.toLowerCase().includes('coastal') || location.toLowerCase().includes('beach') || 
-                       location.toLowerCase().includes('puri') || location.toLowerCase().includes('goa');
-      const isIndustrial = location.toLowerCase().includes('industrial') || location.toLowerCase().includes('factory') || 
-                          location.toLowerCase().includes('plant');
-      
-      const demoSuggestions = {
-        suggestions: [
-          {
-            title: `Professional ${newReportForm.disaster_type} Report - ${location}`,
-            description: `This is a ${newReportForm.disaster_type.toLowerCase()} emergency in ${location} requiring immediate attention. The situation is developing rapidly and poses significant risk to public safety. Emergency services have been notified and are responding to the scene. Residents in the affected area are advised to evacuate immediately and follow all safety protocols.`,
-            confidence: 0.95,
-            disaster_type: newReportForm.disaster_type,
-            location: location
-          },
-          {
-            title: `Detailed ${newReportForm.disaster_type} Assessment - ${location}`,
-            description: `A ${newReportForm.disaster_type.toLowerCase()} incident has been reported in ${location}. The situation appears to be escalating with potential for widespread impact. Multiple agencies are coordinating response efforts. Citizens are urged to avoid the affected area and monitor official updates for further instructions.`,
-            confidence: 0.88,
-            disaster_type: newReportForm.disaster_type,
-            location: location
-          },
-          {
-            title: `Concise ${newReportForm.disaster_type} Alert - ${location}`,
-            description: `${newReportForm.disaster_type} emergency in progress at ${location}. Immediate response required. Please provide specific details about the current situation, any visible damage or injuries, and the exact location of the incident.`,
-            confidence: 0.92,
-            disaster_type: newReportForm.disaster_type,
-            location: location
-          },
-          ...(isUrban ? [{
-            title: `Urban ${newReportForm.disaster_type} Response - ${location}`,
-            description: `${newReportForm.disaster_type} emergency in urban area ${location}. High population density requires coordinated evacuation and response efforts. Traffic management and emergency services coordination essential. Public transportation may be affected.`,
-            confidence: 0.87,
-            disaster_type: newReportForm.disaster_type,
-            location: location
-          }] : []),
-          ...(isRural ? [{
-            title: `Rural ${newReportForm.disaster_type} Alert - ${location}`,
-            description: `${newReportForm.disaster_type} emergency in rural area ${location}. Limited access roads may affect emergency response time. Local community coordination essential. Agricultural areas and livestock may be at risk.`,
-            confidence: 0.85,
-            disaster_type: newReportForm.disaster_type,
-            location: location
-          }] : []),
-          ...(isCoastal ? [{
-            title: `Coastal ${newReportForm.disaster_type} Warning - ${location}`,
-            description: `${newReportForm.disaster_type} emergency in coastal area ${location}. Marine rescue services may be required. Tidal conditions and weather patterns should be monitored. Fishing communities and tourism areas at risk.`,
-            confidence: 0.89,
-            disaster_type: newReportForm.disaster_type,
-            location: location
-          }] : []),
-          ...(isIndustrial ? [{
-            title: `Industrial ${newReportForm.disaster_type} Emergency - ${location}`,
-            description: `${newReportForm.disaster_type} emergency in industrial area ${location}. Chemical safety protocols may be required. Industrial fire suppression systems activated. Worker evacuation and safety procedures in effect.`,
-            confidence: 0.91,
-            disaster_type: newReportForm.disaster_type,
-            location: location
-          }] : [])
-        ]
-      };
-      
-      setDescriptionSuggestions(demoSuggestions);
-      setShowSuggestions(true);
-      setSnackbar({
-        open: true,
-        message: 'Demo description suggestions loaded!',
-        severity: 'success'
-      });
     }
   };
 
-  const applySuggestion = (suggestion) => {
-    setNewReportForm(prev => ({
-      ...prev,
-      description: suggestion.description
-    }));
-    setShowSuggestions(false);
-    setSnackbar({
-      open: true,
-      message: 'AI description applied to form!',
-      severity: 'success'
-    });
+  const getPriorityColor = (priority) => {
+    switch (priority) {
+      case 'CRITICAL': return '#FF1744';
+      case 'HIGH': return '#FF9800';
+      case 'MEDIUM': return '#FFC107';
+      case 'LOW': return '#4CAF50';
+      default: return '#9E9E9E';
+    }
   };
 
-  const handleCloseSnackbar = () => {
-    setSnackbar({ ...snackbar, open: false });
+  const getStatusColor = (status) => {
+    switch (status) {
+      case 'PENDING': return '#FF9800';
+      case 'VERIFIED': return '#9C27B0';
+      case 'IN_PROGRESS': return '#9C27B0';
+      case 'RESOLVED': return '#4CAF50';
+      case 'REJECTED': return '#F44336';
+      default: return '#9E9E9E';
+    }
+  };
+
+  const getDisasterIcon = (disasterType) => {
+    switch (disasterType) {
+      case 'FLOOD': return <Water sx={{ color: '#2196F3', fontSize: 28 }} />;
+      case 'EARTHQUAKE': return <Terrain sx={{ color: '#795548', fontSize: 28 }} />;
+      case 'FIRE': return <LocalFireDepartment sx={{ color: '#F44336', fontSize: 28 }} />;
+      case 'MEDICAL': return <MedicalServices sx={{ color: '#4CAF50', fontSize: 28 }} />;
+      case 'ACCIDENT': return <DirectionsCar sx={{ color: '#FF9800', fontSize: 28 }} />;
+      default: return <CrisisAlert sx={{ color: '#9C27B0', fontSize: 28 }} />;
+    }
+  };
+
+  const formatTimeAgo = (dateString) => {
+    const date = new Date(dateString);
+    const now = new Date();
+    const diffInMinutes = Math.floor((now - date) / (1000 * 60));
+    
+    if (diffInMinutes < 1) return 'Just now';
+    if (diffInMinutes < 60) return `${diffInMinutes}m ago`;
+    if (diffInMinutes < 1440) return `${Math.floor(diffInMinutes / 60)}h ago`;
+    return `${Math.floor(diffInMinutes / 1440)}d ago`;
+  };
+
+  const canEditReport = (report) => {
+    return isAdmin || (user && report.user && report.user.id === user.id);
+  };
+
+  const canDeleteReport = (report) => {
+    return isAdmin || (user && report.user && report.user.id === user.id);
+  };
+
+  const handleViewReport = (report) => {
+    setSelectedReport(report);
+    setViewDialogOpen(true);
+    fetchComments(report.id);
+  };
+
+  const openPhotoModal = (index) => {
+    setSelectedPhotoIndex(index);
+    setPhotoModalOpen(true);
   };
 
   return (
-    <Box sx={{ 
-      minHeight: '100vh',
-      background: '#f8fafc',
-      p: 3,
+    <Container maxWidth="xl" sx={{ 
+      py: 3,
       '@keyframes pulse': {
-        '0%': { opacity: 1 },
-        '50%': { opacity: 0.5 },
-        '100%': { opacity: 1 }
+        '0%': {
+          transform: 'scale(1)',
+          boxShadow: '0 4px 20px rgba(255, 107, 107, 0.4)'
+        },
+        '50%': {
+          transform: 'scale(1.05)',
+          boxShadow: '0 6px 25px rgba(255, 107, 107, 0.6)'
+        },
+        '100%': {
+          transform: 'scale(1)',
+          boxShadow: '0 4px 20px rgba(255, 107, 107, 0.4)'
+        }
       }
     }}>
-      {/* Compact Header */}
-      <Paper sx={{ 
-        p: 2, 
+      {/* Enhanced Header */}
+    <Box sx={{ 
+        display: 'flex', 
+        justifyContent: 'space-between', 
+        alignItems: 'center', 
         mb: 3, 
-        background: 'white',
-        borderRadius: 2,
-        border: '1px solid #e2e8f0',
-        boxShadow: '0 1px 3px rgba(0, 0, 0, 0.1)'
+        p: 3,
+        borderRadius: 3,
+        background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+        boxShadow: '0 6px 24px rgba(102, 126, 234, 0.3)',
+        position: 'relative',
+        overflow: 'hidden',
+        '&::before': {
+          content: '""',
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          background: 'linear-gradient(45deg, rgba(255,255,255,0.1) 0%, rgba(255,255,255,0.05) 100%)',
+          pointerEvents: 'none'
+        }
       }}>
-        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <Box sx={{ display: 'flex', alignItems: 'center' }}>
+        <Box sx={{ position: 'relative', zIndex: 1 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 0.5 }}>
             <Box sx={{
-              width: 40,
-              height: 40,
-              borderRadius: 2,
-              background: '#fef2f2',
+              width: 50,
+              height: 50,
+              borderRadius: '50%',
+              background: 'linear-gradient(45deg, #FF6B6B, #FF8E53)',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              mr: 2
+              fontSize: '1.5rem',
+              boxShadow: '0 3px 15px rgba(255, 107, 107, 0.4)',
+              animation: 'pulse 2s infinite'
             }}>
-              <Emergency sx={{ fontSize: 20, color: '#ef4444' }} />
+              🚨
             </Box>
             <Box>
-              <Typography variant="h5" sx={{ 
-                fontWeight: 600, 
-                color: '#1a202c',
-                mb: 0.5,
-                fontSize: '1.25rem'
+              <Typography variant="h4" component="h1" sx={{ 
+                fontWeight: 'bold', 
+                color: 'white',
+                textShadow: '0 2px 4px rgba(0,0,0,0.3)',
+                mb: 0.25,
+                fontSize: { xs: '1.5rem', md: '2rem' }
               }}>
                 Emergency Reports
               </Typography>
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                <Box sx={{ 
-                  width: 6, 
-                  height: 6, 
-                  borderRadius: '50%', 
-                  background: updateStatus === 'updating' ? '#f59e0b' : 
-                             updateStatus === 'success' ? '#10b981' : 
-                             updateStatus === 'error' ? '#ef4444' : '#6b7280',
-                  animation: updateStatus === 'updating' ? 'pulse 1.5s infinite' : 'none'
-                }} />
-                <Typography variant="caption" sx={{ 
-                  color: '#6b7280',
-                  fontWeight: 500
-                }}>
-                  {updateStatus === 'updating' ? 'Updating...' :
-                   updateStatus === 'success' ? 'Live' :
-                   updateStatus === 'error' ? 'Offline' : 'Idle'} • {lastUpdate.toLocaleTimeString()}
+              <Typography variant="subtitle1" sx={{ 
+                color: 'rgba(255,255,255,0.9)',
+                fontWeight: 500,
+                fontSize: { xs: '0.8rem', md: '0.95rem' },
+                textShadow: '0 1px 2px rgba(0,0,0,0.2)'
+              }}>
+                Real-time emergency reporting and community response
                 </Typography>
-              </Box>
             </Box>
           </Box>
           
-          <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
-            <Box sx={{ textAlign: 'center' }}>
-              <Typography variant="h6" sx={{ fontWeight: 'bold', color: '#1a202c' }}>
-                {filteredReports.length}
-              </Typography>
-              <Typography variant="caption" sx={{ color: '#6b7280' }}>Total</Typography>
-            </Box>
-            
-            <Box sx={{ textAlign: 'center' }}>
-              <Typography variant="h6" sx={{ fontWeight: 'bold', color: '#ef4444' }}>
-                {filteredReports.filter(r => r.priority === 'CRITICAL').length}
-              </Typography>
-              <Typography variant="caption" sx={{ color: '#6b7280' }}>Critical</Typography>
-            </Box>
-            
+          {/* Stats Row */}
+          <Box sx={{ 
+            display: 'flex', 
+            gap: 2, 
+            mt: 1.5,
+            flexWrap: 'wrap'
+          }}>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-              <Typography variant="body2" sx={{ color: '#6b7280', fontWeight: 500 }}>
-                {isAdmin ? 'Admin' : 'User'}
+              <Box sx={{ 
+                width: 8, 
+                height: 8, 
+                borderRadius: '50%', 
+                bgcolor: '#4CAF50',
+                boxShadow: '0 0 10px rgba(76, 175, 80, 0.6)'
+              }} />
+              <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.8)', fontWeight: 500 }}>
+                {reports.length} Active Reports
               </Typography>
-              <Avatar sx={{ 
-                bgcolor: isAdmin ? '#ef4444' : '#6b7280', 
-                width: 32, 
-                height: 32,
-                fontSize: '0.875rem'
-              }}>
-                {isAdmin ? 'A' : 'U'}
-              </Avatar>
+            </Box>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <Box sx={{ 
+                width: 8, 
+                height: 8, 
+                borderRadius: '50%', 
+                bgcolor: '#FF9800',
+                boxShadow: '0 0 10px rgba(255, 152, 0, 0.6)'
+              }} />
+              <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.8)', fontWeight: 500 }}>
+                Community Monitored
+              </Typography>
+            </Box>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <Box sx={{ 
+                width: 8, 
+                height: 8, 
+                borderRadius: '50%', 
+                bgcolor: '#2196F3',
+                boxShadow: '0 0 10px rgba(33, 150, 243, 0.6)'
+              }} />
+              <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.8)', fontWeight: 500 }}>
+                AI Verified
+              </Typography>
             </Box>
           </Box>
         </Box>
-      </Paper>
+          
+        <Button
+          variant="contained"
+          startIcon={<Add />}
+          onClick={() => {
+            setSelectedReport(null);
+            setNewReportForm({
+              disaster_type: '',
+              priority: 'MEDIUM',
+              description: '',
+              latitude: '',
+              longitude: '',
+              address: '',
+              phone_number: '',
+              photos: []
+            });
+            setCreateDialogOpen(true);
+          }}
+          sx={{ 
+            borderRadius: 4,
+            px: 4,
+            py: 2,
+            fontSize: '1.1rem',
+            background: 'linear-gradient(45deg, #FF6B6B, #FF8E53)',
+            boxShadow: '0 8px 32px rgba(255, 107, 107, 0.3)',
+            '&:hover': {
+              background: 'linear-gradient(45deg, #FF5252, #FF7043)',
+              boxShadow: '0 12px 40px rgba(255, 107, 107, 0.4)',
+              transform: 'translateY(-2px)',
+            },
+            transition: 'all 0.3s ease'
+          }}
+        >
+          Create Report
+        </Button>
+            </Box>
+            
+      {/* Live Updates */}
+      {liveUpdates.length > 0 && (
+        <Box sx={{ mb: 3 }}>
+          {liveUpdates.map(update => (
+            <Slide direction="down" in={true} key={update.id}>
+              <Alert 
+                severity={update.type} 
+                sx={{ 
+                  mb: 1, 
+                  borderRadius: 3,
+                  boxShadow: '0 4px 20px rgba(0,0,0,0.1)',
+                  '& .MuiAlert-message': { fontSize: '0.95rem' }
+                }}
+                onClose={() => setLiveUpdates(prev => prev.filter(u => u.id !== update.id))}
+              >
+                {update.message}
+              </Alert>
+            </Slide>
+          ))}
+            </Box>
+      )}
 
-
-      {/* Professional Filters and Search */}
+      {/* Enhanced Filters */}
       <Paper sx={{ 
-        p: 3, 
-        mb: 4,
-        background: 'white',
+        p: 2, 
+        mb: 3,
         borderRadius: 2,
-        boxShadow: '0 1px 3px rgba(0, 0, 0, 0.1)',
-        border: '1px solid #e2e8f0'
+        boxShadow: '0 4px 16px rgba(0,0,0,0.1)',
+        background: 'linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%)'
       }}>
-        <Grid container spacing={3} alignItems="center">
-          <Grid item xs={12} md={4}>
+        <Typography variant="subtitle1" sx={{ mb: 2, fontWeight: 'bold', color: 'primary.main' }}>
+          🔍 Filter Reports
+        </Typography>
+        <Grid container spacing={2} alignItems="center">
+          <Grid item xs={12} md={3}>
             <TextField
               fullWidth
-              placeholder="Search reports by location, type, or description..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
+              label="Search Reports"
+              placeholder="Type to search emergency reports..."
+              value={filters.search}
+              onChange={(e) => setFilters({ ...filters, search: e.target.value })}
               InputProps={{
-                startAdornment: <Search sx={{ mr: 1, color: 'primary.main' }} />
+                startAdornment: (
+                  <Search sx={{ 
+                    mr: 1, 
+                    color: '#667eea',
+                    fontSize: '1.2rem'
+                  }} />
+                )
               }}
+              size="small"
               sx={{
-                '& .MuiOutlinedInput-root': {
                   borderRadius: 2,
-                  background: 'white'
+                '& .MuiOutlinedInput-root': {
+                  backgroundColor: 'white',
+                  boxShadow: '0 4px 12px rgba(102, 126, 234, 0.15)',
+                  border: '2px solid transparent',
+                  transition: 'all 0.3s ease',
+                  '&:hover': {
+                    border: '2px solid rgba(102, 126, 234, 0.3)',
+                    boxShadow: '0 6px 20px rgba(102, 126, 234, 0.25)'
+                  },
+                  '&.Mui-focused': {
+                    border: '2px solid #667eea',
+                    boxShadow: '0 6px 20px rgba(102, 126, 234, 0.3)'
+                  }
+                },
+                '& .MuiInputLabel-root': {
+                  color: '#667eea',
+                  fontWeight: 600,
+                  '&.Mui-focused': {
+                    color: '#667eea'
+                  }
+                },
+                '& .MuiOutlinedInput-input': {
+                  color: '#2c3e50',
+                  fontWeight: 500,
+                  '&::placeholder': {
+                    color: '#95a5a6',
+                    opacity: 1,
+                    fontWeight: 400
+                  }
                 }
               }}
             />
           </Grid>
-          <Grid item xs={12} md={3}>
-            <FormControl fullWidth>
-              <InputLabel>Filter by Status</InputLabel>
+          
+          <Grid item xs={12} md={2}>
+            <FormControl fullWidth size="small">
+              <InputLabel>Disaster Type</InputLabel>
               <Select
-                value={filter}
-                label="Filter by Status"
-                onChange={(e) => setFilter(e.target.value)}
+                value={filters.disaster_type}
+                onChange={(e) => setFilters({ ...filters, disaster_type: e.target.value })}
+                label="Disaster Type"
                 sx={{
                   borderRadius: 2,
-                  background: 'white'
+                  backgroundColor: 'white',
+                  boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
                 }}
               >
-                <MenuItem value="ALL">🔍 All Reports</MenuItem>
+                <MenuItem value="">All Types</MenuItem>
+                <MenuItem value="FLOOD">🌊 Flood</MenuItem>
+                <MenuItem value="EARTHQUAKE">🌍 Earthquake</MenuItem>
+                <MenuItem value="FIRE">🔥 Fire</MenuItem>
+                <MenuItem value="CYCLONE">🌀 Cyclone</MenuItem>
+                <MenuItem value="LANDSLIDE">⛰️ Landslide</MenuItem>
+                <MenuItem value="MEDICAL">🏥 Medical</MenuItem>
+                <MenuItem value="ACCIDENT">🚗 Accident</MenuItem>
+                <MenuItem value="OTHER">⚠️ Other</MenuItem>
+              </Select>
+            </FormControl>
+          </Grid>
+          
+          <Grid item xs={12} md={2}>
+            <FormControl fullWidth size="small">
+              <InputLabel>Priority</InputLabel>
+              <Select
+                value={filters.priority}
+                onChange={(e) => setFilters({ ...filters, priority: e.target.value })}
+                label="Priority"
+                sx={{ 
+                  borderRadius: 2,
+                  backgroundColor: 'white',
+                  boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
+                }}
+              >
+                <MenuItem value="">All Priorities</MenuItem>
+                <MenuItem value="CRITICAL">🔴 Critical</MenuItem>
+                <MenuItem value="HIGH">🟠 High</MenuItem>
+                <MenuItem value="MEDIUM">🟡 Medium</MenuItem>
+                <MenuItem value="LOW">🟢 Low</MenuItem>
+              </Select>
+            </FormControl>
+          </Grid>
+          
+          <Grid item xs={12} md={2}>
+            <FormControl fullWidth size="small">
+              <InputLabel>Status</InputLabel>
+              <Select
+                value={filters.status}
+                onChange={(e) => setFilters({ ...filters, status: e.target.value })}
+                label="Status"
+                sx={{ 
+                  borderRadius: 2,
+                  backgroundColor: 'white',
+                  boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
+                }}
+              >
+                <MenuItem value="">All Status</MenuItem>
                 <MenuItem value="PENDING">⏳ Pending</MenuItem>
                 <MenuItem value="VERIFIED">✅ Verified</MenuItem>
                 <MenuItem value="IN_PROGRESS">🔄 In Progress</MenuItem>
                 <MenuItem value="RESOLVED">✅ Resolved</MenuItem>
-                <MenuItem value="FALSE_ALARM">❌ False Alarm</MenuItem>
+                <MenuItem value="REJECTED">❌ Rejected</MenuItem>
               </Select>
             </FormControl>
           </Grid>
+          
           <Grid item xs={12} md={3}>
             <Button
-              variant="contained"
-              startIcon={<Add />}
+              variant="outlined"
+              size="small"
+              startIcon={<FilterList />}
+              onClick={() => setFilters({ disaster_type: '', priority: '', status: '', search: '' })}
               fullWidth
-              onClick={handleNewReport}
               sx={{ 
-                height: '56px',
-                background: '#ef4444',
                 borderRadius: 2,
-                fontWeight: 'bold',
+                py: 1,
+                fontSize: '0.9rem',
+                borderWidth: 1.5,
                 '&:hover': {
-                  background: '#dc2626',
-                  transform: 'translateY(-2px)',
-                  boxShadow: '0 4px 12px rgba(239, 68, 68, 0.3)'
+                  borderWidth: 1.5,
+                  backgroundColor: 'rgba(25, 118, 210, 0.04)'
                 }
               }}
             >
-              New Emergency Report
+              Clear Filters
             </Button>
-          </Grid>
-          <Grid item xs={12} md={2}>
-            <Tooltip title="Advanced Filters">
-              <IconButton
-                onClick={() => {
-                  // Advanced filter functionality
-                  setSnackbar({
-                    open: true,
-                    message: 'Advanced filters coming soon!',
-                    severity: 'info'
-                  });
-                }}
-                sx={{
-                  height: '56px',
-                  width: '56px',
-                  background: '#7c3aed',
-                  color: 'white',
-                  borderRadius: 2,
-                  '&:hover': {
-                    background: '#6d28d9',
-                    transform: 'translateY(-2px)',
-                    boxShadow: '0 4px 12px rgba(124, 58, 237, 0.3)'
-                  }
-                }}
-              >
-                <FilterList />
-              </IconButton>
-            </Tooltip>
           </Grid>
         </Grid>
       </Paper>
 
-      {/* Enhanced Reports Cards */}
-      <Grid container spacing={3}>
-        {filteredReports.length === 0 ? (
-          <Grid item xs={12}>
+      {/* Loading */}
+      {loading && (
+        <Box sx={{ mb: 4 }}>
+          <LinearProgress 
+                sx={{
+              borderRadius: 4, 
+              height: 8,
+              background: 'linear-gradient(90deg, #FF6B6B, #4ECDC4)',
+              '& .MuiLinearProgress-bar': {
+                background: 'linear-gradient(90deg, #4ECDC4, #FF6B6B)'
+              }
+            }} 
+          />
+          <Typography variant="body1" color="text.secondary" sx={{ mt: 2, textAlign: 'center' }}>
+            Loading emergency reports...
+          </Typography>
+        </Box>
+      )}
+
+      {/* Enhanced Reports Grid */}
+      {!loading && filteredReports.length === 0 ? (
             <Paper sx={{ 
               p: 6, 
               textAlign: 'center',
-              background: 'rgba(255, 255, 255, 0.95)',
-              backdropFilter: 'blur(10px)',
               borderRadius: 3,
-              boxShadow: '0 8px 32px rgba(0, 0, 0, 0.1)'
+          boxShadow: '0 8px 32px rgba(0,0,0,0.1)',
+          background: 'linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%)',
+          border: '2px dashed #dee2e6',
+                  position: 'relative',
+          overflow: 'hidden',
+          '&::before': {
+                    content: '""',
+                    position: 'absolute',
+            top: -50,
+            left: -50,
+            right: -50,
+            bottom: -50,
+            background: 'radial-gradient(circle, rgba(102, 126, 234, 0.05) 0%, transparent 70%)',
+            pointerEvents: 'none'
+          }
+        }}>
+          <Box sx={{ position: 'relative', zIndex: 1 }}>
+                            <Box sx={{
+              width: 100,
+              height: 100,
+                              borderRadius: '50%',
+              background: 'linear-gradient(45deg, #667eea, #764ba2)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              margin: '0 auto 2rem',
+              boxShadow: '0 8px 32px rgba(102, 126, 234, 0.3)',
+              animation: 'pulse 2s infinite'
             }}>
-              <Emergency sx={{ fontSize: 80, color: '#ccc', mb: 2 }} />
-              <Typography variant="h5" color="textSecondary" gutterBottom>
+              <Emergency sx={{ fontSize: 50, color: 'white' }} />
+                        </Box>
+            
+            <Typography variant="h4" sx={{ 
+                            fontWeight: 'bold', 
+              background: 'linear-gradient(45deg, #667eea, #764ba2)',
+              backgroundClip: 'text',
+                            WebkitBackgroundClip: 'text',
+              WebkitTextFillColor: 'transparent',
+              mb: 2
+                          }}>
                 No Emergency Reports Found
-              </Typography>
-              <Typography variant="body1" color="textSecondary">
-                No reports match your current search criteria
-              </Typography>
+                          </Typography>
+            
+            <Typography variant="h6" sx={{ 
+              color: 'text.secondary',
+              mb: 4,
+              maxWidth: 600,
+              margin: '0 auto 2rem',
+              lineHeight: 1.6
+            }}>
+              {reports.length === 0 
+                ? "No emergency reports have been created yet. Be the first to report an emergency and help keep your community safe!"
+                : "No reports match your current filters. Try adjusting your search criteria to find what you're looking for."
+              }
+                          </Typography>
+                        </Box>
+          <Button
+            variant="contained"
+            startIcon={<Add />}
+            onClick={() => {
+              setSelectedReport(null);
+              setNewReportForm({
+                disaster_type: '',
+                priority: 'MEDIUM',
+                description: '',
+                latitude: '',
+                longitude: '',
+                address: '',
+                phone_number: '',
+                photos: []
+              });
+              setCreateDialogOpen(true);
+            }}
+                          sx={{ 
+              borderRadius: 4,
+              px: 6,
+              py: 2,
+              fontSize: '1.2rem',
+              background: 'linear-gradient(45deg, #FF6B6B, #FF8E53)',
+              boxShadow: '0 8px 32px rgba(255, 107, 107, 0.3)',
+              '&:hover': {
+                background: 'linear-gradient(45deg, #FF5252, #FF7043)',
+                boxShadow: '0 12px 40px rgba(255, 107, 107, 0.4)',
+                transform: 'translateY(-2px)',
+              },
+              transition: 'all 0.3s ease'
+            }}
+          >
+            Create First Report
+          </Button>
             </Paper>
-          </Grid>
         ) : (
-          filteredReports.map((report, index) => (
+        <Grid container spacing={4}>
+          {filteredReports.map((report, index) => (
             <Grid item xs={12} md={6} lg={4} key={report.id}>
               <Zoom in={true} timeout={300 + index * 100}>
                 <Card sx={{
-                  background: 'white',
+                  height: '100%', 
+                  display: 'flex', 
+                  flexDirection: 'column',
                   borderRadius: 2,
-                  boxShadow: '0 1px 3px rgba(0, 0, 0, 0.1)',
-                  border: '1px solid #e2e8f0',
-                  transition: 'all 0.2s ease',
+                  boxShadow: '0 4px 16px rgba(0,0,0,0.1)',
+                  transition: 'all 0.4s cubic-bezier(0.4, 0, 0.2, 1)',
+                  background: 'linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%)',
+                  border: '1px solid rgba(255,255,255,0.2)',
                   position: 'relative',
-                  overflow: 'visible',
                   '&:hover': { 
-                    transform: 'translateY(-4px)',
-                    boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)',
-                    border: '1px solid #2563eb',
-                  },
-                  '&::before': report.priority === 'CRITICAL' ? {
-                    content: '""',
-                    position: 'absolute',
-                    top: 0,
-                    left: 0,
-                    right: 0,
-                    height: 4,
-                    background: '#ef4444',
-                    borderRadius: '8px 8px 0 0'
-                  } : report.priority === 'HIGH' ? {
-                    content: '""',
-                    position: 'absolute',
-                    top: 0,
-                    left: 0,
-                    right: 0,
-                    height: 4,
-                    background: '#f59e0b',
-                    borderRadius: '8px 8px 0 0'
-                  } : {}
+                    transform: 'translateY(-4px) scale(1.01)',
+                    boxShadow: '0 12px 32px rgba(0,0,0,0.15)',
+                    border: '1px solid rgba(255,107,107,0.3)',
+                  }
                 }}>
-                  <CardContent sx={{ p: 3 }}>
                     {/* Enhanced Header */}
-                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 3 }}>
-                      <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                        <Box sx={{ position: 'relative' }}>
-                          <Avatar sx={{ 
-                            background: report.priority === 'CRITICAL' 
-                              ? 'linear-gradient(45deg, #ff1744, #d32f2f)'
-                              : report.priority === 'HIGH'
-                              ? 'linear-gradient(45deg, #ff9800, #ffb74d)'
-                              : 'linear-gradient(45deg, #667eea, #764ba2)',
-                            mr: 2,
-                            width: 56,
-                            height: 56,
-                            boxShadow: '0 8px 24px rgba(0, 0, 0, 0.15)',
-                            border: '3px solid rgba(255, 255, 255, 0.8)'
-                          }}>
-                            <Emergency sx={{ fontSize: 28 }} />
-                          </Avatar>
-                          {report.priority === 'CRITICAL' && (
-                            <Box sx={{
-                              position: 'absolute',
-                              top: -4,
-                              right: -4,
-                              width: 16,
-                              height: 16,
-                              borderRadius: '50%',
-                              background: '#ff1744',
-                              border: '2px solid white',
-                              animation: 'pulse 1.5s infinite'
-                            }} />
-                          )}
+                  <CardHeader
+                        sx={{
+                      pb: 1,
+                      background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                      color: 'white',
+                      borderRadius: '8px 8px 0 0'
+                    }}
+                    title={
+                      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+                          <Warning sx={{ color: '#FFD700', fontSize: 24 }} />
+                          <LocationOn sx={{ color: '#87CEEB', fontSize: 24 }} />
                         </Box>
-                        <Box>
+                        <Box sx={{ textAlign: 'right' }}>
+                          <Typography variant="body2" sx={{ fontWeight: 'bold', mb: 0.5 }}>
+                            {new Date(report.created_at).toLocaleDateString('en-GB')}
+                          </Typography>
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5 }}>
+                      <Chip
+                              label={`${report.priority.toLowerCase()} priority`}
+                        size="small"
+                        sx={{
+                          fontWeight: 'bold',
+                                backgroundColor: getPriorityColor(report.priority),
+                                color: 'white',
+                                fontSize: '0.7rem',
+                                height: 20,
+                                mr: 1
+                              }}
+                            />
+                    <Box sx={{ 
+                              width: 10, 
+                              height: 10, 
+                              borderRadius: '50%',
+                              bgcolor: getStatusColor(report.status),
+                              boxShadow: '0 0 10px rgba(255,255,255,0.5)'
+                            }} />
+                            <Typography variant="body2" sx={{ fontWeight: 'bold' }}>
+                              {report.status}
+                      </Typography>
+                    </Box>
+                        </Box>
+                      </Box>
+                    }
+                  />
+
+                  <CardContent sx={{ flexGrow: 1, p: 3 }}>
+                    {/* Enhanced Incident Type */}
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 2 }}>
+                      {getDisasterIcon(report.disaster_type)}
                           <Typography variant="h5" sx={{ 
                             fontWeight: 'bold', 
-                            color: '#2c3e50',
-                            mb: 0.5,
-                            background: 'linear-gradient(45deg, #2c3e50, #34495e)',
+                        background: 'linear-gradient(45deg, #667eea, #764ba2)',
+                        backgroundClip: 'text',
                             WebkitBackgroundClip: 'text',
                             WebkitTextFillColor: 'transparent'
                           }}>
                             {report.disaster_type}
-                          </Typography>
-                          <Typography variant="caption" sx={{ 
-                            color: '#7f8c8d',
-                            fontWeight: 'bold',
-                            textTransform: 'uppercase',
-                            letterSpacing: 1
-                          }}>
-                            Report #{report.id}
-                          </Typography>
-                        </Box>
-                      </Box>
-                      
-                      <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 1 }}>
-                        {report.priority === 'CRITICAL' && (
-                          <Chip
-                            label="🚨 CRITICAL"
-                            size="small"
-                            sx={{
-                              background: 'linear-gradient(45deg, #ff1744, #d32f2f)',
-                              color: 'white',
-                              fontWeight: 'bold',
-                              animation: 'pulse 2s infinite',
-                              boxShadow: '0 4px 12px rgba(255, 23, 68, 0.4)'
-                            }}
-                          />
-                        )}
-                        <Chip
-                          label={`${Math.floor((Date.now() - new Date(report.created_at)) / (1000 * 60))}m ago`}
-                          size="small"
-                          variant="outlined"
-                          sx={{ 
-                            fontSize: '0.7rem',
-                            borderColor: '#bdc3c7',
-                            color: '#7f8c8d'
-                          }}
-                        />
-                      </Box>
-                    </Box>
-
-                    {/* Enhanced Status and Priority */}
-                    <Box sx={{ display: 'flex', gap: 1.5, mb: 3 }}>
-                      <Chip
-                        label={report.status}
-                        size="small"
-                        color={getStatusColor(report.status)}
-                        icon={
-                          report.status === 'RESOLVED' ? <CheckCircle sx={{ fontSize: 16 }} /> :
-                          report.status === 'IN_PROGRESS' ? <Speed sx={{ fontSize: 16 }} /> :
-                          <Schedule sx={{ fontSize: 16 }} />
-                        }
-                        sx={{
-                          fontWeight: 'bold',
-                          boxShadow: '0 2px 8px rgba(0, 0, 0, 0.1)',
-                          '& .MuiChip-label': {
-                            fontSize: '0.75rem',
-                            fontWeight: 'bold'
-                          }
-                        }}
-                      />
-                      <Chip
-                        label={report.priority}
-                        size="small"
-                        color={getPriorityColor(report.priority)}
-                        icon={<Warning sx={{ fontSize: 16 }} />}
-                        sx={{
-                          fontWeight: 'bold',
-                          boxShadow: '0 2px 8px rgba(0, 0, 0, 0.1)',
-                          '& .MuiChip-label': {
-                            fontSize: '0.75rem',
-                            fontWeight: 'bold'
-                          }
-                        }}
-                      />
-                    </Box>
-
-                    {/* Enhanced Location */}
-                    <Box sx={{ 
-                      display: 'flex', 
-                      alignItems: 'flex-start', 
-                      mb: 2.5,
-                      p: 2,
-                      background: 'linear-gradient(135deg, rgba(102, 126, 234, 0.05), rgba(118, 75, 162, 0.05))',
-                      borderRadius: 2,
-                      border: '1px solid rgba(102, 126, 234, 0.1)'
-                    }}>
-                      <LocationOn sx={{ 
-                        color: '#667eea', 
-                        mr: 1.5, 
-                        mt: 0.5, 
-                        fontSize: 22,
-                        filter: 'drop-shadow(0 2px 4px rgba(102, 126, 234, 0.3))'
-                      }} />
-                      <Typography variant="body2" sx={{ 
-                        color: '#2c3e50', 
-                        fontWeight: 600,
-                        lineHeight: 1.4
-                      }}>
-                        {report.address}
                       </Typography>
                     </Box>
 
-                    {/* Enhanced Description */}
-                    <Box sx={{
-                      p: 2,
-                      background: 'linear-gradient(135deg, rgba(255, 255, 255, 0.8), rgba(248, 249, 250, 0.8))',
-                      borderRadius: 2,
-                      border: '1px solid rgba(0, 0, 0, 0.05)',
-                      mb: 2.5
-                    }}>
-                      <Typography variant="body2" sx={{ 
-                        color: '#34495e', 
-                        fontStyle: 'italic',
-                        display: '-webkit-box',
-                        WebkitLineClamp: 3,
-                        WebkitBoxOrient: 'vertical',
-                        overflow: 'hidden',
-                        lineHeight: 1.6,
-                        position: 'relative',
-                        '&::before': {
-                          content: '"💬"',
-                          position: 'absolute',
-                          left: -8,
-                          top: -2,
-                          fontSize: '1.2rem'
-                        },
-                        pl: 2
-                      }}>
-                        {report.description}
-                      </Typography>
-                    </Box>
-
-                    {/* Image Display Section */}
-                    {report.media && report.media.length > 0 && (
+                    {/* Enhanced Main Image */}
+                    {report.media && report.media.length > 0 ? (
                       <Box sx={{ 
-                        mb: 2.5,
-                        p: 2,
-                        background: 'linear-gradient(135deg, rgba(59, 130, 246, 0.05), rgba(37, 99, 235, 0.05))',
-                        borderRadius: 2,
-                        border: '1px solid rgba(59, 130, 246, 0.1)'
-                      }}>
-                        <Box sx={{ display: 'flex', alignItems: 'center', mb: 1.5 }}>
-                          <ImageIcon sx={{ 
-                            color: '#3b82f6', 
-                            mr: 1, 
-                            fontSize: 18 
-                          }} />
-                          <Typography variant="subtitle2" sx={{ 
-                            color: '#1e40af',
-                            fontWeight: 600,
-                            fontSize: '0.875rem'
-                          }}>
-                            📸 Attached Images ({report.media.length})
-                          </Typography>
-                        </Box>
-                        <Box sx={{ 
-                          display: 'flex', 
-                          flexWrap: 'wrap', 
-                          gap: 1,
-                          maxHeight: '120px',
-                          overflowY: 'auto'
-                        }}>
-                          {report.media.slice(0, 4).map((media, index) => (
-                            <Box
-                              key={media.id || index}
-                              sx={{
                                 position: 'relative',
-                                width: 60,
-                                height: 60,
-                                borderRadius: 1,
+                        mb: 3, 
+                        borderRadius: 3, 
                                 overflow: 'hidden',
-                                border: '2px solid #e5e7eb',
                                 cursor: 'pointer',
-                                transition: 'all 0.2s ease',
+                        '&:hover .image-overlay': {
+                          opacity: 1
+                        }
+                      }}
+                      onClick={() => openPhotoModal(0)}
+                      >
+                        <CardMedia
+                          component="img"
+                          height="160"
+                          image={report.media[0].file_url || report.media[0].image_url}
+                          alt={report.disaster_type}
+                          sx={{ 
+                            objectFit: 'cover',
+                            transition: 'transform 0.3s ease',
                                 '&:hover': {
-                                  transform: 'scale(1.05)',
-                                  borderColor: '#3b82f6',
-                                  boxShadow: '0 4px 12px rgba(59, 130, 246, 0.3)'
-                                }
-                              }}
+                              transform: 'scale(1.05)'
+                          }
+                        }}
+                      />
+                        <Box className="image-overlay" sx={{
+                          position: 'absolute',
+                          top: 0,
+                          left: 0,
+                          right: 0,
+                          bottom: 0,
+                          background: 'linear-gradient(transparent, rgba(0,0,0,0.8))',
+                          color: 'white',
+                          display: 'flex',
+                          flexDirection: 'column',
+                          justifyContent: 'flex-end',
+                          p: 2,
+                          opacity: 0,
+                          transition: 'opacity 0.3s ease'
+                        }}>
+                          <Box 
+                            sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer' }}
                               onClick={() => {
-                                // Open image in new tab or show in modal
-                                let imageUrl = media.file;
-                                if (!media.file.startsWith('http') && !media.file.startsWith('blob:')) {
-                                  imageUrl = `http://localhost:8000${media.file}`;
-                                }
-                                window.open(imageUrl, '_blank');
-                              }}
-                            >
-                              <img
-                                src={media.file.startsWith('http') || media.file.startsWith('blob:')
-                                  ? media.file 
-                                  : `http://localhost:8000${media.file}`}
-                                alt={`Emergency image ${index + 1}`}
-                                style={{
-                                  width: '100%',
-                                  height: '100%',
-                                  objectFit: 'cover'
-                                }}
-                                onLoad={() => console.log('✅ Image loaded successfully:', media.file)}
-                                onError={(e) => {
-                                  console.log('❌ Image failed to load:', media.file);
-                                  e.target.style.display = 'none';
-                                  e.target.nextSibling.style.display = 'flex';
-                                }}
-                              />
-                              <Box sx={{
-                                display: 'none',
-                                width: '100%',
-                                height: '100%',
-                                background: '#f3f4f6',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                color: '#6b7280',
-                                fontSize: '12px'
-                              }}>
-                                📷
+                              setSelectedPhotos(report.media);
+                              setPhotoGalleryOpen(true);
+                            }}
+                          >
+                            <Typography variant="body2" sx={{ fontWeight: 'bold' }}>
+                              View All Photos
+                            </Typography>
+                            {report.media.length > 1 && (
+                      <Chip
+                                label={`+${report.media.length - 1}`} 
+                        size="small"
+                        sx={{
+                                  bgcolor: 'rgba(255,255,255,0.2)', 
+                                  color: 'white',
+                                  fontSize: '0.7rem',
+                            fontWeight: 'bold'
+                        }}
+                      />
+                            )}
                               </Box>
                             </Box>
-                          ))}
-                          {report.media.length > 4 && (
+                      </Box>
+                    ) : (
                             <Box sx={{
-                              width: 60,
-                              height: 60,
-                              borderRadius: 1,
-                              background: 'linear-gradient(135deg, #f3f4f6, #e5e7eb)',
-                              border: '2px solid #d1d5db',
+                        height: 160, 
+                        background: 'linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%)', 
                               display: 'flex',
+                        flexDirection: 'column',
                               alignItems: 'center',
                               justifyContent: 'center',
-                              color: '#6b7280',
-                              fontSize: '12px',
-                              fontWeight: 'bold',
-                              cursor: 'pointer',
-                              '&:hover': {
-                                background: 'linear-gradient(135deg, #e5e7eb, #d1d5db)'
-                              }
-                            }}>
-                              +{report.media.length - 4}
-                            </Box>
-                          )}
-                        </Box>
+                      borderRadius: 2,
+                        mb: 2,
+                        border: '2px dashed #ccc'
+                      }}>
+                        <PhotoCamera sx={{ fontSize: 48, color: 'text.secondary', mb: 1 }} />
+                        <Typography variant="body2" color="text.secondary">
+                          No photos available
+                      </Typography>
                       </Box>
                     )}
 
-                    {/* Enhanced Reporter Info */}
-                    <Box sx={{ 
-                      display: 'flex', 
-                      alignItems: 'center', 
-                      mb: 2.5,
-                      p: 2,
-                      background: 'linear-gradient(135deg, rgba(76, 175, 80, 0.05), rgba(102, 187, 106, 0.05))',
-                      borderRadius: 2,
-                      border: '1px solid rgba(76, 175, 80, 0.1)'
-                    }}>
-                      <Box sx={{ 
-                        display: 'flex', 
-                        alignItems: 'center', 
-                        justifyContent: 'center',
-                        width: 40,
-                        height: 40,
-                        borderRadius: '50%',
-                        background: 'linear-gradient(45deg, #4caf50, #66bb6a)',
-                        mr: 2,
-                        boxShadow: '0 4px 12px rgba(76, 175, 80, 0.3)'
-                      }}>
-                        <Phone sx={{ color: 'white', fontSize: 20 }} />
-                      </Box>
-                      <Box sx={{ flexGrow: 1 }}>
-                        <Typography variant="body2" sx={{ 
-                          color: '#2c3e50', 
-                          fontWeight: 'bold',
-                          fontSize: '0.9rem'
-                        }}>
-                          {report.user.first_name} {report.user.last_name}
-                        </Typography>
-                        <Typography variant="caption" sx={{ 
-                          color: '#7f8c8d', 
-                          display: 'block',
-                          fontWeight: 500
-                        }}>
-                          @{report.user.username}
-                        </Typography>
-                      </Box>
-                      <Typography variant="caption" sx={{ 
-                        color: '#27ae60',
-                        fontWeight: 'bold',
-                        fontSize: '0.8rem'
-                      }}>
-                        {report.phone_number}
-                      </Typography>
-                    </Box>
-
-                    {/* Enhanced AI Confidence */}
-                    <Box sx={{ 
-                      mb: 2.5,
-                      p: 2,
-                      background: 'linear-gradient(135deg, rgba(33, 150, 243, 0.05), rgba(30, 136, 229, 0.05))',
-                      borderRadius: 2,
-                      border: '1px solid rgba(33, 150, 243, 0.1)'
-                    }}>
-                      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1.5 }}>
-                        <Typography variant="caption" sx={{ 
-                          color: '#2c3e50',
-                          fontWeight: 'bold',
-                          fontSize: '0.8rem',
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: 0.5
-                        }}>
-                          🤖 AI Analysis
-                        </Typography>
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                          <Typography variant="caption" sx={{ 
-                            fontWeight: 'bold',
-                            fontSize: '0.9rem',
-                            color: report.ai_confidence > 0.9 ? '#27ae60' : 
-                                   report.ai_confidence > 0.7 ? '#f39c12' : '#e74c3c'
-                          }}>
-                            {(report.ai_confidence * 100).toFixed(0)}%
-                          </Typography>
-                          {report.ai_fraud_score > 0.3 && (
-                            <Typography variant="caption" sx={{ 
-                              fontWeight: 'bold',
-                              fontSize: '0.7rem',
-                              color: report.ai_fraud_score > 0.6 ? '#e74c3c' : '#f39c12',
-                              bgcolor: report.ai_fraud_score > 0.6 ? '#fdf2f2' : '#fef9e7',
-                              px: 0.8,
-                              py: 0.3,
-                              borderRadius: 1,
-                              border: `1px solid ${report.ai_fraud_score > 0.6 ? '#e74c3c' : '#f39c12'}`
-                            }}>
-                              FRAUD: {(report.ai_fraud_score * 100).toFixed(0)}%
-                            </Typography>
-                          )}
-                        </Box>
-                      </Box>
-                      <Box sx={{ 
-                        height: 8, 
-                        background: 'rgba(0, 0, 0, 0.1)', 
-                        borderRadius: 4,
+                    {/* Enhanced Description */}
+                    <Typography 
+                      variant="body1" 
+                      color="text.secondary" 
+                      sx={{ 
+                        mb: 2, 
+                        minHeight: 40,
+                        display: '-webkit-box',
+                        WebkitLineClamp: 2,
+                        WebkitBoxOrient: 'vertical',
                         overflow: 'hidden',
-                        boxShadow: 'inset 0 2px 4px rgba(0, 0, 0, 0.1)'
-                      }}>
-                        <Box sx={{
-                          height: '100%',
-                          width: `${report.ai_confidence * 100}%`,
-                          background: report.ai_fraud_score > 0.6 
-                            ? 'linear-gradient(90deg, #e74c3c, #c0392b)' // Red for high fraud
-                            : report.ai_confidence > 0.9 
-                            ? 'linear-gradient(90deg, #4caf50, #66bb6a)' // Green for high confidence
-                            : report.ai_confidence > 0.7
-                            ? 'linear-gradient(90deg, #ff9800, #ffb74d)' // Orange for medium confidence
-                            : 'linear-gradient(90deg, #f44336, #ef5350)', // Red for low confidence
-                          borderRadius: 4,
-                          transition: 'width 0.6s cubic-bezier(0.4, 0, 0.2, 1)',
-                          boxShadow: '0 2px 8px rgba(0, 0, 0, 0.2)',
-                          position: 'relative',
-                          '&::after': {
-                            content: '""',
-                            position: 'absolute',
-                            top: 0,
-                            left: 0,
-                            right: 0,
-                            bottom: 0,
-                            background: 'linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.3), transparent)',
-                            animation: 'shimmer 2s infinite'
-                          }
-                        }} />
-                      </Box>
-                    </Box>
-
-                    {/* Enhanced Timestamp */}
-                    <Box sx={{
-                      p: 1.5,
-                      background: 'linear-gradient(135deg, rgba(149, 165, 166, 0.05), rgba(127, 140, 141, 0.05))',
-                      borderRadius: 2,
-                      border: '1px solid rgba(149, 165, 166, 0.1)',
-                      mb: 2.5
-                    }}>
-                      <Typography variant="caption" sx={{ 
-                        color: '#7f8c8d', 
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: 0.5,
-                        fontWeight: 500
-                      }}>
-                        📅 {new Date(report.created_at).toLocaleString()}
+                        lineHeight: 1.4,
+                        fontSize: '0.9rem'
+                      }}
+                    >
+                        {report.description}
                       </Typography>
-                    </Box>
 
-                    {/* Enhanced Action Buttons */}
+                    {/* Compact Community Poll with Voting Buttons */}
                     <Box sx={{ 
-                      display: 'flex', 
-                      justifyContent: 'space-between', 
-                      alignItems: 'center',
-                      p: 2,
-                      background: 'linear-gradient(135deg, rgba(255, 255, 255, 0.8), rgba(248, 249, 250, 0.8))',
-                      borderRadius: 2,
-                      border: '1px solid rgba(0, 0, 0, 0.05)'
+                      mb: 2, 
+                      p: 1.5,
+                      background: 'linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%)', 
+                      borderRadius: 1.5,
+                      border: '1px solid rgba(0,0,0,0.05)'
                     }}>
-                      <Box sx={{ display: 'flex', gap: 1.5 }}>
-                        <Tooltip title="View Details" arrow>
-                          <IconButton 
-                            size="small" 
-                            onClick={() => handleViewReport(report)}
-                            sx={{ 
-                              background: 'linear-gradient(45deg, #2196f3, #21cbf3)',
-                              color: 'white',
-                              width: 36,
-                              height: 36,
-                              boxShadow: '0 4px 12px rgba(33, 150, 243, 0.3)',
-                              '&:hover': { 
-                                background: 'linear-gradient(45deg, #21cbf3, #2196f3)',
-                                transform: 'scale(1.15) translateY(-2px)',
-                                boxShadow: '0 6px 20px rgba(33, 150, 243, 0.4)'
-                              },
-                              transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)'
-                            }}
-                          >
-                            <Visibility fontSize="small" />
-                          </IconButton>
-                        </Tooltip>
-                        
-                        {/* Edit button - only visible to report creator or admin */}
-                        {canEditReport(report) && (
-                          <Tooltip title="Edit Report" arrow>
-                            <IconButton 
-                              size="small"
-                              onClick={() => handleEditReport(report)}
-                              sx={{ 
-                                background: 'linear-gradient(45deg, #ff9800, #ffb74d)',
-                                color: 'white',
-                                width: 36,
-                                height: 36,
-                                boxShadow: '0 4px 12px rgba(255, 152, 0, 0.3)',
-                                '&:hover': { 
-                                  background: 'linear-gradient(45deg, #ffb74d, #ff9800)',
-                                  transform: 'scale(1.15) translateY(-2px)',
-                                  boxShadow: '0 6px 20px rgba(255, 152, 0, 0.4)'
-                                },
-                                transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)'
-                              }}
-                            >
-                              <Edit fontSize="small" />
-                            </IconButton>
-                          </Tooltip>
-                        )}
-                        
-                        {/* Add Images button - visible to all users who can't edit */}
-                        {canUploadImages(report) && !canEditReport(report) && (
-                          <Tooltip title="Add Images to Report" arrow>
-                            <IconButton 
-                              size="small"
-                              onClick={() => handleAddImages(report)}
-                              sx={{ 
-                                background: 'linear-gradient(45deg, #4caf50, #66bb6a)',
-                                color: 'white',
-                                width: 36,
-                                height: 36,
-                                boxShadow: '0 4px 12px rgba(76, 175, 80, 0.3)',
-                                '&:hover': { 
-                                  background: 'linear-gradient(45deg, #66bb6a, #4caf50)',
-                                  transform: 'scale(1.15) translateY(-2px)',
-                                  boxShadow: '0 6px 20px rgba(76, 175, 80, 0.4)'
-                                },
-                                transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)'
-                              }}
-                            >
-                              <CloudUpload fontSize="small" />
-                            </IconButton>
-                          </Tooltip>
-                        )}
-
-                        {canDeleteReport(report) && (
-                          <Tooltip title={isAdmin ? "Delete Report (Admin)" : "Delete My Report"} arrow>
-                            <IconButton 
-                              size="small"
-                              onClick={() => handleDeleteReport(report)}
-                              sx={{ 
-                                background: 'linear-gradient(45deg, #f44336, #ef5350)',
-                                color: 'white',
-                                width: 36,
-                                height: 36,
-                                boxShadow: '0 4px 12px rgba(244, 67, 54, 0.3)',
-                                '&:hover': { 
-                                  background: 'linear-gradient(45deg, #ef5350, #f44336)',
-                                  transform: 'scale(1.15) translateY(-2px)',
-                                  boxShadow: '0 6px 20px rgba(244, 67, 54, 0.4)'
-                                },
-                                transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)'
-                              }}
-                            >
-                              <Delete fontSize="small" />
-                            </IconButton>
-                          </Tooltip>
-                        )}
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1.5 }}>
+                        <People sx={{ color: '#2196F3', fontSize: 16 }} />
+                        <Typography variant="caption" sx={{ fontWeight: 'bold', color: '#2196F3' }}>
+                          Community Poll
+                          </Typography>
                       </Box>
                       
-                      <Chip
-                        label={`${Math.floor((Date.now() - new Date(report.created_at)) / (1000 * 60))}m ago`}
-                        size="small"
-                        variant="outlined"
-                        sx={{ 
-                          fontSize: '0.7rem',
-                          fontWeight: 'bold',
-                          borderColor: '#bdc3c7',
-                          color: '#7f8c8d',
-                          background: 'rgba(255, 255, 255, 0.8)'
-                        }}
-                      />
+                      <Stack direction="row" spacing={1.5} sx={{ mb: 1.5 }}>
+                        <Box sx={{ textAlign: 'center', flex: 1 }}>
+                          <Typography variant="body2" sx={{ fontWeight: 'bold', color: '#FF9800' }}>
+                            {report.vote_counts?.still_there || 0}
+                        </Typography>
+                          <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.65rem' }}>
+                            Still There
+                        </Typography>
+                      </Box>
+                        <Box sx={{ textAlign: 'center', flex: 1 }}>
+                          <Typography variant="body2" sx={{ fontWeight: 'bold', color: '#4CAF50' }}>
+                            {report.vote_counts?.resolved || 0}
+                        </Typography>
+                          <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.65rem' }}>
+                            Resolved
+                      </Typography>
                     </Box>
+                        <Box sx={{ textAlign: 'center', flex: 1 }}>
+                          <Typography variant="body2" sx={{ fontWeight: 'bold', color: '#F44336' }}>
+                            {report.vote_counts?.fake_report || 0}
+                          </Typography>
+                          <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.65rem' }}>
+                            Fake Report
+                      </Typography>
+                    </Box>
+                      </Stack>
+                      
+                      <Box sx={{ textAlign: 'center', mb: 1.5 }}>
+                        <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.65rem' }}>
+                          Total: {report.vote_counts?.total || 0} votes • 
+                          {report.vote_counts?.total > 0 ? 
+                            ` Resolved: ${report.vote_percentages?.resolved || 0}%` : 
+                            ' No votes yet'
+                          }
+                        </Typography>
+                      </Box>
+
+                      {/* Compact Voting Buttons */}
+                      <Box sx={{ width: '100%', mt: 1.5 }}>
+                        <Typography variant="caption" color="text.secondary" sx={{ mb: 1, display: 'block', textAlign: 'center', fontSize: '0.65rem' }}>
+                          Cast your vote:
+                          </Typography>
+                        <Stack direction="row" spacing={0.8} sx={{ width: '100%' }}>
+                          <Button
+                            size="small" 
+                            variant={report.user_vote === 'STILL_THERE' ? 'contained' : 'outlined'}
+                            color="warning"
+                            onClick={() => handleVote(report.id, 'STILL_THERE')}
+                            disabled={voting[report.id]}
+                            startIcon={<Timer sx={{ fontSize: 14 }} />}
+                              sx={{
+                              flex: 1, 
+                              fontSize: '0.65rem',
+                                borderRadius: 1,
+                              py: 0.8,
+                              fontWeight: 'bold',
+                              minWidth: 0,
+                              boxShadow: report.user_vote === 'STILL_THERE' ? '0 2px 8px rgba(255, 152, 0, 0.3)' : 'none',
+                                '&:hover': {
+                                boxShadow: '0 4px 12px rgba(255, 152, 0, 0.3)',
+                                transform: 'translateY(-1px)'
+                              },
+                              transition: 'all 0.2s ease'
+                            }}
+                          >
+                            Still There
+                          </Button>
+                          <Button
+                            size="small"
+                            variant={report.user_vote === 'RESOLVED' ? 'contained' : 'outlined'}
+                            color="success"
+                            onClick={() => handleVote(report.id, 'RESOLVED')}
+                            disabled={voting[report.id]}
+                            startIcon={<CheckCircle sx={{ fontSize: 14 }} />}
+                            sx={{ 
+                              flex: 1, 
+                              fontSize: '0.65rem',
+                              borderRadius: 1,
+                              py: 0.8,
+                              fontWeight: 'bold',
+                              minWidth: 0,
+                              boxShadow: report.user_vote === 'RESOLVED' ? '0 2px 8px rgba(76, 175, 80, 0.3)' : 'none',
+                              '&:hover': { 
+                                boxShadow: '0 4px 12px rgba(76, 175, 80, 0.3)',
+                                transform: 'translateY(-1px)'
+                              },
+                              transition: 'all 0.2s ease'
+                            }}
+                          >
+                            Resolved
+                          </Button>
+                          <Button
+                            size="small"
+                            variant={report.user_vote === 'FAKE_REPORT' ? 'contained' : 'outlined'}
+                            color="error"
+                            onClick={() => handleVote(report.id, 'FAKE_REPORT')}
+                            disabled={voting[report.id]}
+                            startIcon={<Flag sx={{ fontSize: 14 }} />}
+                            sx={{ 
+                              flex: 1, 
+                              fontSize: '0.65rem',
+                              borderRadius: 1,
+                              py: 0.8,
+                              fontWeight: 'bold',
+                              minWidth: 0,
+                              boxShadow: report.user_vote === 'FAKE_REPORT' ? '0 2px 8px rgba(244, 67, 54, 0.3)' : 'none',
+                              '&:hover': {
+                                boxShadow: '0 4px 12px rgba(244, 67, 54, 0.3)',
+                                transform: 'translateY(-1px)'
+                              },
+                              transition: 'all 0.2s ease'
+                            }}
+                          >
+                            Fake Report
+                          </Button>
+                        </Stack>
+                        </Box>
+                      </Box>
+
+                    {/* Enhanced Location with Map Navigation and Comments Opposite */}
+                    <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, flex: 1 }}>
+                        <LocationOn sx={{ fontSize: 20, color: '#2196F3' }} />
+                        <Typography 
+                          variant="body2" 
+                          color="text.secondary" 
+                          sx={{ 
+                            flex: 1,
+                            cursor: 'pointer',
+                            color: '#2196F3',
+                            textDecoration: 'underline',
+                            '&:hover': { 
+                              color: '#1976D2'
+                            }
+                          }}
+                          onClick={() => {
+                            const mapUrl = `https://www.google.com/maps?q=${report.latitude},${report.longitude}`;
+                            window.open(mapUrl, '_blank');
+                          }}
+                        >
+                          {report.address}
+                        </Typography>
+                    </Box>
+
+                      {/* Comments Count Opposite to Location */}
+                    <Box sx={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 1,
+                        background: 'rgba(156, 39, 176, 0.1)',
+                        borderRadius: 2,
+                        px: 1.5,
+                        py: 0.5,
+                        border: '1px solid rgba(156, 39, 176, 0.2)'
+                      }}>
+                        <Comment sx={{ fontSize: 18, color: '#9C27B0' }} />
+                        <Typography variant="body2" sx={{ fontWeight: 'bold', color: '#9C27B0' }}>
+                          {report.updates?.length || 0} comments
+                      </Typography>
+                      </Box>
+                    </Box>
+
                   </CardContent>
+
+                  {/* Enhanced Actions */}
+                  <CardActions sx={{ p: 2, pt: 0, flexDirection: 'column', gap: 1.5 }}>
+                    {/* Action Buttons - Different for owner vs other users */}
+                    {canEditReport(report) ? (
+                      // Owner can see Edit and Delete buttons
+                      <Stack direction="row" spacing={1.5} sx={{ width: '100%' }}>
+                        <Button
+                            size="small" 
+                          startIcon={<Visibility />}
+                            onClick={() => handleViewReport(report)}
+                            sx={{ 
+                            flex: 1, 
+                            borderRadius: 2,
+                            py: 1,
+                            fontWeight: 'bold',
+                            background: 'linear-gradient(45deg, #2196F3, #21CBF3)',
+                              color: 'white',
+                              '&:hover': { 
+                              background: 'linear-gradient(45deg, #1976D2, #00BCD4)',
+                              transform: 'translateY(-1px)',
+                              boxShadow: '0 4px 12px rgba(33, 150, 243, 0.3)'
+                            },
+                            transition: 'all 0.2s ease'
+                          }}
+                        >
+                          View Details
+                        </Button>
+                        
+                        <Button
+                              size="small"
+                          startIcon={<Edit />}
+                              onClick={() => handleEditReport(report)}
+                              sx={{ 
+                            flex: 1, 
+                            borderRadius: 2,
+                            py: 1,
+                            fontWeight: 'bold',
+                            background: 'linear-gradient(45deg, #FF9800, #FFB74D)',
+                                color: 'white',
+                                '&:hover': { 
+                              background: 'linear-gradient(45deg, #F57C00, #FF9800)',
+                              transform: 'translateY(-1px)',
+                              boxShadow: '0 4px 12px rgba(255, 152, 0, 0.3)'
+                            },
+                            transition: 'all 0.2s ease'
+                          }}
+                        >
+                          Edit
+                        </Button>
+
+                        <Button
+                              size="small"
+                          startIcon={<Delete />}
+                          color="error"
+                          onClick={() => handleDeleteReport(report.id)}
+                              sx={{ 
+                            flex: 1,
+                            borderRadius: 2,
+                            py: 1,
+                            fontWeight: 'bold',
+                                '&:hover': { 
+                              transform: 'translateY(-1px)',
+                              boxShadow: '0 4px 12px rgba(244, 67, 54, 0.3)'
+                            },
+                            transition: 'all 0.2s ease'
+                          }}
+                        >
+                          Delete
+                        </Button>
+                      </Stack>
+                    ) : (
+                      // Other users only see View Details button (full width)
+                      <Button
+                              size="small"
+                        startIcon={<Visibility />}
+                        onClick={() => handleViewReport(report)}
+                        fullWidth
+                              sx={{ 
+                          borderRadius: 2,
+                          py: 1.5,
+                          fontWeight: 'bold',
+                          background: 'linear-gradient(45deg, #2196F3, #21CBF3)',
+                                color: 'white',
+                                '&:hover': { 
+                            background: 'linear-gradient(45deg, #1976D2, #00BCD4)',
+                            transform: 'translateY(-1px)',
+                            boxShadow: '0 6px 16px rgba(33, 150, 243, 0.4)'
+                          },
+                          transition: 'all 0.2s ease'
+                        }}
+                      >
+                        View Details
+                      </Button>
+                    )}
+                  </CardActions>
                 </Card>
               </Zoom>
             </Grid>
-          ))
-        )}
+          ))}
       </Grid>
+      )}
 
-      {/* Floating Action Button */}
-      <Fab
-        color="primary"
-        onClick={handleNewReport}
-        sx={{
-          position: 'fixed',
-          bottom: 24,
-          right: 24,
-          background: '#ef4444',
-          '&:hover': {
-            background: '#dc2626',
-            transform: 'scale(1.05)'
-          }
-        }}
-      >
-        <Add />
-      </Fab>
-
-      {/* Compact New Emergency Report Dialog */}
+      {/* Enhanced View Report Dialog with Photos */}
       <Dialog 
-        open={newReportDialog} 
-        onClose={() => setNewReportDialog(false)}
-        maxWidth="sm"
+        open={viewDialogOpen} 
+        onClose={() => setViewDialogOpen(false)}
+        maxWidth="lg"
         fullWidth
         PaperProps={{
           sx: {
-            borderRadius: 2,
-            background: 'white',
-            boxShadow: '0 4px 20px rgba(0, 0, 0, 0.1)'
+            borderRadius: 4,
+            boxShadow: '0 20px 60px rgba(0,0,0,0.2)'
           }
         }}
       >
         <DialogTitle sx={{ 
-          background: '#f8fafc',
-          borderBottom: '1px solid #e2e8f0',
-          p: 2,
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center'
-        }}>
-          <Typography variant="h6" sx={{ fontWeight: 600, color: '#1a202c' }}>
-            🚨 New Emergency Report
-          </Typography>
-          <IconButton 
-            onClick={() => setNewReportDialog(false)} 
-            size="small"
-            sx={{ color: '#6b7280' }}
-          >
-            <Close />
-          </IconButton>
-        </DialogTitle>
-        <DialogContent sx={{ p: 3, pt: 4 }}>
-          <Grid container spacing={2}>
-            <Grid item xs={12} sm={6} sx={{ mt: 1 }}>
-              <FormControl fullWidth size="small">
-                <InputLabel>Disaster Type</InputLabel>
-                <Select
-                  value={newReportForm.disaster_type}
-                  label="Disaster Type"
-                  onChange={(e) => setNewReportForm({...newReportForm, disaster_type: e.target.value})}
-                  renderValue={(value) => {
-                    const options = {
-                      'FLOOD': '🌊 Flood',
-                      'FIRE': '🔥 Fire', 
-                      'EARTHQUAKE': '🌋 Earthquake',
-                      'LANDSLIDE': '🏔️ Landslide',
-                      'CYCLONE': '🌀 Cyclone',
-                      'MEDICAL': '🏥 Medical',
-                      'OTHER': '🚨 Other'
-                    };
-                    return options[value] || value;
-                  }}
-                >
-                  <MenuItem value="FLOOD">🌊 Flood</MenuItem>
-                  <MenuItem value="FIRE">🔥 Fire</MenuItem>
-                  <MenuItem value="EARTHQUAKE">🌋 Earthquake</MenuItem>
-                  <MenuItem value="LANDSLIDE">🏔️ Landslide</MenuItem>
-                  <MenuItem value="CYCLONE">🌀 Cyclone</MenuItem>
-                  <MenuItem value="MEDICAL">🏥 Medical</MenuItem>
-                  <MenuItem value="OTHER">🚨 Other</MenuItem>
-                </Select>
-              </FormControl>
-            </Grid>
-            <Grid item xs={12} sm={6} sx={{ mt: 1 }}>
-              <FormControl fullWidth size="small">
-                <InputLabel>Priority</InputLabel>
-                <Select
-                  value={newReportForm.priority}
-                  label="Priority"
-                  onChange={(e) => setNewReportForm({...newReportForm, priority: e.target.value})}
-                  renderValue={(value) => {
-                    const options = {
-                      'LOW': '🟢 Low',
-                      'MEDIUM': '🟡 Medium',
-                      'HIGH': '🔴 High',
-                      'CRITICAL': '🚨 Critical'
-                    };
-                    return options[value] || value;
-                  }}
-                >
-                  <MenuItem value="LOW">🟢 Low</MenuItem>
-                  <MenuItem value="MEDIUM">🟡 Medium</MenuItem>
-                  <MenuItem value="HIGH">🔴 High</MenuItem>
-                  <MenuItem value="CRITICAL">🚨 Critical</MenuItem>
-                </Select>
-              </FormControl>
-            </Grid>
-            <Grid item xs={12}>
-              <div className="location-autocomplete" style={{ position: 'relative' }}>
-                <TextField
-                  fullWidth
-                  size="small"
-                  label="Location"
-                  value={newReportForm.address}
-                  onChange={(e) => {
-                    setNewReportForm({...newReportForm, address: e.target.value});
-                    handleLocationSearch(e.target.value);
-                  }}
-                  placeholder="Start typing to search locations..."
-                  InputProps={{
-                    startAdornment: <LocationOn sx={{ mr: 1, color: '#6b7280', fontSize: 18 }} />
-                  }}
-                />
-                {showLocationSuggestions && locationSuggestions.length > 0 && (
-                  <div style={{
-                    position: 'absolute',
-                    top: '100%',
-                    left: 0,
-                    right: 0,
-                    backgroundColor: 'white',
-                    border: '1px solid #ddd',
-                    borderRadius: '4px',
-                    boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
-                    zIndex: 1000,
-                    maxHeight: '200px',
-                    overflowY: 'auto'
-                  }}>
-                    {locationSuggestions.map((suggestion, index) => (
-                      <div
-                        key={index}
-                        onClick={() => handleLocationSelect(suggestion)}
-                        style={{
-                          padding: '12px 16px',
-                          cursor: 'pointer',
-                          borderBottom: index < locationSuggestions.length - 1 ? '1px solid #eee' : 'none',
-                          '&:hover': { backgroundColor: '#f5f5f5' }
-                        }}
-                        onMouseEnter={(e) => e.target.style.backgroundColor = '#f5f5f5'}
-                        onMouseLeave={(e) => e.target.style.backgroundColor = 'white'}
-                      >
-                        <div style={{ fontWeight: 'bold', color: '#333', fontSize: '14px' }}>
-                          📍 {suggestion.address}
-                        </div>
-                        <div style={{ color: '#666', fontSize: '12px', marginTop: '2px' }}>
-                          {suggestion.display_name}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-                {locationLoading && (
-                  <div style={{
-                    position: 'absolute',
-                    top: '100%',
-                    left: 0,
-                    right: 0,
-                    backgroundColor: 'white',
-                    border: '1px solid #ddd',
-                    borderRadius: '4px',
-                    padding: '12px 16px',
-                    textAlign: 'center',
-                    color: '#666'
-                  }}>
-                    🔍 Searching locations...
-                  </div>
-                )}
-              </div>
-            </Grid>
-            <Grid item xs={12}>
-              <TextField
-                fullWidth
-                size="small"
-                label="Description"
-                multiline
-                rows={3}
-                value={newReportForm.description}
-                onChange={(e) => setNewReportForm({...newReportForm, description: e.target.value})}
-                placeholder="Describe the emergency situation"
-              />
-              <Box sx={{ display: 'flex', justifyContent: 'flex-end', mt: 1 }}>
-                <Button
-                  size="small"
-                  variant="outlined"
-                  startIcon={<AutoAwesome />}
-                  onClick={fetchDescriptionSuggestions}
-                  disabled={!newReportForm.disaster_type}
-                  sx={{ 
-                    textTransform: 'none',
-                    fontSize: '0.75rem',
-                    px: 1.5,
-                    py: 0.5,
-                    minWidth: 'auto'
-                  }}
-                >
-                  AI Suggestions
-                </Button>
-              </Box>
-              
-              {/* AI Description Suggestions */}
-              {showSuggestions && descriptionSuggestions && (
-                <Box sx={{
-                  bg: 'white',
-                  border: '1px solid #e5e7eb',
-                  borderRadius: 2,
-                  boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
-                  maxHeight: 300,
-                  overflow: 'auto',
-                  mt: 2
-                }}>
-                  <Box sx={{ p: 2, borderBottom: '1px solid #e5e7eb' }}>
-                    <Typography variant="subtitle2" sx={{ fontWeight: 'bold', mb: 1 }}>
-                      🤖 AI Description Suggestions
-                    </Typography>
-                    <Typography variant="body2" color="text.secondary">
-                      Choose a suggestion to auto-fill the description:
-                    </Typography>
-                    {newReportForm.address && (
-                      <Typography variant="caption" color="primary" sx={{ display: 'block', mt: 1 }}>
-                        📍 Location-aware suggestions for: {newReportForm.address}
-                      </Typography>
-                    )}
-                  </Box>
-                  {descriptionSuggestions.suggestions?.map((suggestion, index) => (
-                    <Box
-                      key={index}
-                      sx={{
-                        p: 2,
-                        borderBottom: index < descriptionSuggestions.suggestions.length - 1 ? '1px solid #f3f4f6' : 'none',
-                        cursor: 'pointer',
-                        '&:hover': {
-                          bg: '#f9fafb'
-                        }
-                      }}
-                      onClick={() => applySuggestion(suggestion)}
-                    >
-                      <Typography variant="body2" sx={{ mb: 1, fontWeight: 'medium' }}>
-                        {suggestion.title}
-                      </Typography>
-                      <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.875rem' }}>
-                        {suggestion.description}
-                      </Typography>
-                      <Box sx={{ mt: 1, display: 'flex', gap: 1, flexWrap: 'wrap' }}>
-                        <Chip 
-                          size="small" 
-                          label={`Confidence: ${Math.round(suggestion.confidence * 100)}%`}
-                          color="primary"
-                          variant="outlined"
-                        />
-                        <Chip 
-                          size="small" 
-                          label={suggestion.disaster_type}
-                          color="secondary"
-                          variant="outlined"
-                        />
-                        {suggestion.location && (
-                          <Chip 
-                            size="small" 
-                            label={`📍 ${suggestion.location}`}
-                            color="info"
-                            variant="outlined"
-                          />
-                        )}
-                      </Box>
-                    </Box>
-                  ))}
-                  <Box sx={{ p: 2, textAlign: 'center' }}>
-                    <Button
-                      size="small"
-                      onClick={() => setShowSuggestions(false)}
-                      sx={{ textTransform: 'none' }}
-                    >
-                      Close
-                    </Button>
-                  </Box>
-                </Box>
-              )}
-            </Grid>
-            <Grid item xs={4}>
-              <FormControl fullWidth size="small">
-                <InputLabel>Country</InputLabel>
-                <Select
-                  value={newReportForm.countryCode}
-                  label="Country"
-                  onChange={(e) => setNewReportForm({...newReportForm, countryCode: e.target.value})}
-                  renderValue={(value) => {
-                    const country = countryCodes.find(c => c.code === value);
-                    return country ? country.display : value;
-                  }}
-                >
-                  {countryCodes.map((country) => (
-                    <MenuItem key={country.code} value={country.code}>
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                        <span>{country.flag}</span>
-                        <span>{country.display}</span>
-                      </Box>
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-            </Grid>
-            <Grid item xs={8}>
-              <TextField
-                fullWidth
-                size="small"
-                label="Phone Number"
-                value={newReportForm.phone_number}
-                onChange={(e) => setNewReportForm({...newReportForm, phone_number: e.target.value})}
-                placeholder="9876543210"
-                inputProps={{ maxLength: 10 }}
-                InputProps={{
-                  startAdornment: <Phone sx={{ mr: 1, color: '#6b7280', fontSize: 18 }} />
-                }}
-              />
-            </Grid>
-            
-            {/* Image Upload Section */}
-            <Grid item xs={12}>
-              <Box 
-                sx={{ 
-                  border: '2px dashed #d1d5db', 
-                  borderRadius: 2, 
-                  p: 2, 
-                  textAlign: 'center',
-                  background: '#f9fafb',
-                  cursor: 'pointer',
-                  transition: 'all 0.2s ease',
-                  '&:hover': {
-                    borderColor: '#3b82f6',
-                    background: '#f0f9ff'
-                  }
-                }}
-                onDrop={(e) => {
-                  e.preventDefault();
-                  console.log('🎯 Files dropped:', e.dataTransfer.files);
-                  const fakeEvent = {
-                    target: {
-                      files: e.dataTransfer.files,
-                      value: ''
-                    }
-                  };
-                  handleImageSelect(fakeEvent);
-                }}
-                onDragOver={(e) => {
-                  e.preventDefault();
-                }}
-                onDragEnter={(e) => {
-                  e.preventDefault();
-                }}
-                onClick={() => {
-                  document.getElementById('image-upload').click();
-                }}
-              >
-                <input
-                  accept="image/*"
-                  style={{ display: 'none' }}
-                  id="image-upload"
-                  multiple
-                  type="file"
-                  onChange={handleImageSelect}
-                />
-                <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1 }}>
-                  <CloudUpload sx={{ fontSize: 32, color: '#6b7280' }} />
-                  <Typography variant="body2" sx={{ color: '#6b7280', fontWeight: 500 }}>
-                    📸 Click to Upload Images or Drag & Drop
-                  </Typography>
-                  <Typography variant="caption" sx={{ color: '#9ca3af' }}>
-                    Supports JPG, PNG, GIF (max 10MB each)
-                  </Typography>
-                </Box>
-              </Box>
-            </Grid>
-            
-            {/* Image Preview Section */}
-            {imagePreview.length > 0 && (
-              <Grid item xs={12}>
-                <Box sx={{ 
-                  border: '1px solid #e5e7eb', 
-                  borderRadius: 2, 
-                  p: 2,
-                  background: 'white'
-                }}>
-                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-                    <Typography variant="subtitle2" sx={{ fontWeight: 600, color: '#374151' }}>
-                      📷 Selected Images ({imagePreview.length})
-                    </Typography>
-                    <Button
-                      size="small"
-                      onClick={clearAllImages}
-                      sx={{ color: '#ef4444', fontSize: '0.75rem' }}
-                    >
-                      Clear All
-                    </Button>
-                  </Box>
-                  <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
-                    {imagePreview.map((preview, index) => (
-                      <Box
-                        key={index}
-                        sx={{
-                          position: 'relative',
-                          width: 80,
-                          height: 80,
-                          borderRadius: 1,
-                          overflow: 'hidden',
-                          border: '2px solid #e5e7eb'
-                        }}
-                      >
-                        <img
-                          src={preview.url}
-                          alt={preview.name}
-                          style={{
-                            width: '100%',
-                            height: '100%',
-                            objectFit: 'cover'
-                          }}
-                        />
-                        <IconButton
-                          size="small"
-                          onClick={() => removeImage(index)}
-                          sx={{
-                            position: 'absolute',
-                            top: 2,
-                            right: 2,
-                            background: 'rgba(239, 68, 68, 0.8)',
-                            color: 'white',
-                            width: 20,
-                            height: 20,
-                            '&:hover': {
-                              background: '#ef4444'
-                            }
-                          }}
-                        >
-                          <DeleteIcon sx={{ fontSize: 12 }} />
-                        </IconButton>
-                      </Box>
-                    ))}
-                  </Box>
-                </Box>
-              </Grid>
-            )}
-          </Grid>
-        </DialogContent>
-        <DialogActions sx={{ p: 2, gap: 1 }}>
-          <Button 
-            onClick={() => setNewReportDialog(false)} 
-            variant="outlined"
-            size="small"
-          >
-            Cancel
-          </Button>
-          <Button 
-            onClick={submitNewReport}
-            variant="contained"
-            size="small"
-            disabled={!newReportForm.disaster_type || !newReportForm.description || !newReportForm.address || uploadingImages}
-            sx={{
-              background: '#ef4444',
-              '&:hover': { background: '#dc2626' }
-            }}
-          >
-            {uploadingImages ? 'Uploading...' : 'Submit Report'}
-          </Button>
-        </DialogActions>
-      </Dialog>
-
-      {/* Compact View Report Dialog */}
-      <Dialog 
-        open={viewReportDialog} 
-        onClose={() => setViewReportDialog(false)}
-        maxWidth="sm"
-        fullWidth
-        PaperProps={{
-          sx: {
-            borderRadius: 2,
-            background: 'white',
-            boxShadow: '0 4px 20px rgba(0, 0, 0, 0.1)'
-          }
-        }}
-      >
-        <DialogTitle sx={{ 
-          background: '#f8fafc',
-          borderBottom: '1px solid #e2e8f0',
-          p: 2,
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center'
-        }}>
-          <Typography variant="h6" sx={{ fontWeight: 600, color: '#1a202c' }}>
-            📋 Report Details
-          </Typography>
-          <IconButton 
-            onClick={() => setViewReportDialog(false)} 
-            size="small"
-            sx={{ color: '#6b7280' }}
-          >
-            <Close />
-          </IconButton>
-        </DialogTitle>
-        <DialogContent sx={{ p: 3 }}>
-          {selectedReport && (
-            <Box>
-              <Box sx={{ display: 'flex', gap: 1, mb: 2 }}>
-                <Chip 
-                  label={selectedReport.disaster_type} 
-                  size="small"
-                  color="primary"
-                />
-                <Chip 
-                  label={selectedReport.priority} 
-                  size="small"
-                  color={getPriorityColor(selectedReport.priority)}
-                />
-                <Chip 
-                  label={selectedReport.status} 
-                  size="small"
-                  color={getStatusColor(selectedReport.status)}
-                />
-              </Box>
-              
-              <Typography variant="body2" sx={{ mb: 1, color: '#6b7280' }}>
-                <strong>Location:</strong> {selectedReport.address}
-              </Typography>
-              
-              <Typography variant="body2" sx={{ mb: 1, color: '#6b7280' }}>
-                <strong>Reporter:</strong> {selectedReport.user.first_name} {selectedReport.user.last_name}
-              </Typography>
-              
-              <Typography variant="body2" sx={{ mb: 1, color: '#6b7280' }}>
-                <strong>Contact:</strong> {selectedReport.phone_number}
-              </Typography>
-              
-              <Box sx={{ mb: 2, p: 2, bgcolor: '#f8f9fa', borderRadius: 2, border: '1px solid #e9ecef' }}>
-                <Typography variant="h6" sx={{ mb: 1, color: '#2c3e50', fontWeight: 'bold' }}>
-                  🤖 AI Analysis Results
-                </Typography>
-                
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 1 }}>
-                  <Typography variant="body2" sx={{ color: '#6b7280' }}>
-                    <strong>Confidence:</strong> {(selectedReport.ai_confidence * 100).toFixed(0)}%
-                  </Typography>
-                  {selectedReport.ai_fraud_score > 0.3 && (
-                    <Typography variant="body2" sx={{ 
-                      color: selectedReport.ai_fraud_score > 0.6 ? '#e74c3c' : '#f39c12',
-                      fontWeight: 'bold'
-                    }}>
-                      <strong>Fraud Risk:</strong> {(selectedReport.ai_fraud_score * 100).toFixed(0)}%
-                    </Typography>
-                  )}
-                </Box>
-                
-                {selectedReport.ai_analysis_data && selectedReport.ai_analysis_data.fraud_indicators && selectedReport.ai_analysis_data.fraud_indicators.length > 0 && (
-                  <Box sx={{ mb: 1 }}>
-                    <Typography variant="caption" sx={{ color: '#e74c3c', fontWeight: 'bold' }}>
-                      Fraud Indicators: {selectedReport.ai_analysis_data.fraud_indicators.join(', ')}
-                    </Typography>
-                  </Box>
-                )}
-                
-                {selectedReport.ai_analysis_data && selectedReport.ai_analysis_data.emergency_indicators && selectedReport.ai_analysis_data.emergency_indicators.length > 0 && (
-                  <Box sx={{ mb: 1 }}>
-                    <Typography variant="caption" sx={{ color: '#27ae60', fontWeight: 'bold' }}>
-                      Emergency Keywords: {selectedReport.ai_analysis_data.emergency_indicators.join(', ')}
-                    </Typography>
-                  </Box>
-                )}
-                
-                {selectedReport.ai_analysis_data && selectedReport.ai_analysis_data.analysis_version && (
-                  <Typography variant="caption" sx={{ color: '#6b7280', fontStyle: 'italic' }}>
-                    Analysis Version: {selectedReport.ai_analysis_data.analysis_version}
-                  </Typography>
-                )}
-              </Box>
-              
-              <Typography variant="body2" sx={{ mb: 1, color: '#6b7280' }}>
-                <strong>Description:</strong>
-              </Typography>
-              <Typography variant="body2" sx={{ 
-                p: 2, 
-                background: '#f8fafc', 
-                borderRadius: 1,
-                fontStyle: 'italic',
-                color: '#4a5568',
-                border: '1px solid #e2e8f0'
-              }}>
-                "{selectedReport.description}"
-              </Typography>
-              
-              {/* Images in View Dialog */}
-              {selectedReport.media && selectedReport.media.length > 0 && (
-                <Box sx={{ mt: 2 }}>
-                  <Typography variant="body2" sx={{ mb: 1, color: '#6b7280', fontWeight: 600 }}>
-                    📸 Attached Images ({selectedReport.media.length}):
-                  </Typography>
-                  <Box sx={{ 
-                    display: 'flex', 
-                    flexWrap: 'wrap', 
-                    gap: 1,
-                    maxHeight: '200px',
-                    overflowY: 'auto'
-                  }}>
-                    {selectedReport.media.map((media, index) => (
-                      <Box
-                        key={media.id || index}
-                        sx={{
-                          position: 'relative',
-                          width: 80,
-                          height: 80,
-                          borderRadius: 1,
-                          overflow: 'hidden',
-                          border: '2px solid #e5e7eb',
-                          cursor: 'pointer',
-                          transition: 'all 0.2s ease',
-                          '&:hover': {
-                            transform: 'scale(1.05)',
-                            borderColor: '#3b82f6',
-                            boxShadow: '0 4px 12px rgba(59, 130, 246, 0.3)'
-                          }
-                        }}
-                        onClick={() => {
-                          let imageUrl = media.file;
-                          if (!media.file.startsWith('http') && !media.file.startsWith('blob:')) {
-                            imageUrl = `http://localhost:8000${media.file}`;
-                          }
-                          window.open(imageUrl, '_blank');
-                        }}
-                      >
-                        <img
-                          src={media.file.startsWith('http') || media.file.startsWith('blob:')
-                            ? media.file 
-                            : `http://localhost:8000${media.file}`}
-                          alt={`Emergency image ${index + 1}`}
-                          style={{
-                            width: '100%',
-                            height: '100%',
-                            objectFit: 'cover'
-                          }}
-                          onLoad={() => console.log('✅ Image loaded successfully:', media.file)}
-                          onError={(e) => {
-                            console.log('❌ Image failed to load:', media.file);
-                            e.target.style.display = 'none';
-                            e.target.nextSibling.style.display = 'flex';
-                          }}
-                        />
-                        <Box sx={{
-                          display: 'none',
-                          width: '100%',
-                          height: '100%',
-                          background: '#f3f4f6',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          color: '#6b7280',
-                          fontSize: '12px'
-                        }}>
-                          📷
-                        </Box>
-                      </Box>
-                    ))}
-                  </Box>
-                </Box>
-              )}
-              
-              <Typography variant="caption" sx={{ color: '#9ca3af', mt: 2, display: 'block' }}>
-                Reported: {new Date(selectedReport.created_at).toLocaleString()}
-              </Typography>
-            </Box>
-          )}
-        </DialogContent>
-        <DialogActions sx={{ p: 2, gap: 1 }}>
-          <Button 
-            onClick={() => setViewReportDialog(false)} 
-            variant="outlined"
-            size="small"
-          >
-            Close
-          </Button>
-          {canEditReport(selectedReport) ? (
-            <Button 
-              onClick={() => {
-                setViewReportDialog(false);
-                handleEditReport(selectedReport);
-              }}
-              variant="contained"
-              size="small"
-              sx={{
-                background: '#f59e0b',
-                '&:hover': { background: '#d97706' }
-              }}
-            >
-              Edit
-            </Button>
-          ) : canUploadImages(selectedReport) ? (
-            <Button 
-              onClick={() => {
-                setViewReportDialog(false);
-                handleAddImages(selectedReport);
-              }}
-              variant="contained"
-              size="small"
-              sx={{
-                background: '#4caf50',
-                '&:hover': { background: '#45a049' }
-              }}
-            >
-              Add Images
-            </Button>
-          ) : null}
-        </DialogActions>
-      </Dialog>
-
-      {/* Compact Edit Report Dialog */}
-      <Dialog 
-        open={editReportDialog} 
-        onClose={() => setEditReportDialog(false)}
-        maxWidth="sm"
-        fullWidth
-        PaperProps={{
-          sx: {
-            borderRadius: 2,
-            background: 'white',
-            boxShadow: '0 4px 20px rgba(0, 0, 0, 0.1)'
-          }
-        }}
-      >
-        <DialogTitle sx={{ 
-          background: '#f8fafc',
-          borderBottom: '1px solid #e2e8f0',
-          p: 2,
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center'
-        }}>
-          <Typography variant="h6" sx={{ fontWeight: 600, color: '#1a202c' }}>
-            ✏️ Edit Report
-          </Typography>
-          <IconButton 
-            onClick={() => setEditReportDialog(false)} 
-            size="small"
-            sx={{ color: '#6b7280' }}
-          >
-            <Close />
-          </IconButton>
-        </DialogTitle>
-        <DialogContent sx={{ p: 3, pt: 4 }}>
-          <Grid container spacing={2}>
-            <Grid item xs={12} sm={6} sx={{ mt: 1 }}>
-              <FormControl fullWidth size="small">
-                <InputLabel>Disaster Type</InputLabel>
-                <Select
-                  value={newReportForm.disaster_type}
-                  label="Disaster Type"
-                  onChange={(e) => setNewReportForm({...newReportForm, disaster_type: e.target.value})}
-                  renderValue={(value) => {
-                    const options = {
-                      'FLOOD': '🌊 Flood',
-                      'FIRE': '🔥 Fire', 
-                      'EARTHQUAKE': '🌋 Earthquake',
-                      'LANDSLIDE': '🏔️ Landslide',
-                      'CYCLONE': '🌀 Cyclone',
-                      'MEDICAL': '🏥 Medical',
-                      'OTHER': '🚨 Other'
-                    };
-                    return options[value] || value;
-                  }}
-                >
-                  <MenuItem value="FLOOD">🌊 Flood</MenuItem>
-                  <MenuItem value="FIRE">🔥 Fire</MenuItem>
-                  <MenuItem value="EARTHQUAKE">🌋 Earthquake</MenuItem>
-                  <MenuItem value="LANDSLIDE">🏔️ Landslide</MenuItem>
-                  <MenuItem value="CYCLONE">🌀 Cyclone</MenuItem>
-                  <MenuItem value="MEDICAL">🏥 Medical</MenuItem>
-                  <MenuItem value="OTHER">🚨 Other</MenuItem>
-                </Select>
-              </FormControl>
-            </Grid>
-            <Grid item xs={12} sm={6} sx={{ mt: 1 }}>
-              <FormControl fullWidth size="small">
-                <InputLabel>Priority</InputLabel>
-                <Select
-                  value={newReportForm.priority}
-                  label="Priority"
-                  onChange={(e) => setNewReportForm({...newReportForm, priority: e.target.value})}
-                  renderValue={(value) => {
-                    const options = {
-                      'LOW': '🟢 Low',
-                      'MEDIUM': '🟡 Medium',
-                      'HIGH': '🔴 High',
-                      'CRITICAL': '🚨 Critical'
-                    };
-                    return options[value] || value;
-                  }}
-                >
-                  <MenuItem value="LOW">🟢 Low</MenuItem>
-                  <MenuItem value="MEDIUM">🟡 Medium</MenuItem>
-                  <MenuItem value="HIGH">🔴 High</MenuItem>
-                  <MenuItem value="CRITICAL">🚨 Critical</MenuItem>
-                </Select>
-              </FormControl>
-            </Grid>
-            <Grid item xs={12}>
-              <div className="location-autocomplete" style={{ position: 'relative' }}>
-                <TextField
-                  fullWidth
-                  size="small"
-                  label="Location"
-                  value={newReportForm.address}
-                  onChange={(e) => {
-                    setNewReportForm({...newReportForm, address: e.target.value});
-                    handleLocationSearch(e.target.value);
-                  }}
-                  placeholder="Start typing to search locations..."
-                  InputProps={{
-                    startAdornment: <LocationOn sx={{ mr: 1, color: '#6b7280', fontSize: 18 }} />
-                  }}
-                />
-                {showLocationSuggestions && locationSuggestions.length > 0 && (
-                  <div style={{
-                    position: 'absolute',
-                    top: '100%',
-                    left: 0,
-                    right: 0,
-                    backgroundColor: 'white',
-                    border: '1px solid #ddd',
-                    borderRadius: '4px',
-                    boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
-                    zIndex: 1000,
-                    maxHeight: '200px',
-                    overflowY: 'auto'
-                  }}>
-                    {locationSuggestions.map((suggestion, index) => (
-                      <div
-                        key={index}
-                        onClick={() => handleLocationSelect(suggestion)}
-                        style={{
-                          padding: '12px 16px',
-                          cursor: 'pointer',
-                          borderBottom: index < locationSuggestions.length - 1 ? '1px solid #eee' : 'none',
-                          '&:hover': { backgroundColor: '#f5f5f5' }
-                        }}
-                        onMouseEnter={(e) => e.target.style.backgroundColor = '#f5f5f5'}
-                        onMouseLeave={(e) => e.target.style.backgroundColor = 'white'}
-                      >
-                        <div style={{ fontWeight: 'bold', color: '#333', fontSize: '14px' }}>
-                          📍 {suggestion.address}
-                        </div>
-                        <div style={{ color: '#666', fontSize: '12px', marginTop: '2px' }}>
-                          {suggestion.display_name}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-                {locationLoading && (
-                  <div style={{
-                    position: 'absolute',
-                    top: '100%',
-                    left: 0,
-                    right: 0,
-                    backgroundColor: 'white',
-                    border: '1px solid #ddd',
-                    borderRadius: '4px',
-                    padding: '12px 16px',
-                    textAlign: 'center',
-                    color: '#666'
-                  }}>
-                    🔍 Searching locations...
-                  </div>
-                )}
-              </div>
-            </Grid>
-            <Grid item xs={12}>
-              <TextField
-                fullWidth
-                size="small"
-                label="Description"
-                multiline
-                rows={3}
-                value={newReportForm.description}
-                onChange={(e) => setNewReportForm({...newReportForm, description: e.target.value})}
-                placeholder="Describe the emergency situation"
-              />
-              <Box sx={{ display: 'flex', justifyContent: 'flex-end', mt: 1 }}>
-                <Button
-                  size="small"
-                  variant="outlined"
-                  startIcon={<AutoAwesome />}
-                  onClick={fetchDescriptionSuggestions}
-                  disabled={!newReportForm.disaster_type}
-                  sx={{ 
-                    textTransform: 'none',
-                    fontSize: '0.75rem',
-                    px: 1.5,
-                    py: 0.5,
-                    minWidth: 'auto'
-                  }}
-                >
-                  AI Suggestions
-                </Button>
-              </Box>
-              
-              {/* AI Description Suggestions */}
-              {showSuggestions && descriptionSuggestions && (
-                <Box sx={{
-                  bg: 'white',
-                  border: '1px solid #e5e7eb',
-                  borderRadius: 2,
-                  boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
-                  maxHeight: 300,
-                  overflow: 'auto',
-                  mt: 2
-                }}>
-                  <Box sx={{ p: 2, borderBottom: '1px solid #e5e7eb' }}>
-                    <Typography variant="subtitle2" sx={{ fontWeight: 'bold', mb: 1 }}>
-                      🤖 AI Description Suggestions
-                    </Typography>
-                    <Typography variant="body2" color="text.secondary">
-                      Choose a suggestion to auto-fill the description:
-                    </Typography>
-                    {newReportForm.address && (
-                      <Typography variant="caption" color="primary" sx={{ display: 'block', mt: 1 }}>
-                        📍 Location-aware suggestions for: {newReportForm.address}
-                      </Typography>
-                    )}
-                  </Box>
-                  {descriptionSuggestions.suggestions?.map((suggestion, index) => (
-                    <Box
-                      key={index}
-                      sx={{
-                        p: 2,
-                        borderBottom: index < descriptionSuggestions.suggestions.length - 1 ? '1px solid #f3f4f6' : 'none',
-                        cursor: 'pointer',
-                        '&:hover': {
-                          bg: '#f9fafb'
-                        }
-                      }}
-                      onClick={() => applySuggestion(suggestion)}
-                    >
-                      <Typography variant="body2" sx={{ mb: 1, fontWeight: 'medium' }}>
-                        {suggestion.title}
-                      </Typography>
-                      <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.875rem' }}>
-                        {suggestion.description}
-                      </Typography>
-                      <Box sx={{ mt: 1, display: 'flex', gap: 1, flexWrap: 'wrap' }}>
-                        <Chip 
-                          size="small" 
-                          label={`Confidence: ${Math.round(suggestion.confidence * 100)}%`}
-                          color="primary"
-                          variant="outlined"
-                        />
-                        <Chip 
-                          size="small" 
-                          label={suggestion.disaster_type}
-                          color="secondary"
-                          variant="outlined"
-                        />
-                        {suggestion.location && (
-                          <Chip 
-                            size="small" 
-                            label={`📍 ${suggestion.location}`}
-                            color="info"
-                            variant="outlined"
-                          />
-                        )}
-                      </Box>
-                    </Box>
-                  ))}
-                  <Box sx={{ p: 2, textAlign: 'center' }}>
-                    <Button
-                      size="small"
-                      onClick={() => setShowSuggestions(false)}
-                      sx={{ textTransform: 'none' }}
-                    >
-                      Close
-                    </Button>
-                  </Box>
-                </Box>
-              )}
-            </Grid>
-            <Grid item xs={4}>
-              <FormControl fullWidth size="small">
-                <InputLabel>Country</InputLabel>
-                <Select
-                  value={newReportForm.countryCode}
-                  label="Country"
-                  onChange={(e) => setNewReportForm({...newReportForm, countryCode: e.target.value})}
-                  renderValue={(value) => {
-                    const country = countryCodes.find(c => c.code === value);
-                    return country ? country.display : value;
-                  }}
-                >
-                  {countryCodes.map((country) => (
-                    <MenuItem key={country.code} value={country.code}>
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                        <span>{country.flag}</span>
-                        <span>{country.display}</span>
-                      </Box>
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-            </Grid>
-            <Grid item xs={8}>
-              <TextField
-                fullWidth
-                size="small"
-                label="Phone Number"
-                value={newReportForm.phone_number}
-                onChange={(e) => setNewReportForm({...newReportForm, phone_number: e.target.value})}
-                placeholder="9876543210"
-                inputProps={{ maxLength: 10 }}
-                InputProps={{
-                  startAdornment: <Phone sx={{ mr: 1, color: '#6b7280', fontSize: 18 }} />
-                }}
-              />
-            </Grid>
-            
-            {/* Image Upload Section for Edit */}
-            <Grid item xs={12}>
-              <Box 
-                sx={{ 
-                  border: '2px dashed #d1d5db', 
-                  borderRadius: 2, 
-                  p: 2, 
-                  textAlign: 'center',
-                  background: '#f9fafb',
-                  cursor: 'pointer',
-                  transition: 'all 0.2s ease',
-                  '&:hover': {
-                    borderColor: '#3b82f6',
-                    background: '#f0f9ff'
-                  }
-                }}
-                onDrop={(e) => {
-                  e.preventDefault();
-                  console.log('🎯 Files dropped:', e.dataTransfer.files);
-                  const fakeEvent = {
-                    target: {
-                      files: e.dataTransfer.files,
-                      value: ''
-                    }
-                  };
-                  handleImageSelect(fakeEvent);
-                }}
-                onDragOver={(e) => {
-                  e.preventDefault();
-                }}
-                onDragEnter={(e) => {
-                  e.preventDefault();
-                }}
-                onClick={() => {
-                  document.getElementById('image-upload-edit').click();
-                }}
-              >
-                <input
-                  accept="image/*"
-                  style={{ display: 'none' }}
-                  id="image-upload-edit"
-                  multiple
-                  type="file"
-                  onChange={handleImageSelect}
-                />
-                <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1 }}>
-                  <CloudUpload sx={{ fontSize: 32, color: '#6b7280' }} />
-                  <Typography variant="body2" sx={{ color: '#6b7280', fontWeight: 500 }}>
-                    📸 Add More Images or Drag & Drop
-                  </Typography>
-                  <Typography variant="caption" sx={{ color: '#9ca3af' }}>
-                    Supports JPG, PNG, GIF (max 10MB each)
-                  </Typography>
-                </Box>
-              </Box>
-            </Grid>
-            
-            {/* Image Preview Section for Edit */}
-            {imagePreview.length > 0 && (
-              <Grid item xs={12}>
-                <Box sx={{ 
-                  border: '1px solid #e5e7eb', 
-                  borderRadius: 2, 
-                  p: 2,
-                  background: 'white'
-                }}>
-                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-                    <Typography variant="subtitle2" sx={{ fontWeight: 600, color: '#374151' }}>
-                      📷 New Images ({imagePreview.length})
-                    </Typography>
-                    <Button
-                      size="small"
-                      onClick={clearAllImages}
-                      sx={{ color: '#ef4444', fontSize: '0.75rem' }}
-                    >
-                      Clear All
-                    </Button>
-                  </Box>
-                  <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
-                    {imagePreview.map((preview, index) => (
-                      <Box
-                        key={index}
-                        sx={{
-                          position: 'relative',
-                          width: 80,
-                          height: 80,
-                          borderRadius: 1,
-                          overflow: 'hidden',
-                          border: '2px solid #e5e7eb'
-                        }}
-                      >
-                        <img
-                          src={preview.url}
-                          alt={preview.name}
-                          style={{
-                            width: '100%',
-                            height: '100%',
-                            objectFit: 'cover'
-                          }}
-                        />
-                        <IconButton
-                          size="small"
-                          onClick={() => removeImage(index)}
-                          sx={{
-                            position: 'absolute',
-                            top: 2,
-                            right: 2,
-                            background: 'rgba(239, 68, 68, 0.8)',
-                            color: 'white',
-                            width: 20,
-                            height: 20,
-                            '&:hover': {
-                              background: '#ef4444'
-                            }
-                          }}
-                        >
-                          <DeleteIcon sx={{ fontSize: 12 }} />
-                        </IconButton>
-                      </Box>
-                    ))}
-                  </Box>
-                </Box>
-              </Grid>
-            )}
-            
-            {/* Existing Images Display */}
-            {selectedReport && selectedReport.media && selectedReport.media.length > 0 && (
-              <Grid item xs={12}>
-                <Box sx={{ 
-                  border: '1px solid #e5e7eb', 
-                  borderRadius: 2, 
-                  p: 2,
-                  background: '#f8fafc'
-                }}>
-                  <Typography variant="subtitle2" sx={{ fontWeight: 600, color: '#374151', mb: 1.5 }}>
-                    📸 Current Images ({selectedReport.media.length})
-                  </Typography>
-                  <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
-                    {selectedReport.media.map((media, index) => (
-                      <Box
-                        key={media.id || index}
-                        sx={{
-                          position: 'relative',
-                          width: 60,
-                          height: 60,
-                          borderRadius: 1,
-                          overflow: 'hidden',
-                          border: '2px solid #e5e7eb',
-                          cursor: 'pointer',
-                          transition: 'all 0.2s ease',
-                          '&:hover': {
-                            transform: 'scale(1.05)',
-                            borderColor: '#3b82f6',
-                            boxShadow: '0 4px 12px rgba(59, 130, 246, 0.3)'
-                          }
-                        }}
-                        onClick={() => {
-                          let imageUrl = media.file;
-                          if (!media.file.startsWith('http') && !media.file.startsWith('blob:')) {
-                            imageUrl = `http://localhost:8000${media.file}`;
-                          }
-                          window.open(imageUrl, '_blank');
-                        }}
-                      >
-                        <img
-                          src={media.file.startsWith('http') || media.file.startsWith('blob:')
-                            ? media.file 
-                            : `http://localhost:8000${media.file}`}
-                          alt={`Current image ${index + 1}`}
-                          style={{
-                            width: '100%',
-                            height: '100%',
-                            objectFit: 'cover'
-                          }}
-                          onError={(e) => {
-                            e.target.style.display = 'none';
-                            e.target.nextSibling.style.display = 'flex';
-                          }}
-                        />
-                        <Box sx={{
-                          display: 'none',
-                          width: '100%',
-                          height: '100%',
-                          background: '#f3f4f6',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          color: '#6b7280',
-                          fontSize: '12px'
-                        }}>
-                          📷
-                        </Box>
-                      </Box>
-                    ))}
-                  </Box>
-                  <Typography variant="caption" sx={{ color: '#6b7280', mt: 1, display: 'block' }}>
-                    Click to view full size • Existing images cannot be removed in edit mode
-                  </Typography>
-                </Box>
-              </Grid>
-            )}
-          </Grid>
-        </DialogContent>
-        <DialogActions sx={{ p: 2, gap: 1 }}>
-          <Button 
-            onClick={() => setEditReportDialog(false)} 
-            variant="outlined"
-            size="small"
-          >
-            Cancel
-          </Button>
-          <Button 
-            onClick={submitEditReport}
-            variant="contained"
-            size="small"
-            disabled={!newReportForm.disaster_type || !newReportForm.description || !newReportForm.address || uploadingImages}
-            sx={{
-              background: '#f59e0b',
-              '&:hover': { background: '#d97706' }
-            }}
-          >
-            {uploadingImages ? 'Updating...' : 'Update Report'}
-          </Button>
-        </DialogActions>
-      </Dialog>
-
-      {/* Add Images Only Dialog */}
-      <Dialog 
-        open={addImagesDialog} 
-        onClose={() => setAddImagesDialog(false)}
-        maxWidth="sm"
-        fullWidth
-        PaperProps={{
-          sx: {
-            borderRadius: 2,
-            background: 'white',
-            boxShadow: '0 4px 20px rgba(0, 0, 0, 0.1)'
-          }
-        }}
-      >
-        <DialogTitle sx={{ 
-          background: 'linear-gradient(45deg, #4caf50, #66bb6a)',
+          background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
           color: 'white',
           display: 'flex',
           justifyContent: 'space-between',
-          alignItems: 'center'
+          alignItems: 'center',
+          borderRadius: '16px 16px 0 0'
         }}>
-          <Typography variant="h6" sx={{ fontWeight: 600 }}>
-            📸 Add Images to Report
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+            {selectedReport && getDisasterIcon(selectedReport.disaster_type)}
+            <Typography variant="h5" sx={{ fontWeight: 'bold' }}>
+              {selectedReport?.disaster_type} Report Details
           </Typography>
-          <IconButton 
-            onClick={() => setAddImagesDialog(false)} 
-            size="small"
-            sx={{ color: 'white' }}
-          >
+          </Box>
+          <IconButton onClick={() => setViewDialogOpen(false)} sx={{ color: 'white' }}>
             <Close />
           </IconButton>
         </DialogTitle>
-        <DialogContent sx={{ p: 3, pt: 4 }}>
-          <Grid container spacing={2}>
-            {/* Report Info */}
-            <Grid item xs={12}>
-              <Box sx={{ 
-                p: 2, 
-                bgcolor: '#f8fafc', 
-                borderRadius: 2, 
-                border: '1px solid #e2e8f0' 
-              }}>
-                <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
-                  📋 Report Details
-                </Typography>
-                <Typography variant="body2" sx={{ color: '#64748b' }}>
-                  <strong>Type:</strong> {selectedReport?.disaster_type} | 
-                  <strong> Priority:</strong> {selectedReport?.priority} | 
-                  <strong> Location:</strong> {selectedReport?.address}
-                </Typography>
-              </Box>
+        
+        <DialogContent sx={{ p: 4 }}>
+          {selectedReport && (
+            <Box>
+              {/* Report Details */}
+              <Grid container spacing={4} sx={{ mb: 4 }}>
+                <Grid item xs={12} sm={6}>
+                  <Typography variant="subtitle1" color="text.secondary" gutterBottom sx={{ fontWeight: 'bold' }}>Priority</Typography>
+                  <Chip 
+                    label={selectedReport.priority} 
+                    sx={{ 
+                      backgroundColor: getPriorityColor(selectedReport.priority),
+                      color: 'white',
+                      fontWeight: 'bold',
+                      fontSize: '1rem',
+                      py: 2,
+                      px: 3
+                    }}
+                  />
             </Grid>
-
-            {/* Image Upload Section */}
+                <Grid item xs={12} sm={6}>
+                  <Typography variant="subtitle1" color="text.secondary" gutterBottom sx={{ fontWeight: 'bold' }}>Status</Typography>
+                  <Chip 
+                    label={selectedReport.status} 
+                    sx={{ 
+                      backgroundColor: getStatusColor(selectedReport.status),
+                      color: 'white',
+                      fontWeight: 'bold',
+                      fontSize: '1rem',
+                      py: 2,
+                      px: 3
+                    }}
+                  />
+            </Grid>
             <Grid item xs={12}>
-              <Box 
-                sx={{ 
-                  border: '2px dashed #d1d5db', 
-                  borderRadius: 2, 
-                  p: 2, 
-                  textAlign: 'center',
-                  background: '#f9fafb',
-                  cursor: 'pointer',
-                  transition: 'all 0.2s ease',
-                  '&:hover': {
-                    borderColor: '#4caf50',
-                    background: '#f0f9f0'
-                  }
-                }}
-                onDrop={(e) => {
-                  e.preventDefault();
-                  console.log('🎯 Files dropped:', e.dataTransfer.files);
-                  const fakeEvent = {
-                    target: {
-                      files: e.dataTransfer.files,
-                      value: ''
+                  <Typography variant="subtitle1" color="text.secondary" gutterBottom sx={{ fontWeight: 'bold' }}>Description</Typography>
+                  <Typography variant="body1" sx={{ 
+                    mb: 2, 
+                    p: 3, 
+                    bgcolor: 'grey.50', 
+                    borderRadius: 3,
+                    lineHeight: 1.6,
+                    fontSize: '1.1rem'
+                  }}>
+                    {selectedReport.description}
+                  </Typography>
+            </Grid>
+            <Grid item xs={12}>
+                  <Typography variant="subtitle1" color="text.secondary" gutterBottom sx={{ fontWeight: 'bold' }}>Location</Typography>
+                <Box sx={{
+                    display: 'flex', 
+                    alignItems: 'center', 
+                    gap: 2, 
+                    p: 3, 
+                    bgcolor: 'grey.50', 
+                    borderRadius: 3,
+                    lineHeight: 1.6,
+                    fontSize: '1.1rem'
+                  }}>
+                    {selectedReport.address}
+                  </Box>
+            </Grid>
+            <Grid item xs={12}>
+                  <Typography variant="subtitle1" color="text.secondary" gutterBottom sx={{ fontWeight: 'bold' }}>Phone Number</Typography>
+                  <Typography variant="body1" sx={{ 
+                    p: 2, 
+                    bgcolor: 'grey.50', 
+                    borderRadius: 2,
+                    fontFamily: 'monospace'
+                  }}>
+                    {selectedReport.phone_number}
+                  </Typography>
+            </Grid>
+            
+                {/* Photo Gallery */}
+                {selectedReport.media && selectedReport.media.length > 0 && (
+              <Grid item xs={12}>
+                    <Typography variant="subtitle1" color="text.secondary" gutterBottom sx={{ fontWeight: 'bold', mt: 2 }}>
+                      📸 Report Photos ({selectedReport.media.length})
+                    </Typography>
+                    <Grid container spacing={2}>
+                      {selectedReport.media.map((media, index) => (
+                        <Grid item xs={12} sm={6} md={4} key={index}>
+                          <Box sx={{ 
+                          position: 'relative',
+                            borderRadius: 2,
+                          overflow: 'hidden',
+                            boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
+                            '&:hover': {
+                              transform: 'scale(1.02)',
+                              transition: 'transform 0.2s ease'
+                            }
+                          }}>
+                            <img
+                              src={media.file_url || media.image_url}
+                              alt={`Report photo ${index + 1}`}
+                          style={{
+                            width: '100%',
+                                height: 200,
+                                objectFit: 'cover',
+                                cursor: 'pointer'
+                              }}
+                              onClick={() => {
+                                // Open full-size image in new tab
+                                window.open(media.file_url || media.image_url, '_blank');
+                              }}
+                            />
+                            <Box sx={{
+                            position: 'absolute',
+                              bottom: 0,
+                              left: 0,
+                              right: 0,
+                              background: 'linear-gradient(transparent, rgba(0,0,0,0.7))',
+                            color: 'white',
+                              p: 1
+                            }}>
+                              <Typography variant="caption" sx={{ fontWeight: 'bold' }}>
+                                Photo {index + 1}
+                              </Typography>
+                  </Box>
+                </Box>
+              </Grid>
+                      ))}
+          </Grid>
+                  </Grid>
+                )}
+
+                {/* AI Analysis */}
+                {selectedReport.ai_analysis_data && Object.keys(selectedReport.ai_analysis_data).length > 0 && (
+                  <Grid item xs={12}>
+                    <Typography variant="subtitle1" color="text.secondary" gutterBottom sx={{ fontWeight: 'bold', mt: 2 }}>
+                      🤖 AI Analysis
+          </Typography>
+                    <Box sx={{ p: 2, bgcolor: 'grey.50', borderRadius: 2 }}>
+                      <Grid container spacing={2}>
+                        <Grid item xs={12} sm={4}>
+                          <Typography variant="caption" color="text.secondary">Confidence</Typography>
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 0.5 }}>
+                            <LinearProgress 
+                              variant="determinate" 
+                              value={selectedReport.ai_confidence * 100} 
+                              sx={{ flex: 1, height: 8, borderRadius: 4 }}
+                            />
+                            <Typography variant="body2" sx={{ fontWeight: 'bold' }}>
+                              {Math.round(selectedReport.ai_confidence * 100)}%
+                            </Typography>
+                          </Box>
+                        </Grid>
+                        <Grid item xs={12} sm={4}>
+                          <Typography variant="caption" color="text.secondary">Fraud Score</Typography>
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 0.5 }}>
+                            <LinearProgress 
+                              variant="determinate" 
+                              value={selectedReport.ai_fraud_score * 100} 
+                              color={selectedReport.ai_fraud_score > 0.7 ? 'error' : 'warning'}
+                              sx={{ flex: 1, height: 8, borderRadius: 4 }}
+                            />
+                            <Typography variant="body2" sx={{ fontWeight: 'bold' }}>
+                              {Math.round(selectedReport.ai_fraud_score * 100)}%
+                            </Typography>
+                          </Box>
+                        </Grid>
+                        <Grid item xs={12} sm={4}>
+                          <Typography variant="caption" color="text.secondary">Status</Typography>
+                <Chip 
+                            label={selectedReport.ai_verified ? 'Verified' : 'Pending Review'}
+                            color={selectedReport.ai_verified ? 'success' : 'warning'}
+                  size="small"
+                            sx={{ mt: 0.5 }}
+                />
+                        </Grid>
+                      </Grid>
+              </Box>
+                  </Grid>
+                )}
+              </Grid>
+
+              <Divider sx={{ my: 3 }} />
+
+              {/* Enhanced Community Poll Section */}
+              <Box sx={{ mb: 3 }}>
+                <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                  <HowToVote color="primary" />
+                  Community Poll
+              </Typography>
+              
+                <Paper sx={{ p: 3, borderRadius: 3, bgcolor: 'grey.50' }}>
+                  {/* Vote Counts */}
+                  <Grid container spacing={2} sx={{ mb: 3 }}>
+                    <Grid item xs={4}>
+                      <Box sx={{ textAlign: 'center', p: 2, bgcolor: 'warning.light', borderRadius: 2 }}>
+                        <Typography variant="h4" sx={{ fontWeight: 'bold', color: 'warning.contrastText' }}>
+                          {selectedReport.vote_counts?.still_there || 0}
+              </Typography>
+                        <Typography variant="caption" sx={{ color: 'warning.contrastText' }}>
+                          Still There
+                </Typography>
+                      </Box>
+                    </Grid>
+                    <Grid item xs={4}>
+                      <Box sx={{ textAlign: 'center', p: 2, bgcolor: 'success.light', borderRadius: 2 }}>
+                        <Typography variant="h4" sx={{ fontWeight: 'bold', color: 'success.contrastText' }}>
+                          {selectedReport.vote_counts?.resolved || 0}
+                  </Typography>
+                        <Typography variant="caption" sx={{ color: 'success.contrastText' }}>
+                          Resolved
+                    </Typography>
+                </Box>
+                    </Grid>
+                    <Grid item xs={4}>
+                      <Box sx={{ textAlign: 'center', p: 2, bgcolor: 'error.light', borderRadius: 2 }}>
+                        <Typography variant="h4" sx={{ fontWeight: 'bold', color: 'error.contrastText' }}>
+                          {selectedReport.vote_counts?.fake_report || 0}
+                    </Typography>
+                        <Typography variant="caption" sx={{ color: 'error.contrastText' }}>
+                          Fake Report
+                    </Typography>
+                  </Box>
+                    </Grid>
+                  </Grid>
+
+                  {/* Vote Progress Bars */}
+                  {selectedReport.vote_counts?.total > 0 && (
+                    <Box sx={{ mb: 3 }}>
+                      <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                        Total Votes: {selectedReport.vote_counts.total}
+                  </Typography>
+                      <Box sx={{ display: 'flex', height: 20, borderRadius: 2, overflow: 'hidden' }}>
+                        <Box sx={{ 
+                          flex: selectedReport.vote_percentages?.still_there || 0,
+                          bgcolor: 'warning.main',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center'
+                        }}>
+                          <Typography variant="caption" sx={{ color: 'white', fontWeight: 'bold' }}>
+                            {selectedReport.vote_percentages?.still_there || 0}%
+              </Typography>
+                        </Box>
+                  <Box sx={{ 
+                          flex: selectedReport.vote_percentages?.resolved || 0,
+                          bgcolor: 'success.main',
+                    display: 'flex', 
+                          alignItems: 'center',
+                          justifyContent: 'center'
+                        }}>
+                          <Typography variant="caption" sx={{ color: 'white', fontWeight: 'bold' }}>
+                            {selectedReport.vote_percentages?.resolved || 0}%
+                          </Typography>
+                        </Box>
+                        <Box sx={{
+                          flex: selectedReport.vote_percentages?.fake_report || 0,
+                          bgcolor: 'error.main',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center'
+                        }}>
+                          <Typography variant="caption" sx={{ color: 'white', fontWeight: 'bold' }}>
+                            {selectedReport.vote_percentages?.fake_report || 0}%
+                          </Typography>
+                        </Box>
+                  </Box>
+                </Box>
+              )}
+              
+                  {/* Voting Buttons */}
+                  <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                    Cast your vote:
+              </Typography>
+                  <Stack direction="row" spacing={2} sx={{ flexWrap: 'wrap', gap: 1 }}>
+          <Button 
+                      variant={selectedReport.user_vote === 'STILL_THERE' ? 'contained' : 'outlined'}
+                      color="warning"
+                      startIcon={<ReportProblem />}
+                      onClick={() => handleVote(selectedReport.id, 'STILL_THERE')}
+                      disabled={voting[selectedReport.id]}
+                      sx={{ 
+                        borderRadius: 3,
+                        px: 3,
+                        py: 1.5,
+                        fontWeight: 'bold',
+                        textTransform: 'none'
+                      }}
+                    >
+                      Still There
+          </Button>
+            <Button 
+                      variant={selectedReport.user_vote === 'RESOLVED' ? 'contained' : 'outlined'}
+                      color="success"
+                      startIcon={<CheckCircleOutline />}
+                      onClick={() => handleVote(selectedReport.id, 'RESOLVED')}
+                      disabled={voting[selectedReport.id]}
+              sx={{
+                        borderRadius: 3,
+                        px: 3,
+                        py: 1.5,
+                        fontWeight: 'bold',
+                        textTransform: 'none'
+                      }}
+                    >
+                      Resolved
+            </Button>
+            <Button 
+                      variant={selectedReport.user_vote === 'FAKE_REPORT' ? 'contained' : 'outlined'}
+                      color="error"
+                      startIcon={<CancelOutlined />}
+                      onClick={() => handleVote(selectedReport.id, 'FAKE_REPORT')}
+                      disabled={voting[selectedReport.id]}
+                      sx={{ 
+                        borderRadius: 3,
+                        px: 3,
+                        py: 1.5,
+                        fontWeight: 'bold',
+                        textTransform: 'none'
+                      }}
+                    >
+                      Fake Report
+                    </Button>
+                  </Stack>
+                </Paper>
+              </Box>
+
+              <Divider sx={{ my: 3 }} />
+
+              {/* Comments Section */}
+              <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                <Comment color="primary" />
+                Comments & Updates ({comments.length})
+              </Typography>
+
+              {/* Add Comment */}
+              <Box sx={{ mb: 3 }}>
+                <TextField
+                  fullWidth
+                  multiline
+                  rows={3}
+                  placeholder="Add a comment or update about this report..."
+                  value={newComment}
+                  onChange={(e) => setNewComment(e.target.value)}
+                  sx={{ mb: 2 }}
+                />
+                <Button
+              variant="contained"
+                  onClick={() => addComment(selectedReport.id)}
+                  disabled={!newComment.trim()}
+              sx={{
+                    borderRadius: 2,
+                    px: 3,
+                    py: 1.5,
+                    background: 'linear-gradient(45deg, #2196F3, #21CBF3)',
+                    '&:hover': {
+                      background: 'linear-gradient(45deg, #1976D2, #00ACC1)',
                     }
-                  };
-                  handleImageSelect(fakeEvent);
-                }}
-                onDragOver={(e) => {
-                  e.preventDefault();
-                }}
-                onDragEnter={(e) => {
-                  e.preventDefault();
-                }}
-                onClick={() => {
-                  document.getElementById('image-upload-add').click();
-                }}
-              >
+                  }}
+                >
+                  Add Comment
+            </Button>
+              </Box>
+
+              {/* Comments List */}
+              <List>
+                {comments.length === 0 ? (
+                  <ListItem>
+                    <ListItemText 
+                      primary="No comments yet"
+                      secondary="Be the first to add a comment or update about this report"
+                    />
+                  </ListItem>
+                ) : (
+                  comments.map((comment, index) => (
+                    <ListItem key={index} sx={{ alignItems: 'flex-start', mb: 2 }}>
+                      <ListItemAvatar>
+                        <Avatar sx={{ bgcolor: 'primary.main' }}>
+                          {comment.user?.first_name?.[0] || 'U'}
+                        </Avatar>
+                      </ListItemAvatar>
+                      <ListItemText
+                        primary={
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5 }}>
+                            <Typography variant="subtitle2" sx={{ fontWeight: 'bold' }}>
+                              {comment.user?.first_name} {comment.user?.last_name}
+                            </Typography>
+                            <Typography variant="caption" color="text.secondary">
+                              {formatTimeAgo(comment.created_at)}
+                            </Typography>
+                          </Box>
+                        }
+                        secondary={
+                          <Typography variant="body2" sx={{ 
+                            whiteSpace: 'pre-wrap',
+                            p: 2,
+                            bgcolor: 'grey.50',
+                            borderRadius: 2,
+                            border: '1px solid #e0e0e0'
+                          }}>
+                            {comment.message}
+                          </Typography>
+                        }
+                      />
+                    </ListItem>
+                  ))
+                )}
+              </List>
+            </Box>
+          )}
+        </DialogContent>
+        
+        <DialogActions sx={{ p: 3 }}>
+          <Button 
+            onClick={() => setViewDialogOpen(false)} 
+            sx={{ 
+              borderRadius: 2,
+              px: 3,
+              py: 1.5
+            }}
+          >
+            Close
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Create Report Dialog */}
+      <Dialog 
+        open={createDialogOpen} 
+        onClose={() => setCreateDialogOpen(false)}
+        maxWidth="sm"
+        fullWidth
+        PaperProps={{
+          sx: {
+            borderRadius: 3,
+            boxShadow: '0 8px 32px rgba(0,0,0,0.12)'
+          }
+        }}
+      >
+        <DialogTitle sx={{ 
+          background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+          color: 'white'
+        }}>
+          {selectedReport && selectedReport.id ? '✏️ Edit Emergency Report' : '🚨 Create Emergency Report'}
+        </DialogTitle>
+        <DialogContent sx={{ p: 3 }}>
+          <Box sx={{ mt: 2 }}>
+          <Grid container spacing={2}>
+              <Grid item xs={12}>
+                <FormControl fullWidth>
+                <InputLabel>Disaster Type</InputLabel>
+                <Select
+                  value={newReportForm.disaster_type}
+                    onChange={(e) => setNewReportForm({ ...newReportForm, disaster_type: e.target.value })}
+                  label="Disaster Type"
+                >
+                  <MenuItem value="FLOOD">🌊 Flood</MenuItem>
+                    <MenuItem value="EARTHQUAKE">🌍 Earthquake</MenuItem>
+                  <MenuItem value="FIRE">🔥 Fire</MenuItem>
+                  <MenuItem value="CYCLONE">🌀 Cyclone</MenuItem>
+                    <MenuItem value="LANDSLIDE">⛰️ Landslide</MenuItem>
+                    <MenuItem value="MEDICAL">🏥 Medical Emergency</MenuItem>
+                    <MenuItem value="ACCIDENT">🚗 Accident</MenuItem>
+                    <MenuItem value="OTHER">⚠️ Other</MenuItem>
+                </Select>
+              </FormControl>
+            </Grid>
+              
+              <Grid item xs={12}>
+                <FormControl fullWidth>
+                <InputLabel>Priority</InputLabel>
+                <Select
+                  value={newReportForm.priority}
+                    onChange={(e) => setNewReportForm({ ...newReportForm, priority: e.target.value })}
+                  label="Priority"
+                  >
+                    <MenuItem value="CRITICAL">🔴 Critical</MenuItem>
+                    <MenuItem value="HIGH">🟠 High</MenuItem>
+                  <MenuItem value="MEDIUM">🟡 Medium</MenuItem>
+                    <MenuItem value="LOW">🟢 Low</MenuItem>
+                </Select>
+              </FormControl>
+            </Grid>
+              
+            <Grid item xs={12}>
+                <TextField
+                  fullWidth
+                label="Description"
+                multiline
+                rows={3}
+                value={newReportForm.description}
+                    onChange={(e) => setNewReportForm({ ...newReportForm, description: e.target.value })}
+                    placeholder="Describe the emergency situation in detail..."
+              />
+                <Box sx={{ display: 'flex', justifyContent: 'flex-end', mt: 1, mb: 1 }}>
+                <Button
+                  size="small"
+                  variant="outlined"
+                  startIcon={<AutoAwesome sx={{ fontSize: 16 }} />}
+                    onClick={generateAIDescription}
+                  sx={{ 
+                      minWidth: 'auto',
+                    px: 1.5,
+                      py: 0.8,
+                  borderRadius: 1.5,
+                      whiteSpace: 'nowrap',
+                      fontSize: '0.75rem',
+                      background: 'linear-gradient(45deg, #9C27B0, #E91E63)',
+                      color: 'white',
+                      border: 'none',
+                        '&:hover': {
+                        background: 'linear-gradient(45deg, #7B1FA2, #C2185B)',
+                        transform: 'translateY(-1px)',
+                        boxShadow: '0 4px 12px rgba(156, 39, 176, 0.3)'
+                      },
+                      transition: 'all 0.2s ease'
+                    }}
+                  >
+                    AI Generate
+                </Button>
+              </Box>
+                <Typography variant="caption" color="text.secondary">
+                  💡 Let AI help you create a detailed description based on disaster type and location
+                    </Typography>
+            </Grid>
+              
+            <Grid item xs={12}>
+                <Box sx={{ display: 'flex', gap: 1, mb: 1 }}>
+              <TextField
+                fullWidth
+                    label="Location"
+                    value={newReportForm.address}
+                    onChange={(e) => setNewReportForm({ ...newReportForm, address: e.target.value })}
+                    placeholder="Enter location or click 'Get Current Location'"
+                  />
+                <Button
+                  variant="outlined"
+                    startIcon={<LocationOn />}
+                    onClick={getCurrentLocation}
+                      sx={{
+                      minWidth: 'auto',
+                      px: 2,
+                  borderRadius: 2, 
+                      whiteSpace: 'nowrap'
+                    }}
+                  >
+                    Get Current Location
+                    </Button>
+                  </Box>
+                <Typography variant="caption" color="text.secondary">
+                  Coordinates: {newReportForm.latitude ? `${newReportForm.latitude}, ${newReportForm.longitude}` : 'Not set'}
+                </Typography>
+            </Grid>
+            
+              <Grid item xs={12}>
+              <TextField
+                fullWidth
+                label="Phone Number"
+                value={newReportForm.phone_number}
+                  onChange={(e) => setNewReportForm({ ...newReportForm, phone_number: e.target.value })}
+                  placeholder="+919876543210"
+              />
+            </Grid>
+            
+              {/* Photo Upload */}
+            <Grid item xs={12}>
+                <Typography variant="subtitle2" gutterBottom>
+                  📸 Upload Photos (Max 5)
+                </Typography>
                 <input
                   accept="image/*"
                   style={{ display: 'none' }}
-                  id="image-upload-add"
+                  id="photo-upload"
                   multiple
                   type="file"
-                  onChange={handleImageSelect}
+                  onChange={handlePhotoUpload}
                 />
-                <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1 }}>
-                  <CloudUpload sx={{ fontSize: 32, color: '#4caf50' }} />
-                  <Typography variant="body2" sx={{ color: '#4caf50', fontWeight: 500 }}>
-                    📸 Click to Upload Images or Drag & Drop
-                  </Typography>
-                  <Typography variant="caption" sx={{ color: '#9ca3af' }}>
-                    Supports JPG, PNG, GIF (max 10MB each)
-                  </Typography>
-                </Box>
-              </Box>
-            </Grid>
-
-            {/* Image Preview Section */}
-            {imagePreview.length > 0 && (
-              <Grid item xs={12}>
-                <Box sx={{ 
-                  border: '1px solid #e5e7eb', 
-                  borderRadius: 2, 
-                  p: 2,
-                  background: 'white'
-                }}>
-                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-                    <Typography variant="subtitle2" sx={{ fontWeight: 600, color: '#374151' }}>
-                      📷 New Images ({imagePreview.length})
-                    </Typography>
+                <label htmlFor="photo-upload">
                     <Button
-                      size="small"
-                      onClick={clearAllImages}
-                      sx={{ color: '#ef4444', fontSize: '0.75rem' }}
-                    >
-                      Clear All
+                    variant="outlined"
+                    component="span"
+                    startIcon={<PhotoCamera />}
+                    sx={{ mb: 2 }}
+                  >
+                    Add Photos
                     </Button>
-                  </Box>
-                  <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
-                    {imagePreview.map((preview, index) => (
-                      <Box
-                        key={index}
-                        sx={{
-                          position: 'relative',
+                </label>
+                
+                {/* Photo Previews */}
+                {newReportForm.photos.length > 0 && (
+                  <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mt: 1 }}>
+                    {newReportForm.photos.map((photo, index) => (
+                      <Box key={index} sx={{ position: 'relative' }}>
+                        <img
+                          src={photo.preview}
+                          alt={photo.name}
+                          style={{
                           width: 80,
                           height: 80,
-                          borderRadius: 1,
-                          overflow: 'hidden',
-                          border: '2px solid #e5e7eb'
-                        }}
-                      >
-                        <img
-                          src={preview.url}
-                          alt={preview.name}
-                          style={{
-                            width: '100%',
-                            height: '100%',
-                            objectFit: 'cover'
+                            objectFit: 'cover',
+                            borderRadius: 8
                           }}
                         />
                         <IconButton
                           size="small"
-                          onClick={() => removeImage(index)}
+                          onClick={() => removePhoto(index)}
                           sx={{
                             position: 'absolute',
                             top: -8,
                             right: -8,
-                            bgcolor: '#ef4444',
+                            bgcolor: 'error.main',
                             color: 'white',
-                            width: 20,
-                            height: 20,
-                            '&:hover': { bgcolor: '#dc2626' }
+                            '&:hover': { bgcolor: 'error.dark' }
                           }}
                         >
-                          <DeleteIcon sx={{ fontSize: 12 }} />
+                          <Close fontSize="small" />
                         </IconButton>
                       </Box>
                     ))}
                   </Box>
-                </Box>
-              </Grid>
             )}
+              </Grid>
           </Grid>
-        </DialogContent>
-        <DialogActions sx={{ p: 3, pt: 2 }}>
-          <Button 
-            onClick={() => setAddImagesDialog(false)} 
-            variant="outlined"
-            size="small"
-          >
-            Cancel
-          </Button>
-          <Button 
-            onClick={submitImagesOnly}
-            variant="contained"
-            size="small"
-            disabled={selectedImages.length === 0 || uploadingImages}
-            sx={{
-              background: '#4caf50',
-              '&:hover': { background: '#45a049' }
-            }}
-          >
-            {uploadingImages ? 'Uploading...' : `Add ${selectedImages.length} Image(s)`}
-          </Button>
-        </DialogActions>
-      </Dialog>
-
-      {/* Delete Confirmation Dialog */}
-      <Dialog 
-        open={deleteConfirmDialog} 
-        onClose={() => setDeleteConfirmDialog(false)}
-        maxWidth="sm"
-        fullWidth
-      >
-        <DialogTitle sx={{ 
-          background: 'linear-gradient(45deg, #f44336, #ef5350)',
-          color: 'white',
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center'
-        }}>
-          🗑️ Delete Emergency Report
-          <IconButton onClick={() => setDeleteConfirmDialog(false)} sx={{ color: 'white' }}>
-            <Close />
-          </IconButton>
-        </DialogTitle>
-        <DialogContent sx={{ pt: 3 }}>
-          <Alert severity="warning" sx={{ mb: 2 }}>
-            Are you sure you want to delete this emergency report?
-          </Alert>
-          {selectedReport && (
-            <Box>
-              <Typography variant="h6" gutterBottom>
-                Report #{selectedReport.id} - {selectedReport.disaster_type}
-              </Typography>
-              <Typography variant="body2" color="textSecondary">
-                This action cannot be undone. The report will be permanently removed from the system.
-              </Typography>
             </Box>
-          )}
         </DialogContent>
         <DialogActions sx={{ p: 3 }}>
-          <Button onClick={() => setDeleteConfirmDialog(false)} variant="outlined">
+          <Button onClick={() => setCreateDialogOpen(false)} sx={{ borderRadius: 2 }}>
             Cancel
           </Button>
           <Button 
-            onClick={confirmDeleteReport}
+            onClick={handleCreateReport}
             variant="contained"
-            color="error"
+            disabled={!newReportForm.disaster_type || !newReportForm.description}
             sx={{
-              background: 'linear-gradient(45deg, #f44336, #ef5350)',
+              borderRadius: 2,
+              background: 'linear-gradient(45deg, #FF6B6B, #FF8E53)',
               '&:hover': {
-                background: 'linear-gradient(45deg, #ef5350, #f44336)'
+                background: 'linear-gradient(45deg, #FF5252, #FF7043)',
               }
             }}
           >
-            Delete Report
+            {selectedReport && selectedReport.id ? 'Update Report' : 'Create Report'}
           </Button>
         </DialogActions>
       </Dialog>
 
-      {/* Snackbar for notifications */}
+      {/* Snackbar */}
       <Snackbar
         open={snackbar.open}
         autoHideDuration={6000}
-        onClose={handleCloseSnackbar}
-        anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+        onClose={() => setSnackbar({ ...snackbar, open: false })}
       >
         <Alert 
-          onClose={handleCloseSnackbar} 
+          onClose={() => setSnackbar({ ...snackbar, open: false })} 
           severity={snackbar.severity} 
-          sx={{ width: '100%' }}
+          sx={{ borderRadius: 2 }}
         >
           {snackbar.message}
         </Alert>
       </Snackbar>
 
-      {/* Enhanced Styles */}
-      <style jsx global>{`
-        @keyframes pulse {
-          0% { opacity: 1; }
-          50% { opacity: 0.7; }
-          100% { opacity: 1; }
-        }
-        
-        @keyframes slideInUp {
-          from {
-            opacity: 0;
-            transform: translateY(30px);
+      {/* Photo Gallery Dialog */}
+      <Dialog 
+        open={photoGalleryOpen}
+        onClose={() => setPhotoGalleryOpen(false)}
+        maxWidth="lg"
+        fullWidth
+        PaperProps={{
+          sx: {
+            borderRadius: 3,
+            boxShadow: '0 20px 60px rgba(0,0,0,0.3)'
           }
-          to {
-            opacity: 1;
-            transform: translateY(0);
+        }}
+      >
+        <DialogTitle sx={{ 
+          background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+          color: 'white',
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center'
+        }}>
+          <Typography variant="h6" sx={{ fontWeight: 'bold' }}>
+            📸 Photo Gallery ({selectedPhotos.length} photos)
+          </Typography>
+          <IconButton 
+            onClick={() => setPhotoGalleryOpen(false)}
+            sx={{ color: 'white' }}
+          >
+            <Close />
+          </IconButton>
+        </DialogTitle>
+        
+        <DialogContent sx={{ p: 3 }}>
+          <Grid container spacing={2}>
+            {selectedPhotos.map((photo, index) => (
+              <Grid item xs={12} sm={6} md={4} key={index}>
+              <Box sx={{ 
+                  position: 'relative',
+                borderRadius: 2, 
+                  overflow: 'hidden',
+                  boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
+                  '&:hover': {
+                    transform: 'scale(1.02)',
+                    transition: 'transform 0.2s ease'
+                  }
+                }}>
+                  <img
+                    src={photo.file_url || photo.image_url}
+                    alt={`Photo ${index + 1}`}
+                    style={{
+                      width: '100%',
+                      height: 250,
+                      objectFit: 'cover',
+                      cursor: 'pointer'
+                }}
+                onClick={() => {
+                      setSelectedPhotoIndex(index);
+                      setPhotoModalOpen(true);
+                    }}
+                  />
+                  <Box sx={{
+                    position: 'absolute',
+                    bottom: 0,
+                    left: 0,
+                    right: 0,
+                    background: 'linear-gradient(transparent, rgba(0,0,0,0.7))',
+                    color: 'white',
+                    p: 1.5
+                  }}>
+                    <Typography variant="body2" sx={{ fontWeight: 'bold' }}>
+                      Photo {index + 1}
+                  </Typography>
+                </Box>
+              </Box>
+            </Grid>
+            ))}
+          </Grid>
+        </DialogContent>
+      </Dialog>
+
+      {/* Full-size Photo Modal */}
+      <Dialog
+        open={photoModalOpen}
+        onClose={() => setPhotoModalOpen(false)}
+        maxWidth="md"
+        fullWidth
+        PaperProps={{
+          sx: {
+                  borderRadius: 2, 
+            boxShadow: '0 20px 60px rgba(0,0,0,0.4)'
           }
-        }
-        
-        @keyframes fadeInScale {
-          from {
-            opacity: 0;
-            transform: scale(0.9);
-          }
-          to {
-            opacity: 1;
-            transform: scale(1);
-          }
-        }
-        
-        @keyframes shimmer {
-          0% {
-            background-position: -200px 0;
-          }
-          100% {
-            background-position: calc(200px + 100%) 0;
-          }
-        }
-        
-        .shimmer-effect {
-          background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
-          background-size: 200px 100%;
-          animation: shimmer 1.5s infinite;
-        }
-        
-        .card-hover-effect {
-          transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-        }
-        
-        .card-hover-effect:hover {
-          transform: translateY(-8px) scale(1.02);
-          box-shadow: 0 20px 60px rgba(0, 0, 0, 0.15);
-        }
-        
-        .gradient-text {
-          background: linear-gradient(45deg, #667eea, #764ba2);
-          -webkit-background-clip: text;
-          -webkit-text-fill-color: transparent;
-          background-clip: text;
-        }
-        
-        .status-indicator {
-          position: relative;
-          overflow: hidden;
-        }
-        
-        .status-indicator::before {
-          content: '';
-          position: absolute;
-          top: 0;
-          left: -100%;
-          width: 100%;
-          height: 100%;
-          background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.4), transparent);
-          animation: shimmer 2s infinite;
-        }
-      `}</style>
-    </Box>
+        }}
+      >
+        <DialogContent sx={{ p: 0, position: 'relative' }}>
+          <IconButton
+            onClick={() => setPhotoModalOpen(false)}
+                        sx={{
+              position: 'absolute',
+              top: 16,
+              right: 16,
+              zIndex: 1,
+              bgcolor: 'rgba(0,0,0,0.5)',
+              color: 'white',
+              '&:hover': {
+                bgcolor: 'rgba(0,0,0,0.7)'
+              }
+            }}
+          >
+            <Close />
+          </IconButton>
+          
+          {selectedPhotos[selectedPhotoIndex] && (
+            <img
+              src={selectedPhotos[selectedPhotoIndex].file_url || selectedPhotos[selectedPhotoIndex].image_url}
+              alt={`Photo ${selectedPhotoIndex + 1}`}
+                          style={{
+                            width: '100%',
+                height: 'auto',
+                maxHeight: '80vh',
+                objectFit: 'contain'
+              }}
+            />
+          )}
+          
+          {selectedPhotos.length > 1 && (
+            <Box sx={{
+              position: 'absolute',
+              bottom: 16,
+              left: '50%',
+              transform: 'translateX(-50%)',
+              display: 'flex',
+              gap: 1
+            }}>
+                        <IconButton
+                onClick={() => setSelectedPhotoIndex(Math.max(0, selectedPhotoIndex - 1))}
+                disabled={selectedPhotoIndex === 0}
+                          sx={{
+                  bgcolor: 'rgba(0,0,0,0.5)',
+                            color: 'white',
+                  '&:hover': { bgcolor: 'rgba(0,0,0,0.7)' }
+                          }}
+                        >
+                <ArrowBack />
+                        </IconButton>
+              <IconButton
+                onClick={() => setSelectedPhotoIndex(Math.min(selectedPhotos.length - 1, selectedPhotoIndex + 1))}
+                disabled={selectedPhotoIndex === selectedPhotos.length - 1}
+            sx={{
+                  bgcolor: 'rgba(0,0,0,0.5)',
+                  color: 'white',
+                  '&:hover': { bgcolor: 'rgba(0,0,0,0.7)' }
+                }}
+              >
+                <ArrowForward />
+          </IconButton>
+            </Box>
+          )}
+        </DialogContent>
+      </Dialog>
+    </Container>
   );
 };
 

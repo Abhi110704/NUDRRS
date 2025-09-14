@@ -4,8 +4,8 @@ from rest_framework.response import Response
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from django.db.models import Q, Count
 from django.utils import timezone
-from .models import SOSReport, ReportMedia, ReportUpdate
-from .serializers import SOSReportSerializer, SOSReportCreateSerializer, ReportMediaSerializer
+from .models import SOSReport, ReportMedia, ReportUpdate, ReportVote
+from .serializers import SOSReportSerializer, SOSReportCreateSerializer, ReportUpdateSerializer, ReportVoteSerializer
 from ai_services.services import AIVerificationService
 import json
 import math
@@ -37,13 +37,6 @@ class SOSReportViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         queryset = SOSReport.objects.all()
         
-        # Filter by demo mode if specified
-        is_demo_param = self.request.query_params.get('is_demo')
-        if is_demo_param is not None:
-            is_demo = is_demo_param.lower() == 'true'
-            queryset = queryset.filter(is_demo=is_demo)
-        # If no is_demo parameter is provided, show all reports (both demo and real)
-        
         # Filter by user if specified and user is not admin
         user_id = self.request.query_params.get('user')
         if user_id and not (self.request.user.is_authenticated and 
@@ -72,11 +65,8 @@ class SOSReportViewSet(viewsets.ModelViewSet):
                 }
             )
         
-        # Create the report - ensure it's marked as a real report (not demo)
-        report = serializer.save(
-            user=user,
-            is_demo=False  # Always mark new reports as real reports
-        )
+        # Create the report
+        report = serializer.save(user=user)
         
         # Process uploaded media files and perform comprehensive AI analysis
         files = request.FILES.getlist('files')
@@ -159,7 +149,6 @@ class SOSReportViewSet(viewsets.ModelViewSet):
         lat = request.query_params.get('lat')
         lng = request.query_params.get('lng')
         radius = request.query_params.get('radius', 10)  # km
-        is_demo = request.query_params.get('is_demo', 'false').lower() == 'true'
         
         if not lat or not lng:
             return Response({'error': 'lat and lng parameters required'}, 
@@ -177,12 +166,68 @@ class SOSReportViewSet(viewsets.ModelViewSet):
         reports = SOSReport.objects.filter(
             latitude__range=(lat - lat_range, lat + lat_range),
             longitude__range=(lng - lng_range, lng + lng_range),
-            status__in=['PENDING', 'VERIFIED', 'IN_PROGRESS'],
-            is_demo=is_demo
+            status__in=['PENDING', 'VERIFIED', 'IN_PROGRESS']
         )
         
         serializer = self.get_serializer(reports, many=True)
         return Response(serializer.data)
+    
+    @action(detail=True, methods=['get', 'post'])
+    def updates(self, request, pk=None):
+        """Get or create report updates/comments"""
+        report = self.get_object()
+        
+        if request.method == 'GET':
+            # Get all updates for this report
+            updates = report.updates.all()
+            serializer = ReportUpdateSerializer(updates, many=True)
+            return Response(serializer.data)
+        
+        elif request.method == 'POST':
+            # Create a new update/comment
+            serializer = ReportUpdateSerializer(data=request.data)
+            if serializer.is_valid():
+                serializer.save(report=report, user=request.user)
+                return Response(serializer.data, status=status.HTTP_201_CREATED)
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    
+    @action(detail=True, methods=['get', 'post'])
+    def votes(self, request, pk=None):
+        """Get or create report votes"""
+        report = self.get_object()
+        
+        if request.method == 'GET':
+            # Get all votes for this report
+            votes = report.votes.all()
+            serializer = ReportVoteSerializer(votes, many=True)
+            return Response(serializer.data)
+        
+        elif request.method == 'POST':
+            # Create or update a vote
+            vote_type = request.data.get('vote_type')
+            if not vote_type:
+                return Response({'error': 'vote_type is required'}, status=status.HTTP_400_BAD_REQUEST)
+            
+            if vote_type not in ['STILL_THERE', 'RESOLVED', 'FAKE_REPORT']:
+                return Response({'error': 'Invalid vote_type'}, status=status.HTTP_400_BAD_REQUEST)
+            
+            # Get or create vote
+            vote, created = ReportVote.objects.get_or_create(
+                report=report,
+                user=request.user,
+                defaults={'vote_type': vote_type}
+            )
+            
+            if not created:
+                # Update existing vote
+                vote.vote_type = vote_type
+                vote.save()
+            
+            # Check and update report status based on votes
+            report.check_and_update_status()
+            
+            serializer = ReportVoteSerializer(vote)
+            return Response(serializer.data, status=status.HTTP_201_CREATED if created else status.HTTP_200_OK)
     
     def update(self, request, *args, **kwargs):
         """Custom update method to handle file uploads for existing reports"""

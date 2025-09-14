@@ -71,6 +71,26 @@ def generate_ai_description(request):
 
 @api_view(['POST'])
 @permission_classes([AllowAny])
+def generate_description_from_context(request):
+    """API endpoint to generate AI description from disaster type and location"""
+    disaster_type = request.data.get('disaster_type', None)
+    location = request.data.get('location', None)
+    priority = request.data.get('priority', 'MEDIUM')
+    
+    if not disaster_type or not location:
+        return Response({'error': 'Disaster type and location are required'}, status=status.HTTP_400_BAD_REQUEST)
+    
+    try:
+        # Generate AI description from context
+        ai_service = AIVerificationService()
+        result = ai_service.generate_description_from_context(disaster_type, location, priority)
+        
+        return Response(result)
+    except Exception as e:
+        return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
 def enhance_description(request):
     """API endpoint to enhance user description using AI"""
     user_description = request.data.get('description', '')

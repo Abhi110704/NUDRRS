@@ -9,14 +9,14 @@ from django.db import transaction
 from django.conf import settings
 from .models import UserProfile, Organization
 from .serializers import (
-    UserSerializer, LoginSerializer, UserProfileSerializer, 
+    UserSerializer, UserRegistrationSerializer, LoginSerializer, UserProfileSerializer, 
     ChangePasswordSerializer, PasswordResetSerializer, OrganizationSerializer
 )
 
 class RegisterView(generics.CreateAPIView):
     queryset = User.objects.all()
     permission_classes = [AllowAny]
-    serializer_class = UserSerializer
+    serializer_class = UserRegistrationSerializer
     
     @transaction.atomic
     def create(self, request, *args, **kwargs):
@@ -55,8 +55,12 @@ def login_view(request):
                     profile.last_login_ip = request.META.get('REMOTE_ADDR')
                     profile.save()
                 except (UserProfile.DoesNotExist, AttributeError):
-                    # Profile doesn't exist, continue without it
-                    pass
+                    # Create a default profile if it doesn't exist
+                    UserProfile.objects.create(
+                        user=user,
+                        role='VIEWER',
+                        last_login_ip=request.META.get('REMOTE_ADDR')
+                    )
                 
                 return Response({
                     'token': token.key,
@@ -86,12 +90,32 @@ def logout_view(request):
 @permission_classes([IsAuthenticated])
 def profile_view(request):
     if request.method == 'GET':
+        # Ensure user has a profile
+        try:
+            profile = request.user.profile
+        except UserProfile.DoesNotExist:
+            # Create a default profile if it doesn't exist
+            profile = UserProfile.objects.create(
+                user=request.user,
+                role='VIEWER'
+            )
+        
         serializer = UserSerializer(request.user, context={'request': request})
         return Response(serializer.data)
     
     elif request.method == 'PUT':
+        # Ensure user has a profile
+        try:
+            profile = request.user.profile
+        except UserProfile.DoesNotExist:
+            # Create a default profile if it doesn't exist
+            profile = UserProfile.objects.create(
+                user=request.user,
+                role='VIEWER'
+            )
+        
         user_serializer = UserSerializer(request.user, data=request.data, partial=True, context={'request': request})
-        profile_serializer = UserProfileSerializer(request.user.profile, data=request.data.get('profile', {}), partial=True, context={'request': request})
+        profile_serializer = UserProfileSerializer(profile, data=request.data.get('profile', {}), partial=True, context={'request': request})
         
         if user_serializer.is_valid() and profile_serializer.is_valid():
             user_serializer.save()

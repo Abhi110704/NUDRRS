@@ -12,11 +12,14 @@ urlpatterns = [
     path('admin/', admin.site.urls),
     path('health/', views.health_check, name='health_check'),
     path('api/auth/', include('authentication.urls')),
+    path('api/mongodb-auth/', include('mongodb_integration.auth_urls')),
     path('api/sos_reports/', include('sos_reports.urls')),
     path('api/ai/', include('ai_services.urls')),
     path('api/notifications/', include('notifications.urls')),
     path('api/resources/', include('resources.urls')),
     path('api/analytics/', include('analytics.urls')),
+    path('api/mongodb/', include('mongodb_integration.urls')),
+    # path('api/imagekit/', include('imagekit_urls')),  # Temporarily disabled
 ]
 
 # Serve media files in development

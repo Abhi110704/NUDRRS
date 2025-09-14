@@ -29,6 +29,7 @@ INSTALLED_APPS = [
     'notifications',
     'resources',
     'analytics',
+    'mongodb_integration',
 ]
 
 MIDDLEWARE = [
@@ -68,6 +69,21 @@ DATABASES = {
         'ENGINE': 'django.db.backends.sqlite3',
         'NAME': BASE_DIR / 'db.sqlite3',
     }
+}
+
+# MongoDB Configuration
+# For local MongoDB (development)
+# MONGODB_SETTINGS = {
+#     'host': 'mongodb://localhost:27017/',
+#     'db': 'nudrrs_mongodb',
+#     'port': 27017,
+# }
+
+# For MongoDB Atlas (production/cloud)
+MONGODB_SETTINGS = {
+    'host': os.environ.get('MONGODB_ATLAS_URI', 'mongodb://localhost:27017/'),
+    'db': os.environ.get('MONGODB_DB_NAME', 'nudrrs_mongodb'),
+    'port': int(os.environ.get('MONGODB_PORT', 27017)),
 }
 
 # Session configuration - use database sessions instead of cache
@@ -141,6 +157,11 @@ GEMINI_API_KEY = os.environ.get('GEMINI_API_KEY', '')
 OPENAI_API_KEY = os.environ.get('OPENAI_API_KEY', '')
 TWILIO_ACCOUNT_SID = os.environ.get('TWILIO_ACCOUNT_SID', '')
 TWILIO_AUTH_TOKEN = os.environ.get('TWILIO_AUTH_TOKEN', '')
+
+# ImageKit Configuration
+IMAGEKIT_PUBLIC_KEY = os.environ.get('IMAGEKIT_PUBLIC_KEY', '')
+IMAGEKIT_PRIVATE_KEY = os.environ.get('IMAGEKIT_PRIVATE_KEY', '')
+IMAGEKIT_URL_ENDPOINT = os.environ.get('IMAGEKIT_URL_ENDPOINT', '')
 
 # Logging
 LOGGING = {

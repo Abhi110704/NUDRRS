@@ -11,7 +11,7 @@ from .admin_views import admin_dashboard
 @admin.register(SOSReport)
 class SOSReportAdmin(admin.ModelAdmin):
     list_display = ['id', 'disaster_type', 'priority_badge', 'status_badge', 'phone_number', 'location', 'ai_confidence_bar', 'created_at']
-    list_filter = ['disaster_type', 'priority', 'status', 'ai_verified', 'is_demo', 'created_at']
+    list_filter = ['disaster_type', 'priority', 'status', 'ai_verified', 'created_at']
     search_fields = ['phone_number', 'address', 'description', 'user__username']
     readonly_fields = ['ai_verified', 'ai_confidence', 'created_at', 'updated_at', 'verified_at']
     list_per_page = 25
@@ -33,7 +33,7 @@ class SOSReportAdmin(admin.ModelAdmin):
             'classes': ('collapse',)
         }),
         ('System', {
-            'fields': ('is_demo', 'created_at', 'updated_at'),
+            'fields': ('created_at', 'updated_at'),
             'classes': ('collapse',)
         })
     )

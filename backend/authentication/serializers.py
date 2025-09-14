@@ -24,22 +24,15 @@ class UserProfileSerializer(serializers.ModelSerializer):
                 return request.build_absolute_uri(obj.profile_image.url)
         return None
 
-class UserSerializer(serializers.ModelSerializer):
-    profile = UserProfileSerializer(read_only=True)
+class UserRegistrationSerializer(serializers.ModelSerializer):
     password = serializers.CharField(write_only=True, required=True, validators=[validate_password])
     password2 = serializers.CharField(write_only=True, required=True)
     phone_number = serializers.CharField(max_length=15, required=False, allow_blank=True)
     organization = serializers.CharField(max_length=200, required=False, allow_blank=True)
     
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        # Pass context to nested profile serializer
-        if 'context' in kwargs:
-            self.fields['profile'] = UserProfileSerializer(context=kwargs['context'])
-    
     class Meta:
         model = User
-        fields = ['id', 'username', 'email', 'first_name', 'last_name', 'password', 'password2', 'phone_number', 'organization', 'profile']
+        fields = ['id', 'username', 'email', 'first_name', 'last_name', 'password', 'password2', 'phone_number', 'organization']
         extra_kwargs = {
             'first_name': {'required': True},
             'last_name': {'required': True},
@@ -77,6 +70,19 @@ class UserSerializer(serializers.ModelSerializer):
         )
         
         return user
+
+class UserSerializer(serializers.ModelSerializer):
+    profile = UserProfileSerializer(read_only=True)
+    
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Pass context to nested profile serializer
+        if 'context' in kwargs:
+            self.fields['profile'] = UserProfileSerializer(context=kwargs['context'])
+    
+    class Meta:
+        model = User
+        fields = ['id', 'username', 'email', 'first_name', 'last_name', 'profile']
 
 class LoginSerializer(serializers.Serializer):
     username = serializers.CharField(max_length=150)
