@@ -48,7 +48,6 @@ const Reports = () => {
   });
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'info' });
   const [updateStatus, setUpdateStatus] = useState('idle');
-  const [liveUpdates, setLiveUpdates] = useState([]);
   const [comments, setComments] = useState([]);
   const [newComment, setNewComment] = useState('');
   const [expandedCards, setExpandedCards] = useState(new Set());
@@ -58,18 +57,6 @@ const Reports = () => {
   const [photoModalOpen, setPhotoModalOpen] = useState(false);
   const [selectedPhotoIndex, setSelectedPhotoIndex] = useState(0);
 
-  const addLiveUpdate = (message, type = 'info') => {
-    const update = {
-      id: Date.now(),
-      message,
-      type,
-      timestamp: new Date()
-    };
-    setLiveUpdates(prev => [update, ...prev.slice(0, 4)]);
-    setTimeout(() => {
-      setLiveUpdates(prev => prev.filter(u => u.id !== update.id));
-    }, 5000);
-  };
 
   useEffect(() => {
       fetchReports();
@@ -91,11 +78,9 @@ const Reports = () => {
         
       setReports(reportsData);
         setUpdateStatus('success');
-      addLiveUpdate(`✅ Live data loaded: ${reportsData.length} reports`, 'success');
     } catch (error) {
       console.error('Error fetching reports:', error);
       setUpdateStatus('error');
-      addLiveUpdate('⚠️ Failed to load reports from backend', 'error');
       setReports([]);
     } finally {
       setLoading(false);
@@ -781,27 +766,6 @@ const Reports = () => {
         </Button>
             </Box>
             
-      {/* Live Updates */}
-      {liveUpdates.length > 0 && (
-        <Box sx={{ mb: 3 }}>
-          {liveUpdates.map(update => (
-            <Slide direction="down" in={true} key={update.id}>
-              <Alert 
-                severity={update.type} 
-                sx={{ 
-                  mb: 1, 
-                  borderRadius: 3,
-                  boxShadow: '0 4px 20px rgba(0,0,0,0.1)',
-                  '& .MuiAlert-message': { fontSize: '0.95rem' }
-                }}
-                onClose={() => setLiveUpdates(prev => prev.filter(u => u.id !== update.id))}
-              >
-                {update.message}
-              </Alert>
-            </Slide>
-          ))}
-            </Box>
-      )}
 
       {/* Enhanced Filters */}
       <Paper sx={{ 

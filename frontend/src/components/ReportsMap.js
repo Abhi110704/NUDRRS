@@ -31,7 +31,6 @@ const ReportsMap = () => {
   const [refreshing, setRefreshing] = useState(false);
   const [userLocation, setUserLocation] = useState(null);
   const [locationLoading, setLocationLoading] = useState(false);
-  const [liveUpdates, setLiveUpdates] = useState([]);
   const [lastUpdate, setLastUpdate] = useState(null);
   const [updateStatus, setUpdateStatus] = useState('idle');
 
@@ -41,24 +40,6 @@ const ReportsMap = () => {
     return () => clearInterval(interval);
   }, []);
 
-  const addLiveUpdate = (message, type = 'info') => {
-    const update = {
-      id: Date.now(),
-      message,
-      type,
-      timestamp: new Date(),
-      isNew: true
-    };
-    
-    setLiveUpdates(prev => [update, ...prev.slice(0, 9)]); // Keep last 10 updates
-    
-    // Remove isNew flag after 3 seconds
-    setTimeout(() => {
-      setLiveUpdates(prev => 
-        prev.map(u => u.id === update.id ? { ...u, isNew: false } : u)
-      );
-    }, 3000);
-  };
 
   const getUserLocation = () => {
     setLocationLoading(true);
@@ -144,7 +125,6 @@ const ReportsMap = () => {
         setUpdateStatus('success');
         setLastUpdate(new Date());
         console.log('✅ Live data loaded:', transformedReports.length, 'reports');
-        addLiveUpdate(`✅ Live map data loaded: ${transformedReports.length} reports`, 'success');
       } catch (apiError) {
         setUpdateStatus('error');
         setLastUpdate(new Date());
@@ -221,14 +201,12 @@ const ReportsMap = () => {
           }
         ];
         setReports(demoReports);
-        addLiveUpdate('🎭 Using demo map data', 'info');
       }
       setLoading(false);
     } catch (error) {
       console.error('Error fetching reports:', error);
       setUpdateStatus('error');
       setLastUpdate(new Date());
-      addLiveUpdate('❌ Error loading map data', 'error');
       setLoading(false);
     } finally {
       setRefreshing(false);
