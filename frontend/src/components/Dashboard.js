@@ -966,222 +966,270 @@ const Dashboard = () => {
       {/* Recent Reports Section */}
       <Grid container spacing={3}>
         <Grid item xs={12} md={8}>
-              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-            <Typography variant="h5" sx={{ fontWeight: 'bold', color: 'primary.main' }}>
+          <Card sx={{ height: '500px', display: 'flex', flexDirection: 'column' }}>
+            <CardContent sx={{ p: 3, flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2, flexShrink: 0 }}>
+                <Typography variant="h5" sx={{ fontWeight: 'bold', color: 'primary.main' }}>
                   Recent Reports
-        </Typography>
+                </Typography>
                 <Button 
                   variant="outlined" 
-              onClick={() => navigate('/reports')}
+                  onClick={() => navigate('/reports')}
                   size="small"
                 >
                   View All
                 </Button>
-                </Box>
+              </Box>
               
-              {(!recentReports || !Array.isArray(recentReports) || recentReports.length === 0) ? (
-            <Card>
-              <CardContent sx={{ textAlign: 'center', py: 4 }}>
-                  <Typography color="text.secondary">
-                    No reports found. Create your first emergency report!
-                  </Typography>
-                  <Button 
-                    variant="contained" 
-                    onClick={() => navigate('/reports')}
-                    sx={{ mt: 2 }}
-                  >
-                    Create Report
-                  </Button>
-              </CardContent>
-            </Card>
-              ) : (
-                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-              {(Array.isArray(recentReports) ? recentReports : []).slice(0, 2).map((report) => (
-                <Card 
-                      key={report.id}
-              sx={{ 
-                cursor: 'pointer',
-                    '&:hover': { 
-                      boxShadow: 3,
-                      transform: 'translateY(-2px)',
-                      transition: 'all 0.2s ease-in-out'
-                    }
-                      }}
-                      onClick={() => handleViewReport(report)}
+              <Box sx={{ 
+                flex: 1, 
+                overflow: 'hidden',
+                display: 'flex',
+                flexDirection: 'column'
+              }}>
+                {(!recentReports || !Array.isArray(recentReports) || recentReports.length === 0) ? (
+                  <Box sx={{ textAlign: 'center', py: 4, flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+                    <Typography color="text.secondary">
+                      No reports found. Create your first emergency report!
+                    </Typography>
+                    <Button 
+                      variant="contained" 
+                      onClick={() => navigate('/reports')}
+                      sx={{ mt: 2 }}
                     >
-                  <CardContent sx={{ p: 2 }}>
-                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1.5 }}>
-                      <Typography variant="h6" sx={{ fontWeight: 'bold', textTransform: 'uppercase' }}>
-                          {report.disaster_type}
-                </Typography>
-                          <Chip 
-                            label={report.priority} 
-                            size="small" 
-                            color={getPriorityColor(report.priority)}
-                        sx={{ fontWeight: 'bold' }}
-                      />
-      </Box>
-
-                    <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5, lineHeight: 1.4 }}>
-                        {report.description}
-        </Typography>
-                      
-                    <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1 }}>
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, color: 'text.secondary' }}>
-                        <LocationOn sx={{ fontSize: 16 }} />
-                        <Typography variant="caption">
-                          {report.address}
-            </Typography>
-                      </Box>
-                      <Typography variant="caption" color="text.secondary">
-                          {formatTimeAgo(report.created_at)}
-            </Typography>
-                </Box>
-                    
-                    {/* Comment button */}
-                    <Box sx={{ display: 'flex', justifyContent: 'flex-end' }}>
-                      <Button
-                        size="small"
-                        variant="outlined"
-                        startIcon={<Comment />}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleOpenCommentDialog(report);
-                        }}
-                        sx={{ 
-                          bgcolor: '#f3e5f5',
-                          borderColor: '#ce93d8',
-                          color: '#7b1fa2',
-                          fontWeight: 'bold',
-                          '&:hover': { 
-                            bgcolor: '#e1bee7',
-                            borderColor: '#ba68c8'
-                          },
-                          borderRadius: 2,
-                          textTransform: 'none'
-                        }}
-                      >
-                        {report.comment_count || 0} comments
-                      </Button>
+                      Create Report
+                    </Button>
                   </Box>
-                  </CardContent>
-                </Card>
-                  ))}
+                ) : (
+                  <Box sx={{ 
+                    flex: 1,
+                    overflowY: 'auto',
+                    overflowX: 'hidden',
+                    pr: 1,
+                    '&::-webkit-scrollbar': {
+                      width: '6px',
+                    },
+                    '&::-webkit-scrollbar-track': {
+                      background: 'transparent',
+                    },
+                    '&::-webkit-scrollbar-thumb': {
+                      background: '#ccc',
+                      borderRadius: '3px',
+                      '&:hover': {
+                        background: '#999',
+                      },
+                    },
+                  }}>
+                    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, pb: 1 }}>
+                      {(Array.isArray(recentReports) ? recentReports : []).map((report) => (
+                        <Card 
+                          key={report.id}
+                          sx={{ 
+                            cursor: 'pointer',
+                            flexShrink: 0,
+                            '&:hover': { 
+                              boxShadow: 3,
+                              transform: 'translateY(-2px)',
+                              transition: 'all 0.2s ease-in-out'
+                            }
+                          }}
+                          onClick={() => handleViewReport(report)}
+                        >
+                          <CardContent sx={{ p: 2 }}>
+                            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1.5 }}>
+                              <Typography variant="h6" sx={{ fontWeight: 'bold', textTransform: 'uppercase' }}>
+                                {report.disaster_type}
+                              </Typography>
+                              <Chip 
+                                label={report.priority} 
+                                size="small" 
+                                color={getPriorityColor(report.priority)}
+                                sx={{ fontWeight: 'bold' }}
+                              />
+                            </Box>
+
+                            <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5, lineHeight: 1.4 }}>
+                              {report.description}
+                            </Typography>
+                            
+                            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1 }}>
+                              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, color: 'text.secondary' }}>
+                                <LocationOn sx={{ fontSize: 16 }} />
+                                <Typography variant="caption">
+                                  {report.address}
+                                </Typography>
+                              </Box>
+                              <Typography variant="caption" color="text.secondary">
+                                {formatTimeAgo(report.created_at)}
+                              </Typography>
+                            </Box>
+                            
+                            {/* Comment button */}
+                            <Box sx={{ display: 'flex', justifyContent: 'flex-end' }}>
+                              <Button
+                                size="small"
+                                variant="outlined"
+                                startIcon={<Comment />}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleOpenCommentDialog(report);
+                                }}
+                                sx={{ 
+                                  bgcolor: '#f3e5f5',
+                                  borderColor: '#ce93d8',
+                                  color: '#7b1fa2',
+                                  fontWeight: 'bold',
+                                  '&:hover': { 
+                                    bgcolor: '#e1bee7',
+                                    borderColor: '#ba68c8'
+                                  },
+                                  borderRadius: 2,
+                                  textTransform: 'none'
+                                }}
+                              >
+                                {report.comment_count || 0} comments
+                              </Button>
+                            </Box>
+                          </CardContent>
+                        </Card>
+                      ))}
+                    </Box>
                   </Box>
                 )}
+              </Box>
+            </CardContent>
+          </Card>
         </Grid>
 
         {/* User Reports */}
         {user && (
           <Grid item xs={12} md={4}>
-            <Card sx={{ minHeight: '400px', height: '100%' }}>
-              <CardContent sx={{ p: 3 }}>
-                <Typography variant="h5" component="h2" sx={{ mb: 3, fontWeight: 'bold', color: 'primary.main' }}>
+            <Card sx={{ height: '500px', display: 'flex', flexDirection: 'column' }}>
+              <CardContent sx={{ p: 3, flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+                <Typography variant="h5" component="h2" sx={{ mb: 3, fontWeight: 'bold', color: 'primary.main', flexShrink: 0 }}>
                   My Reports
-            </Typography>
+                </Typography>
                 
-                {(!userReports || !Array.isArray(userReports) || userReports.length === 0) ? (
-                  <Box sx={{ textAlign: 'center', py: 4 }}>
-                    <Typography color="text.secondary" variant="h6" sx={{ mb: 2 }}>
-                      You haven't created any reports yet.
+                <Box sx={{ 
+                  flex: 1, 
+                  overflow: 'hidden',
+                  display: 'flex',
+                  flexDirection: 'column'
+                }}>
+                  {(!userReports || !Array.isArray(userReports) || userReports.length === 0) ? (
+                    <Box sx={{ textAlign: 'center', py: 4, flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+                      <Typography color="text.secondary" variant="h6" sx={{ mb: 2 }}>
+                        You haven't created any reports yet.
                       </Typography>
-                    <Button 
-                      variant="contained" 
-                      onClick={() => navigate('/reports')}
-                      size="large"
-                      sx={{ mt: 2, px: 3, py: 1.5, fontSize: '1rem' }}
-                    >
-                      Create Report
-                    </Button>
-                </Box>
-                ) : (
-                  <Box>
-                    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, mb: 3 }}>
-                      {(Array.isArray(userReports) ? userReports : []).slice(0, 4).map((report) => (
-                      <Box 
-                        key={report.id}
-                        sx={{ 
-                          p: 2, 
-                          border: 1, 
-                          borderColor: 'divider', 
-                          borderRadius: 1,
-                          cursor: 'pointer',
-                          '&:hover': { backgroundColor: 'action.hover', boxShadow: 2 }
-                        }}
-                        onClick={() => handleViewReport(report)}
-                      >
-                        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
-                          <Typography variant="subtitle1" sx={{ fontWeight: 'bold', fontSize: '1rem' }}>
-                        {report.disaster_type}
-                    </Typography>
-                      <Chip
-                        label={report.status}
-                        size="medium"
-                            color={getStatusColor(report.status)}
-                            sx={{ fontWeight: 'bold' }}
-                      />
                     </Box>
-                          
-                          {/* Comment button - positioned in right corner below status */}
-                          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
-                        <Typography variant="caption" color="text.secondary">
-                          {formatTimeAgo(report.created_at)}
-                    </Typography>
-                            <Button
-                              size="small"
-                              variant="outlined"
-                              startIcon={<Comment />}
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleOpenCommentDialog(report);
-                              }}
-                              sx={{ 
-                                bgcolor: '#f3e5f5',
-                                borderColor: '#ce93d8',
-                                color: '#7b1fa2',
-                                fontWeight: 'bold',
-                                fontSize: '0.6rem',
-                                py: 0.25,
-                                px: 1,
-                                minWidth: 'auto',
-                                '&:hover': { 
-                                  bgcolor: '#e1bee7',
-                                  borderColor: '#ba68c8'
-                                },
-                                borderRadius: 1.5
-                              }}
-                            >
-                              {report.comment_count || 0} comments
-                            </Button>
+                  ) : (
+                    <Box sx={{ 
+                      flex: 1,
+                      overflowY: 'auto',
+                      overflowX: 'hidden',
+                      pr: 1,
+                      '&::-webkit-scrollbar': {
+                        width: '6px',
+                      },
+                      '&::-webkit-scrollbar-track': {
+                        background: 'transparent',
+                      },
+                      '&::-webkit-scrollbar-thumb': {
+                        background: '#ccc',
+                        borderRadius: '3px',
+                        '&:hover': {
+                          background: '#999',
+                        },
+                      },
+                    }}>
+                      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, pb: 1 }}>
+                        {(Array.isArray(userReports) ? userReports : []).map((report) => (
+                          <Box 
+                            key={report.id}
+                            sx={{ 
+                              p: 2, 
+                              border: 1, 
+                              borderColor: 'divider', 
+                              borderRadius: 1,
+                              cursor: 'pointer',
+                              flexShrink: 0,
+                              '&:hover': { backgroundColor: 'action.hover', boxShadow: 2 }
+                            }}
+                            onClick={() => handleViewReport(report)}
+                          >
+                            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
+                              <Typography variant="subtitle1" sx={{ fontWeight: 'bold', fontSize: '1rem' }}>
+                                {report.disaster_type}
+                              </Typography>
+                              <Chip
+                                label={report.status}
+                                size="medium"
+                                color={getStatusColor(report.status)}
+                                sx={{ fontWeight: 'bold' }}
+                              />
+                            </Box>
+                            
+                            {/* Comment button - positioned in right corner below status */}
+                            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
+                              <Typography variant="caption" color="text.secondary">
+                                {formatTimeAgo(report.created_at)}
+                              </Typography>
+                              <Button
+                                size="small"
+                                variant="outlined"
+                                startIcon={<Comment />}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleOpenCommentDialog(report);
+                                }}
+                                sx={{ 
+                                  bgcolor: '#f3e5f5',
+                                  borderColor: '#ce93d8',
+                                  color: '#7b1fa2',
+                                  fontWeight: 'bold',
+                                  fontSize: '0.6rem',
+                                  py: 0.25,
+                                  px: 1,
+                                  minWidth: 'auto',
+                                  '&:hover': { 
+                                    bgcolor: '#e1bee7',
+                                    borderColor: '#ba68c8'
+                                  },
+                                  borderRadius: 1.5
+                                }}
+                              >
+                                {report.comment_count || 0} comments
+                              </Button>
+                            </Box>
                           </Box>
+                        ))}
+                      </Box>
                     </Box>
-            ))}
-                    </Box>
-                    
-                    {/* Create Report Button - Always visible when user has reports */}
-                    <Box sx={{ textAlign: 'center', pt: 2, borderTop: 1, borderColor: 'divider' }}>
-                      <Button 
-                        variant="contained" 
-                        onClick={() => navigate('/reports')}
-                        size="large"
-                        sx={{ 
-                          borderRadius: 2,
-                          textTransform: 'none',
-                          fontWeight: 'bold',
-                          px: 3,
-                          py: 1.5,
-                          fontSize: '1rem'
-                        }}
-                      >
-                        Create New Report
-                      </Button>
-                    </Box>
-                  </Box>
-                )}
+                  )}
+                </Box>
+                
+                {/* Create Report Button - Always at bottom */}
+                <Box sx={{ textAlign: 'center', pt: 2, borderTop: 1, borderColor: 'divider', mt: 'auto', flexShrink: 0 }}>
+                  <Button 
+                    variant="contained" 
+                    onClick={() => navigate('/reports')}
+                    size="large"
+                    sx={{ 
+                      borderRadius: 2,
+                      textTransform: 'none',
+                      fontWeight: 'bold',
+                      px: 3,
+                      py: 1.5,
+                      fontSize: '1rem'
+                    }}
+                  >
+                    Create New Report
+                  </Button>
+                </Box>
               </CardContent>
             </Card>
           </Grid>
-          )}
+        )}
         </Grid>
 
       {/* Report Details Dialog */}

@@ -67,6 +67,32 @@ const Login = () => {
       if (isLogin) {
         await login(formData.username, formData.password);
       } else {
+        // Validate required fields
+        if (!formData.firstName.trim()) {
+          setError('First name is required');
+          setLoading(false);
+          return;
+        }
+        if (!formData.lastName.trim()) {
+          setError('Last name is required');
+          setLoading(false);
+          return;
+        }
+        if (!formData.username.trim()) {
+          setError('Username is required');
+          setLoading(false);
+          return;
+        }
+        if (!formData.email.trim()) {
+          setError('Email is required');
+          setLoading(false);
+          return;
+        }
+        if (!formData.password.trim()) {
+          setError('Password is required');
+          setLoading(false);
+          return;
+        }
         if (formData.password !== formData.confirmPassword) {
           setError('Passwords do not match');
           setLoading(false);
@@ -75,14 +101,14 @@ const Login = () => {
         
         // Map form data to backend serializer fields
         const registrationData = {
-          username: formData.username,
-          email: formData.email,
+          username: formData.username.trim(),
+          email: formData.email.trim(),
           password: formData.password,
           password2: formData.confirmPassword,
-          first_name: formData.firstName,
-          last_name: formData.lastName,
+          first_name: formData.firstName.trim(),
+          last_name: formData.lastName.trim(),
           phone_number: `${formData.countryCode}${formData.phoneNumber}`,
-          organization: formData.organization
+          organization: formData.organization.trim()
         };
         
         await register(registrationData);

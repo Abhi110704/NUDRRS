@@ -1,6 +1,7 @@
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { ThemeProvider, createTheme } from '@mui/material/styles';
+import { Box } from '@mui/material';
 import CssBaseline from '@mui/material/CssBaseline';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import Dashboard from './components/Dashboard';
@@ -12,6 +13,10 @@ import Navbar from './components/Navbar';
 import Login from './components/Login';
 import Profile from './components/Profile';
 import AdminPanel from './components/AdminPanel';
+import Footer from './components/Footer';
+import PrivacyPolicy from './components/PrivacyPolicy';
+import TermsOfService from './components/TermsOfService';
+import HelpSupport from './components/HelpSupport';
 
 // Enhanced dark/light theme for disaster management system
 const lightTheme = createTheme({
@@ -230,6 +235,25 @@ const lightTheme = createTheme({
     '0 8px 30px rgba(0,0,0,0.16)',
     '0 16px 40px rgba(0,0,0,0.20)',
     '0 24px 60px rgba(0,0,0,0.24)',
+    '0 32px 80px rgba(0,0,0,0.28)',
+    '0 40px 100px rgba(0,0,0,0.32)',
+    '0 48px 120px rgba(0,0,0,0.36)',
+    '0 56px 140px rgba(0,0,0,0.40)',
+    '0 64px 160px rgba(0,0,0,0.44)',
+    '0 72px 180px rgba(0,0,0,0.48)',
+    '0 80px 200px rgba(0,0,0,0.52)',
+    '0 88px 220px rgba(0,0,0,0.56)',
+    '0 96px 240px rgba(0,0,0,0.60)',
+    '0 104px 260px rgba(0,0,0,0.64)',
+    '0 112px 280px rgba(0,0,0,0.68)',
+    '0 120px 300px rgba(0,0,0,0.72)',
+    '0 128px 320px rgba(0,0,0,0.76)',
+    '0 136px 340px rgba(0,0,0,0.80)',
+    '0 144px 360px rgba(0,0,0,0.84)',
+    '0 152px 380px rgba(0,0,0,0.88)',
+    '0 160px 400px rgba(0,0,0,0.92)',
+    '0 168px 420px rgba(0,0,0,0.96)',
+    '0 176px 440px rgba(0,0,0,1.00)',
   ],
 });
 
@@ -450,6 +474,25 @@ const darkTheme = createTheme({
     '0 8px 30px rgba(0,0,0,0.5)',
     '0 16px 40px rgba(0,0,0,0.6)',
     '0 24px 60px rgba(0,0,0,0.7)',
+    '0 32px 80px rgba(0,0,0,0.8)',
+    '0 40px 100px rgba(0,0,0,0.85)',
+    '0 48px 120px rgba(0,0,0,0.9)',
+    '0 56px 140px rgba(0,0,0,0.95)',
+    '0 64px 160px rgba(0,0,0,1.0)',
+    '0 72px 180px rgba(0,0,0,1.0)',
+    '0 80px 200px rgba(0,0,0,1.0)',
+    '0 88px 220px rgba(0,0,0,1.0)',
+    '0 96px 240px rgba(0,0,0,1.0)',
+    '0 104px 260px rgba(0,0,0,1.0)',
+    '0 112px 280px rgba(0,0,0,1.0)',
+    '0 120px 300px rgba(0,0,0,1.0)',
+    '0 128px 320px rgba(0,0,0,1.0)',
+    '0 136px 340px rgba(0,0,0,1.0)',
+    '0 144px 360px rgba(0,0,0,1.0)',
+    '0 152px 380px rgba(0,0,0,1.0)',
+    '0 160px 400px rgba(0,0,0,1.0)',
+    '0 168px 420px rgba(0,0,0,1.0)',
+    '0 176px 440px rgba(0,0,0,1.0)',
   ],
 });
 
@@ -487,20 +530,30 @@ function AppContent({ toggleTheme, isDarkMode }) {
   const { isAuthenticated } = useAuth();
   return (
       <Router>
-        <div className="App">
-        {isAuthenticated && <Navbar />}
-          <Routes>
-          <Route path="/login" element={<PublicRoute><Login /></PublicRoute>} />
-          <Route path="/" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
-          <Route path="/map" element={<ProtectedRoute><ReportsMap /></ProtectedRoute>} />
-          <Route path="/reports" element={<ProtectedRoute><Reports /></ProtectedRoute>} />
-          <Route path="/analytics" element={<ProtectedRoute><Analytics /></ProtectedRoute>} />
-          <Route path="/emergency-contacts" element={<ProtectedRoute><EmergencyContacts /></ProtectedRoute>} />
-          <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
-          <Route path="/admin" element={<ProtectedRoute><AdminPanel /></ProtectedRoute>} />
-          <Route path="*" element={<Navigate to="/" />} />
-          </Routes>
-        </div>
+        <Box sx={{ 
+          display: 'flex', 
+          flexDirection: 'column', 
+          minHeight: '100vh' 
+        }}>
+          {isAuthenticated && <Navbar />}
+          <Box component="main" sx={{ flex: 1 }}>
+            <Routes>
+              <Route path="/login" element={<PublicRoute><Login /></PublicRoute>} />
+              <Route path="/" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
+              <Route path="/map" element={<ProtectedRoute><ReportsMap /></ProtectedRoute>} />
+              <Route path="/reports" element={<ProtectedRoute><Reports /></ProtectedRoute>} />
+              <Route path="/analytics" element={<ProtectedRoute><Analytics /></ProtectedRoute>} />
+              <Route path="/emergency-contacts" element={<ProtectedRoute><EmergencyContacts /></ProtectedRoute>} />
+              <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
+              <Route path="/admin" element={<ProtectedRoute><AdminPanel /></ProtectedRoute>} />
+              <Route path="/privacy" element={<PrivacyPolicy />} />
+              <Route path="/terms" element={<TermsOfService />} />
+              <Route path="/help" element={<HelpSupport />} />
+              <Route path="*" element={<Navigate to="/" />} />
+            </Routes>
+          </Box>
+          {isAuthenticated && <Footer />}
+        </Box>
       </Router>
   );
 }

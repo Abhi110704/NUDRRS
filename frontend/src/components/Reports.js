@@ -69,6 +69,9 @@ const Reports = () => {
   const [phoneNumber, setPhoneNumber] = useState('');
   const [existingImages, setExistingImages] = useState([]);
   const [imagesToRemove, setImagesToRemove] = useState([]);
+  const [locationSuggestions, setLocationSuggestions] = useState([]);
+  const [showLocationSuggestions, setShowLocationSuggestions] = useState(false);
+  const [locationSearchTimeout, setLocationSearchTimeout] = useState(null);
 
   // Country codes with phone number formats
   const countryCodes = [
@@ -96,6 +99,8 @@ const Reports = () => {
 
   // Phone number validation
   const validatePhoneNumber = (phone, countryCode) => {
+    if (!phone || !countryCode) return false;
+    
     const country = countryCodes.find(c => c.code === countryCode);
     if (!country) return false;
     
@@ -114,20 +119,24 @@ const Reports = () => {
     const value = e.target.value;
     // Only allow digits
     const cleanValue = value.replace(/\D/g, '');
+    console.log('Phone number input:', value, 'Clean value:', cleanValue);
     setPhoneNumber(cleanValue);
     
-    // Update the form with full phone number
-    const fullPhoneNumber = selectedCountryCode + cleanValue;
+    // Update the form with full phone number (ensure country code is properly set)
+    const countryCode = selectedCountryCode || '+91';
+    const fullPhoneNumber = countryCode + cleanValue;
+    console.log('Full phone number being saved:', fullPhoneNumber);
     setNewReportForm({ ...newReportForm, phone_number: fullPhoneNumber });
   };
 
   // Handle country code change
   const handleCountryCodeChange = (e) => {
     const newCountryCode = e.target.value;
+    console.log('Country code changed to:', newCountryCode);
     setSelectedCountryCode(newCountryCode);
     
     // Update the form with new country code
-    const fullPhoneNumber = newCountryCode + phoneNumber;
+    const fullPhoneNumber = newCountryCode + (phoneNumber || '');
     setNewReportForm({ ...newReportForm, phone_number: fullPhoneNumber });
   };
 
@@ -135,6 +144,158 @@ const Reports = () => {
   const handleRemoveExistingImage = (imageId) => {
     setImagesToRemove(prev => [...prev, imageId]);
     setExistingImages(prev => prev.filter(img => img.id !== imageId));
+  };
+
+  // Location autocomplete functionality with debouncing
+  const handleLocationInputChange = (value) => {
+    setNewReportForm({ ...newReportForm, address: value });
+    
+    // Clear existing timeout
+    if (locationSearchTimeout) {
+      clearTimeout(locationSearchTimeout);
+    }
+    
+    if (value.length > 2) {
+      // Debounce the API call
+      const timeout = setTimeout(async () => {
+        try {
+          console.log('Fetching location suggestions for:', value);
+          
+          // Add some test suggestions for debugging
+          if (value.toLowerCase().includes('test')) {
+            const testSuggestions = [
+              {
+                address: 'Test Location, Test City, Test State, India',
+                latitude: 28.6139,
+                longitude: 77.2090,
+                city: 'Test City',
+                state: 'Test State',
+                country: 'India'
+              }
+            ];
+            console.log('Using test suggestions:', testSuggestions);
+            setLocationSuggestions(testSuggestions);
+            setShowLocationSuggestions(true);
+            return;
+          }
+          
+          // Local fallback for common Indian cities
+          const commonCities = [
+            { name: 'Delhi', lat: 28.6139, lng: 77.2090, state: 'Delhi' },
+            { name: 'Mumbai', lat: 19.0760, lng: 72.8777, state: 'Maharashtra' },
+            { name: 'Bangalore', lat: 12.9716, lng: 77.5946, state: 'Karnataka' },
+            { name: 'Chennai', lat: 13.0827, lng: 80.2707, state: 'Tamil Nadu' },
+            { name: 'Kolkata', lat: 22.5726, lng: 88.3639, state: 'West Bengal' },
+            { name: 'Hyderabad', lat: 17.3850, lng: 78.4867, state: 'Telangana' },
+            { name: 'Pune', lat: 18.5204, lng: 73.8567, state: 'Maharashtra' },
+            { name: 'Ahmedabad', lat: 23.0225, lng: 72.5714, state: 'Gujarat' },
+            { name: 'Jaipur', lat: 26.9124, lng: 75.7873, state: 'Rajasthan' },
+            { name: 'Lucknow', lat: 26.8467, lng: 80.9462, state: 'Uttar Pradesh' }
+          ];
+          
+          const matchingCities = commonCities.filter(city => 
+            city.name.toLowerCase().includes(value.toLowerCase())
+          );
+          
+          if (matchingCities.length > 0) {
+            const localSuggestions = matchingCities.map(city => ({
+              address: `${city.name}, ${city.state}, India`,
+              latitude: city.lat,
+              longitude: city.lng,
+              city: city.name,
+              state: city.state,
+              country: 'India'
+            }));
+            console.log('Using local city suggestions:', localSuggestions);
+            setLocationSuggestions(localSuggestions);
+            setShowLocationSuggestions(true);
+            return;
+          }
+          
+          // Try OpenStreetMap Nominatim API first (more reliable)
+          console.log('Trying OpenStreetMap Nominatim API...');
+          let response = await fetch(
+            `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(value)}&limit=5&addressdetails=1&countrycodes=in,us,gb,ca,au,de,fr,it,es,jp,cn,kr,sg,ae,sa,za,mx,tr,nl,br,ru&accept-language=en`
+          );
+          
+          if (response.ok) {
+            const data = await response.json();
+            console.log('OpenStreetMap API response:', data);
+            
+            if (data && data.length > 0) {
+              const suggestions = data.map(result => ({
+                address: result.display_name,
+                latitude: result.lat,
+                longitude: result.lon,
+                city: result.address?.city || result.address?.town || result.address?.village || result.address?.municipality,
+                state: result.address?.state || result.address?.province || result.address?.region,
+                country: result.address?.country
+              }));
+              console.log('Processed OpenStreetMap suggestions:', suggestions);
+              setLocationSuggestions(suggestions);
+              setShowLocationSuggestions(true);
+              return;
+            }
+          }
+          
+          // Fallback: Try a different geocoding service
+          console.log('Trying fallback API...');
+          try {
+            response = await fetch(
+              `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(value)}&count=5&language=en&format=json`
+            );
+            
+            if (response.ok) {
+              const fallbackData = await response.json();
+              console.log('Fallback API response:', fallbackData);
+              
+              if (fallbackData.results && fallbackData.results.length > 0) {
+                const suggestions = fallbackData.results.map(result => ({
+                  address: `${result.name}, ${result.admin1 || ''}, ${result.country || ''}`.replace(/,\s*,/g, ',').replace(/^,\s*|,\s*$/g, ''),
+                  latitude: result.latitude,
+                  longitude: result.longitude,
+                  city: result.name,
+                  state: result.admin1,
+                  country: result.country
+                }));
+                console.log('Processed fallback suggestions:', suggestions);
+                setLocationSuggestions(suggestions);
+                setShowLocationSuggestions(true);
+                return;
+              }
+            }
+          } catch (fallbackError) {
+            console.log('Fallback API also failed:', fallbackError);
+          }
+          
+          // If all APIs fail, show a message
+          console.log('No results found from any API');
+          setLocationSuggestions([]);
+          setShowLocationSuggestions(false);
+        } catch (error) {
+          console.error('Location autocomplete error:', error);
+          setLocationSuggestions([]);
+          setShowLocationSuggestions(false);
+        }
+      }, 300); // 300ms debounce
+      
+      setLocationSearchTimeout(timeout);
+    } else {
+      setLocationSuggestions([]);
+      setShowLocationSuggestions(false);
+    }
+  };
+
+  // Handle location suggestion selection
+  const handleLocationSelect = (suggestion) => {
+    setNewReportForm({
+      ...newReportForm,
+      address: suggestion.address,
+      latitude: suggestion.latitude.toString(),
+      longitude: suggestion.longitude.toString()
+    });
+    setLocationSuggestions([]);
+    setShowLocationSuggestions(false);
   };
 
   // Handle undo image removal
@@ -150,6 +311,13 @@ const Reports = () => {
     const interval = setInterval(fetchReports, 30000);
     return () => clearInterval(interval);
   }, []);
+
+  // Ensure country code is always set
+  useEffect(() => {
+    if (!selectedCountryCode) {
+      setSelectedCountryCode('+91');
+    }
+  }, [selectedCountryCode]);
 
   useEffect(() => {
     filterReports();
@@ -531,6 +699,12 @@ const Reports = () => {
       });
       setSelectedCountryCode('+91');
       setPhoneNumber('');
+      setLocationSuggestions([]);
+      setShowLocationSuggestions(false);
+      if (locationSearchTimeout) {
+        clearTimeout(locationSearchTimeout);
+        setLocationSearchTimeout(null);
+      }
       setExistingImages([]);
       setImagesToRemove([]);
 
@@ -639,13 +813,46 @@ const Reports = () => {
     
     // Parse phone number for country code and number
     if (report.phone_number) {
+      console.log('Parsing phone number:', report.phone_number);
+      
+      // Try to match country code pattern first (e.g., +919866363666)
       const phoneMatch = report.phone_number.match(/^(\+\d{1,4})(\d+)$/);
       if (phoneMatch) {
+        console.log('Matched country code pattern:', phoneMatch[1], phoneMatch[2]);
         setSelectedCountryCode(phoneMatch[1]);
         setPhoneNumber(phoneMatch[2]);
       } else {
-        setSelectedCountryCode('+91');
-        setPhoneNumber(report.phone_number.replace(/\D/g, ''));
+        // If no country code found, try to detect from the number
+        const cleanNumber = report.phone_number.replace(/\D/g, '');
+        console.log('Clean number:', cleanNumber);
+        
+        // Special handling for common cases
+        if (cleanNumber.startsWith('91') && cleanNumber.length >= 12) {
+          // Indian number without + prefix
+          console.log('Detected Indian number without + prefix');
+          setSelectedCountryCode('+91');
+          setPhoneNumber(cleanNumber.substring(2));
+        } else {
+          // Check if it starts with a known country code (try longest matches first)
+          const sortedCountries = countryCodes.sort((a, b) => b.code.length - a.code.length);
+          const foundCountry = sortedCountries.find(country => {
+            const countryCodeDigits = country.code.replace('+', '');
+            return cleanNumber.startsWith(countryCodeDigits);
+          });
+          
+          if (foundCountry) {
+            const countryCodeDigits = foundCountry.code.replace('+', '');
+            const phoneDigits = cleanNumber.substring(countryCodeDigits.length);
+            console.log('Found country:', foundCountry.code, 'Phone digits:', phoneDigits);
+            setSelectedCountryCode(foundCountry.code);
+            setPhoneNumber(phoneDigits);
+          } else {
+            // Default to India if no country code detected
+            console.log('No country code found, defaulting to India');
+            setSelectedCountryCode('+91');
+            setPhoneNumber(cleanNumber);
+          }
+        }
       }
     } else {
       setSelectedCountryCode('+91');
@@ -1009,6 +1216,12 @@ const Reports = () => {
             });
             setSelectedCountryCode('+91');
             setPhoneNumber('');
+            setLocationSuggestions([]);
+            setShowLocationSuggestions(false);
+            if (locationSearchTimeout) {
+              clearTimeout(locationSearchTimeout);
+              setLocationSearchTimeout(null);
+            }
             setExistingImages([]);
             setImagesToRemove([]);
             setCreateDialogOpen(true);
@@ -1291,6 +1504,12 @@ const Reports = () => {
               });
               setSelectedCountryCode('+91');
               setPhoneNumber('');
+              setLocationSuggestions([]);
+              setShowLocationSuggestions(false);
+              if (locationSearchTimeout) {
+                clearTimeout(locationSearchTimeout);
+                setLocationSearchTimeout(null);
+              }
               setExistingImages([]);
               setImagesToRemove([]);
               setCreateDialogOpen(true);
@@ -2358,14 +2577,66 @@ const Reports = () => {
             </Grid>
               
             <Grid item xs={12}>
-                <Box sx={{ display: 'flex', gap: 1, mb: 1 }}>
-              <TextField
-                fullWidth
-                    label="Location"
-                    value={newReportForm.address}
-                    onChange={(e) => setNewReportForm({ ...newReportForm, address: e.target.value })}
-                    placeholder="Enter location or click 'Get Current Location'"
-                  />
+                <Box sx={{ display: 'flex', gap: 1, mb: 1, position: 'relative' }}>
+              <Box sx={{ flex: 1, position: 'relative' }}>
+                <TextField
+                  fullWidth
+                  label="Location"
+                  value={newReportForm.address}
+                  onChange={(e) => handleLocationInputChange(e.target.value)}
+                  onFocus={() => {
+                    if (locationSuggestions.length > 0) {
+                      setShowLocationSuggestions(true);
+                    }
+                  }}
+                  onBlur={() => {
+                    // Delay hiding suggestions to allow clicking on them
+                    setTimeout(() => setShowLocationSuggestions(false), 200);
+                  }}
+                  placeholder="Start typing to get location suggestions..."
+                />
+                
+                {/* Location Suggestions Dropdown */}
+                {showLocationSuggestions && locationSuggestions.length > 0 && (
+                  <Box sx={{
+                    position: 'absolute',
+                    top: '100%',
+                    left: 0,
+                    right: 0,
+                    zIndex: 1000,
+                    bgcolor: 'background.paper',
+                    border: 1,
+                    borderColor: 'divider',
+                    borderRadius: 1,
+                    boxShadow: 3,
+                    maxHeight: 200,
+                    overflowY: 'auto'
+                  }}>
+                    {locationSuggestions.map((suggestion, index) => (
+                      <Box
+                        key={index}
+                        sx={{
+                          p: 2,
+                          cursor: 'pointer',
+                          borderBottom: index < locationSuggestions.length - 1 ? 1 : 0,
+                          borderColor: 'divider',
+                          '&:hover': {
+                            bgcolor: 'action.hover'
+                          }
+                        }}
+                        onClick={() => handleLocationSelect(suggestion)}
+                      >
+                        <Typography variant="body2" sx={{ fontWeight: 'bold' }}>
+                          {suggestion.address}
+                        </Typography>
+                        <Typography variant="caption" color="text.secondary">
+                          {suggestion.city}, {suggestion.state}, {suggestion.country}
+                        </Typography>
+                      </Box>
+                    ))}
+                  </Box>
+                )}
+              </Box>
                 <Button
                   variant="outlined"
                     startIcon={<LocationOn />}
@@ -2392,11 +2663,22 @@ const Reports = () => {
                 <Box sx={{ display: 'flex', gap: 1 }}>
                   {/* Country Code Selector */}
                   <FormControl sx={{ minWidth: 120 }}>
+                    <InputLabel id="country-code-label">Country</InputLabel>
                     <Select
-                      value={selectedCountryCode}
+                      labelId="country-code-label"
+                      value={selectedCountryCode || '+91'}
                       onChange={handleCountryCodeChange}
-                      displayEmpty
+                      label="Country"
                       sx={{ height: 56 }}
+                      renderValue={(value) => {
+                        const country = countryCodes.find(c => c.code === value);
+                        return country ? (
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                            <span>{country.flag}</span>
+                            <span>{country.code}</span>
+                          </Box>
+                        ) : value;
+                      }}
                     >
                       {countryCodes.map((country) => (
                         <MenuItem key={country.code} value={country.code}>
@@ -2416,16 +2698,16 @@ const Reports = () => {
                     value={phoneNumber}
                     onChange={handlePhoneNumberChange}
                     placeholder="9876543210"
-                    error={phoneNumber && !validatePhoneNumber(phoneNumber, selectedCountryCode)}
+                    error={phoneNumber && selectedCountryCode && !validatePhoneNumber(phoneNumber, selectedCountryCode)}
                     helperText={
-                      phoneNumber && !validatePhoneNumber(phoneNumber, selectedCountryCode)
-                        ? `Phone number must be ${countryCodes.find(c => c.code === selectedCountryCode)?.maxLength} digits`
-                        : phoneNumber
-                        ? `Valid ${countryCodes.find(c => c.code === selectedCountryCode)?.country} phone number`
-                        : `Enter ${countryCodes.find(c => c.code === selectedCountryCode)?.maxLength} digit phone number`
+                      phoneNumber && selectedCountryCode && !validatePhoneNumber(phoneNumber, selectedCountryCode)
+                        ? `Phone number must be exactly ${countryCodes.find(c => c.code === selectedCountryCode)?.maxLength || 10} digits for ${countryCodes.find(c => c.code === selectedCountryCode)?.country || 'this country'}`
+                        : phoneNumber && selectedCountryCode
+                        ? `Valid ${countryCodes.find(c => c.code === selectedCountryCode)?.country || 'phone'} number`
+                        : `Enter ${countryCodes.find(c => c.code === selectedCountryCode)?.maxLength || 10} digit phone number for ${countryCodes.find(c => c.code === selectedCountryCode)?.country || 'this country'}`
                     }
                     inputProps={{
-                      maxLength: countryCodes.find(c => c.code === selectedCountryCode)?.maxLength
+                      maxLength: countryCodes.find(c => c.code === selectedCountryCode)?.maxLength || 10
                     }}
                   />
                 </Box>

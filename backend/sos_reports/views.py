@@ -460,51 +460,134 @@ class SOSReportViewSet(viewsets.ModelViewSet):
             return Response({'error': f'Voting error: {str(e)}'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
     
     def update(self, request, *args, **kwargs):
-        """Custom update method to handle file uploads for existing reports"""
-        partial = kwargs.pop('partial', False)
-        instance = self.get_object()
-        
-        # Get the serializer
-        serializer = self.get_serializer(instance, data=request.data, partial=partial)
-        serializer.is_valid(raise_exception=True)
-        
-        # Save the report
-        report = serializer.save()
-        
-        # Process uploaded media files if any
-        files = request.FILES.getlist('files')
-        if files:
-            image_paths = []
+        """Update existing report in MongoDB"""
+        try:
+            report_id = kwargs.get('pk')
+            if not report_id:
+                return Response({'error': 'Report ID is required'}, status=status.HTTP_400_BAD_REQUEST)
             
-            for file in files:
-                media_type = 'IMAGE' if file.content_type.startswith('image/') else 'VIDEO'
-                media = ReportMedia.objects.create(
-                    report=report,
-                    media_type=media_type,
-                    file=file
-                )
+            # Get the existing report from MongoDB
+            existing_report = mongodb_service.get_report_by_id(report_id)
+            if not existing_report:
+                return Response({'error': 'Report not found'}, status=status.HTTP_404_NOT_FOUND)
+            
+            # Prepare update data
+            update_data = {}
+            
+            # Handle text fields
+            if 'title' in request.data:
+                update_data['title'] = request.data['title']
+            if 'description' in request.data:
+                update_data['description'] = request.data['description']
+            if 'location' in request.data:
+                update_data['location'] = request.data['location']
+            if 'disaster_type' in request.data:
+                update_data['disaster_type'] = request.data['disaster_type']
+            if 'priority' in request.data:
+                update_data['priority'] = request.data['priority']
+            if 'latitude' in request.data:
+                update_data['latitude'] = float(request.data['latitude'])
+            if 'longitude' in request.data:
+                update_data['longitude'] = float(request.data['longitude'])
+            
+            # Handle images to remove
+            images_to_remove = []
+            if 'images_to_remove' in request.data:
+                try:
+                    images_to_remove = json.loads(request.data['images_to_remove'])
+                except (json.JSONDecodeError, TypeError):
+                    images_to_remove = []
+            
+            # Process uploaded media files if any
+            files = request.FILES.getlist('files')
+            new_image_paths = []
+            
+            if files:
+                for file in files:
+                    try:
+                        # Upload to Cloudinary
+                        from .cloudinary_service import cloudinary_service
+                        upload_result = cloudinary_service.upload_image(file)
+                        
+                        if upload_result['success']:
+                            media_info = {
+                                'file_id': upload_result['public_id'],
+                                'url': upload_result['secure_url'],
+                                'media_type': 'IMAGE',
+                                'uploaded_at': timezone.now().isoformat()
+                            }
+                            
+                            # Add to existing media or create new media list
+                            if 'media' not in update_data:
+                                update_data['media'] = existing_report.get('media', [])
+                            
+                            update_data['media'].append(media_info)
+                            new_image_paths.append(upload_result['secure_url'])
+                        else:
+                            return Response({
+                                'error': f'Failed to upload image: {upload_result["error"]}'
+                            }, status=status.HTTP_400_BAD_REQUEST)
+                            
+                    except Exception as e:
+                        return Response({
+                            'error': f'Error processing file {file.name}: {str(e)}'
+                        }, status=status.HTTP_400_BAD_REQUEST)
+            
+            # Remove specified images
+            if images_to_remove and 'media' in update_data:
+                from .cloudinary_service import cloudinary_service
+                for image_url in images_to_remove:
+                    # Remove from Cloudinary
+                    try:
+                        # Extract public_id from URL
+                        public_id = image_url.split('/')[-1].split('.')[0]
+                        cloudinary_service.delete_image(public_id)
+                    except Exception as e:
+                        print(f"Error deleting image from Cloudinary: {e}")
                 
-                if media_type == 'IMAGE':
-                    image_paths.append(media.file.path)
+                # Remove from media list
+                update_data['media'] = [media for media in update_data['media'] if media.get('url') not in images_to_remove]
+            
+            # Update timestamp
+            update_data['updated_at'] = timezone.now().isoformat()
+            
+            # Update the report in MongoDB
+            updated_report = mongodb_service.update_report(report_id, update_data)
+            if not updated_report:
+                return Response({'error': 'Failed to update report'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
             
             # Perform AI analysis on new images if any
-            if image_paths:
-                ai_service = AIVerificationService()
-                comprehensive_analysis = ai_service.analyze_report(
-                    text_description=report.description,
-                    image_paths=image_paths
-                )
-                
-                # Update report with AI analysis results
-                report.ai_verified = comprehensive_analysis.get('is_emergency', False)
-                report.ai_confidence = comprehensive_analysis.get('confidence', 0.0)
-                report.ai_fraud_score = comprehensive_analysis.get('fraud_score', 0.0)
-                report.ai_analysis_data = comprehensive_analysis
-                report.save()
-        
-        # Return the updated report with media
-        response_serializer = SOSReportSerializer(report, context={'request': request})
-        return Response(response_serializer.data)
+            if new_image_paths:
+                try:
+                    ai_service = AIVerificationService()
+                    comprehensive_analysis = ai_service.analyze_report(
+                        text_description=update_data.get('description', existing_report.get('description', '')),
+                        image_paths=new_image_paths
+                    )
+                    
+                    # Update report with AI analysis results
+                    ai_update_data = {
+                        'ai_verified': comprehensive_analysis.get('is_emergency', False),
+                        'ai_confidence': comprehensive_analysis.get('confidence', 0.0),
+                        'ai_fraud_score': comprehensive_analysis.get('fraud_score', 0.0),
+                        'ai_analysis_data': comprehensive_analysis,
+                        'updated_at': timezone.now().isoformat()
+                    }
+                    
+                    mongodb_service.update_report(report_id, ai_update_data)
+                except Exception as e:
+                    print(f"AI analysis failed: {e}")
+                    # Continue without AI analysis
+            
+            return Response(updated_report, status=status.HTTP_200_OK)
+            
+        except Exception as e:
+            return Response({'error': f'Update failed: {str(e)}'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    def partial_update(self, request, *args, **kwargs):
+        """Partial update existing report in MongoDB (PATCH request)"""
+        kwargs['partial'] = True
+        return self.update(request, *args, **kwargs)
 
     @action(detail=True, methods=['post'])
     def update_status(self, request, pk=None):

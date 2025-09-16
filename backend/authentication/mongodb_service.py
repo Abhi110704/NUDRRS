@@ -40,6 +40,26 @@ class AuthMongoDBService:
         """Hash password using SHA-256"""
         return hashlib.sha256(password.encode()).hexdigest()
     
+    def _serialize_user_data(self, user_data: Dict) -> Dict:
+        """Convert ObjectIds to strings for JSON serialization"""
+        from bson import ObjectId
+        
+        serialized_data = {}
+        for key, value in user_data.items():
+            if isinstance(value, ObjectId):
+                serialized_data[key] = str(value)
+            elif isinstance(value, dict):
+                serialized_data[key] = self._serialize_user_data(value)
+            elif isinstance(value, list):
+                serialized_data[key] = [
+                    str(item) if isinstance(item, ObjectId) else item
+                    for item in value
+                ]
+            else:
+                serialized_data[key] = value
+        
+        return serialized_data
+    
     def create_user(self, user_data: Dict) -> Optional[Dict]:
         """Create a new user in MongoDB"""
         try:
@@ -80,7 +100,9 @@ class AuthMongoDBService:
                 user_data['created_at'] = now.isoformat()
                 user_data['updated_at'] = now.isoformat()
                 del user_data['password']  # Remove password from response
-                return user_data
+                
+                # Ensure all ObjectIds are converted to strings for JSON serialization
+                return self._serialize_user_data(user_data)
             
             return None
         except Exception as e:
@@ -125,7 +147,8 @@ class AuthMongoDBService:
                 if 'last_login' in user and isinstance(user['last_login'], datetime):
                     user['last_login'] = user['last_login'].isoformat()
                 
-                return user
+                # Ensure all ObjectIds are converted to strings for JSON serialization
+                return self._serialize_user_data(user)
             
             return None
         except Exception as e:
@@ -161,7 +184,8 @@ class AuthMongoDBService:
                 if 'last_login' in user and isinstance(user['last_login'], datetime):
                     user['last_login'] = user['last_login'].isoformat()
                 
-                return user
+                # Ensure all ObjectIds are converted to strings for JSON serialization
+                return self._serialize_user_data(user)
             
             return None
         except Exception as e:
