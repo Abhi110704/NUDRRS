@@ -64,6 +64,7 @@ TEMPLATES = [
 WSGI_APPLICATION = 'nudrrs.wsgi.application'
 ASGI_APPLICATION = 'nudrrs.asgi.application'
 
+# MongoDB as primary database
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.sqlite3',
@@ -79,15 +80,24 @@ DATABASES = {
 #     'port': 27017,
 # }
 
-# For MongoDB Atlas (production/cloud)
+# MongoDB Atlas Configuration (Primary Database)
 MONGODB_SETTINGS = {
-    'host': os.environ.get('MONGODB_ATLAS_URI', 'mongodb://localhost:27017/'),
-    'db': os.environ.get('MONGODB_DB_NAME', 'nudrrs_mongodb'),
-    'port': int(os.environ.get('MONGODB_PORT', 27017)),
+    'host': 'mongodb+srv://NUDDRS:HackerXhacker%400921@cluster0.jvsnjs4.mongodb.net/NUDDRS?retryWrites=true&w=majority&ssl=true&ssl_cert_reqs=CERT_NONE',
+    'db': 'NUDDRS',
+    'port': 27017,
 }
 
-# Session configuration - use database sessions instead of cache
-SESSION_ENGINE = 'django.contrib.sessions.backends.db'
+# Cache configuration for sessions
+CACHES = {
+    'default': {
+        'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
+        'LOCATION': 'unique-snowflake',
+    }
+}
+
+# Session configuration - use cache since we're using MongoDB
+SESSION_ENGINE = 'django.contrib.sessions.backends.cache'
+SESSION_CACHE_ALIAS = 'default'
 
 AUTH_PASSWORD_VALIDATORS = [
     {
@@ -119,7 +129,7 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': [
-        'rest_framework.authentication.TokenAuthentication',
+        'authentication.mongodb_auth.MongoDBTokenAuthentication',
     ],
     'DEFAULT_PERMISSION_CLASSES': [
         'rest_framework.permissions.AllowAny',  # Allow public access for dashboard data

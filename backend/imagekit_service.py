@@ -5,7 +5,6 @@ import os
 import base64
 from django.conf import settings
 from imagekitio import ImageKit
-from imagekitio.models.UploadFileRequestOptions import UploadFileRequestOptions
 import logging
 
 logger = logging.getLogger(__name__)
@@ -55,9 +54,16 @@ class ImageKitService:
             
             # Prepare file data
             if hasattr(file, 'read'):
-                # Django file object
+                # Django file object - reset file pointer to beginning
+                file.seek(0)
                 file_data = file.read()
                 file_name = filename or file.name
+                # Reset file pointer again for any subsequent reads
+                file.seek(0)
+            elif isinstance(file, bytes):
+                # Raw bytes data
+                file_data = file
+                file_name = filename or "uploaded_image.jpg"
             elif isinstance(file, str):
                 # Base64 string
                 file_data = base64.b64decode(file)
@@ -65,29 +71,83 @@ class ImageKitService:
             else:
                 raise ValueError("Invalid file format")
             
-            # Upload options
+            # Upload file directly
+            from imagekitio.models.UploadFileRequestOptions import UploadFileRequestOptions
+            
             options = UploadFileRequestOptions(
-                file=file_data,
-                file_name=file_name,
                 folder=folder,
-                tags=tags or ["nudrrs", "emergency_report"]
+                tags=tags or ["nudrrs", "emergency_report"],
+                use_unique_file_name=True
             )
             
-            # Upload file
-            result = self.imagekit.upload_file(options)
+            result = self.imagekit.upload_file(
+                file=file_data,
+                file_name=file_name,
+                options=options
+            )
             
-            if hasattr(result, 'url') and hasattr(result, 'file_id'):
-                return {
-                    'success': True,
-                    'url': result.url,
-                    'file_id': result.file_id,
-                    'name': result.name,
-                    'size': result.size,
-                    'file_type': result.file_type,
-                    'tags': result.tags
-                }
+            # Debug logging
+            logger.info(f"ImageKit upload result type: {type(result)}")
+            logger.info(f"ImageKit upload result: {result}")
+            
+            # Handle different response formats
+            if isinstance(result, dict):
+                # Dictionary response
+                if 'url' in result and 'fileId' in result:
+                    return {
+                        'success': True,
+                        'url': result['url'],
+                        'file_id': result['fileId'],
+                        'name': result.get('name', file_name),
+                        'size': result.get('size', len(file_data)),
+                        'file_type': result.get('fileType', 'image/jpeg'),
+                        'tags': result.get('tags', [])
+                    }
+                else:
+                    raise Exception(f"Upload failed: {result}")
             else:
-                raise Exception("Upload failed")
+                # Object response - handle ImageKit response object
+                try:
+                    # Try to access attributes directly
+                    if hasattr(result, 'url') and hasattr(result, 'file_id'):
+                        return {
+                            'success': True,
+                            'url': result.url,
+                            'file_id': result.file_id,
+                            'name': getattr(result, 'name', file_name),
+                            'size': getattr(result, 'size', len(file_data)),
+                            'file_type': getattr(result, 'file_type', 'image/jpeg'),
+                            'tags': getattr(result, 'tags', [])
+                        }
+                    # Try alternative attribute names
+                    elif hasattr(result, 'url') and hasattr(result, 'fileId'):
+                        return {
+                            'success': True,
+                            'url': result.url,
+                            'file_id': result.fileId,
+                            'name': getattr(result, 'name', file_name),
+                            'size': getattr(result, 'size', len(file_data)),
+                            'file_type': getattr(result, 'fileType', 'image/jpeg'),
+                            'tags': getattr(result, 'tags', [])
+                        }
+                    else:
+                        # Try to convert to dict
+                        result_dict = result.__dict__ if hasattr(result, '__dict__') else {}
+                        if 'url' in result_dict and 'fileId' in result_dict:
+                            return {
+                                'success': True,
+                                'url': result_dict['url'],
+                                'file_id': result_dict['fileId'],
+                                'name': result_dict.get('name', file_name),
+                                'size': result_dict.get('size', len(file_data)),
+                                'file_type': result_dict.get('fileType', 'image/jpeg'),
+                                'tags': result_dict.get('tags', [])
+                            }
+                        else:
+                            raise Exception(f"Upload failed - invalid response format: {result}")
+                except Exception as e:
+                    logger.error(f"Error processing ImageKit response: {e}")
+                    raise Exception(f"Upload failed - response processing error: {e}")
                 
         except Exception as e:
             logger.error(f"ImageKit upload error: {e}")

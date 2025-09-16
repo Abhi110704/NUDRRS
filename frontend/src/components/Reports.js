@@ -56,6 +56,92 @@ const Reports = () => {
   const [selectedPhotos, setSelectedPhotos] = useState([]);
   const [photoModalOpen, setPhotoModalOpen] = useState(false);
   const [selectedPhotoIndex, setSelectedPhotoIndex] = useState(0);
+  const [commentDialogOpen, setCommentDialogOpen] = useState(false);
+  const [commentReport, setCommentReport] = useState(null);
+  const [reportComments, setReportComments] = useState([]);
+  const [newReportComment, setNewReportComment] = useState('');
+  const [stats, setStats] = useState({
+    total_reports: 0,
+    critical_reports: 0
+  });
+  const [selectedCountryCode, setSelectedCountryCode] = useState('+91');
+  const [phoneNumber, setPhoneNumber] = useState('');
+  const [existingImages, setExistingImages] = useState([]);
+  const [imagesToRemove, setImagesToRemove] = useState([]);
+
+  // Country codes with phone number formats
+  const countryCodes = [
+    { code: '+91', country: 'India', flag: '🇮🇳', maxLength: 10, format: 'XXXXXXXXXX' },
+    { code: '+1', country: 'USA/Canada', flag: '🇺🇸', maxLength: 10, format: 'XXXXXXXXXX' },
+    { code: '+44', country: 'UK', flag: '🇬🇧', maxLength: 10, format: 'XXXXXXXXXX' },
+    { code: '+86', country: 'China', flag: '🇨🇳', maxLength: 11, format: 'XXXXXXXXXXX' },
+    { code: '+81', country: 'Japan', flag: '🇯🇵', maxLength: 10, format: 'XXXXXXXXXX' },
+    { code: '+49', country: 'Germany', flag: '🇩🇪', maxLength: 11, format: 'XXXXXXXXXXX' },
+    { code: '+33', country: 'France', flag: '🇫🇷', maxLength: 9, format: 'XXXXXXXXX' },
+    { code: '+39', country: 'Italy', flag: '🇮🇹', maxLength: 10, format: 'XXXXXXXXXX' },
+    { code: '+34', country: 'Spain', flag: '🇪🇸', maxLength: 9, format: 'XXXXXXXXX' },
+    { code: '+61', country: 'Australia', flag: '🇦🇺', maxLength: 9, format: 'XXXXXXXXX' },
+    { code: '+55', country: 'Brazil', flag: '🇧🇷', maxLength: 11, format: 'XXXXXXXXXXX' },
+    { code: '+7', country: 'Russia', flag: '🇷🇺', maxLength: 10, format: 'XXXXXXXXXX' },
+    { code: '+82', country: 'South Korea', flag: '🇰🇷', maxLength: 10, format: 'XXXXXXXXXX' },
+    { code: '+65', country: 'Singapore', flag: '🇸🇬', maxLength: 8, format: 'XXXXXXXX' },
+    { code: '+971', country: 'UAE', flag: '🇦🇪', maxLength: 9, format: 'XXXXXXXXX' },
+    { code: '+966', country: 'Saudi Arabia', flag: '🇸🇦', maxLength: 9, format: 'XXXXXXXXX' },
+    { code: '+27', country: 'South Africa', flag: '🇿🇦', maxLength: 9, format: 'XXXXXXXXX' },
+    { code: '+52', country: 'Mexico', flag: '🇲🇽', maxLength: 10, format: 'XXXXXXXXXX' },
+    { code: '+90', country: 'Turkey', flag: '🇹🇷', maxLength: 10, format: 'XXXXXXXXXX' },
+    { code: '+31', country: 'Netherlands', flag: '🇳🇱', maxLength: 9, format: 'XXXXXXXXX' }
+  ];
+
+  // Phone number validation
+  const validatePhoneNumber = (phone, countryCode) => {
+    const country = countryCodes.find(c => c.code === countryCode);
+    if (!country) return false;
+    
+    // Remove any non-digit characters
+    const cleanPhone = phone.replace(/\D/g, '');
+    
+    // Check length
+    if (cleanPhone.length !== country.maxLength) return false;
+    
+    // Basic format validation (all digits)
+    return /^\d+$/.test(cleanPhone);
+  };
+
+  // Handle phone number change
+  const handlePhoneNumberChange = (e) => {
+    const value = e.target.value;
+    // Only allow digits
+    const cleanValue = value.replace(/\D/g, '');
+    setPhoneNumber(cleanValue);
+    
+    // Update the form with full phone number
+    const fullPhoneNumber = selectedCountryCode + cleanValue;
+    setNewReportForm({ ...newReportForm, phone_number: fullPhoneNumber });
+  };
+
+  // Handle country code change
+  const handleCountryCodeChange = (e) => {
+    const newCountryCode = e.target.value;
+    setSelectedCountryCode(newCountryCode);
+    
+    // Update the form with new country code
+    const fullPhoneNumber = newCountryCode + phoneNumber;
+    setNewReportForm({ ...newReportForm, phone_number: fullPhoneNumber });
+  };
+
+  // Handle existing image removal
+  const handleRemoveExistingImage = (imageId) => {
+    setImagesToRemove(prev => [...prev, imageId]);
+    setExistingImages(prev => prev.filter(img => img.id !== imageId));
+  };
+
+  // Handle undo image removal
+  const handleUndoImageRemoval = (imageId) => {
+    setImagesToRemove(prev => prev.filter(id => id !== imageId));
+    // Note: We would need to restore the image from the original report data
+    // For now, we'll just remove it from the removal list
+  };
 
 
   useEffect(() => {
@@ -68,6 +154,26 @@ const Reports = () => {
     filterReports();
   }, [reports, filters]);
 
+  const fetchStats = async () => {
+    try {
+      const response = await axios.get('http://localhost:8000/api/sos_reports/sos_reports/dashboard_stats/');
+      const statsData = response.data;
+      setStats({
+        total_reports: statsData.total_reports || 0,
+        critical_reports: statsData.by_priority?.CRITICAL || 0
+      });
+    } catch (error) {
+      console.error('Error fetching stats:', error);
+      // Calculate stats from reports if API fails
+      const totalReports = reports.length;
+      const criticalReports = reports.filter(report => report.priority === 'CRITICAL').length;
+      setStats({
+        total_reports: totalReports,
+        critical_reports: criticalReports
+      });
+    }
+  };
+
   const fetchReports = async () => {
     try {
       setLoading(true);
@@ -77,6 +183,7 @@ const Reports = () => {
         const reportsData = response.data.results || response.data || [];
         
       setReports(reportsData);
+      await fetchStats();
         setUpdateStatus('success');
     } catch (error) {
       console.error('Error fetching reports:', error);
@@ -125,6 +232,88 @@ const Reports = () => {
         severity: 'error'
       });
     }
+  };
+
+  // Comment Dialog Functions
+  const handleOpenCommentDialog = async (report) => {
+    setCommentReport(report);
+    setCommentDialogOpen(true);
+    await fetchReportComments(report.id);
+  };
+
+  const fetchReportComments = async (reportId) => {
+    try {
+      const response = await axios.get(`http://localhost:8000/api/sos_reports/sos_reports/${reportId}/updates/`);
+      setReportComments(response.data || []);
+    } catch (error) {
+      console.error('Error fetching comments:', error);
+      setReportComments([]);
+    }
+  };
+
+  const handleAddReportComment = async () => {
+    if (!newReportComment.trim() || !commentReport) return;
+
+    try {
+      const response = await axios.post(`http://localhost:8000/api/sos_reports/sos_reports/${commentReport.id}/updates/`, {
+        message: newReportComment.trim()
+      }, {
+        headers: {
+          'Authorization': `Token ${localStorage.getItem('token')}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      setNewReportComment('');
+      await fetchReportComments(commentReport.id);
+      setSnackbar({
+        open: true,
+        message: 'Comment added successfully!',
+        severity: 'success'
+      });
+    } catch (error) {
+      console.error('Error adding comment:', error);
+      setSnackbar({
+        open: true,
+        message: 'Failed to add comment. Please try again.',
+        severity: 'error'
+      });
+    }
+  };
+
+  const handleDeleteReportComment = async (commentId) => {
+    if (!commentReport) return;
+
+    try {
+      await axios.delete(`http://localhost:8000/api/sos_reports/sos_reports/${commentReport.id}/updates/${commentId}/`, {
+        headers: {
+          'Authorization': `Token ${localStorage.getItem('token')}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      await fetchReportComments(commentReport.id);
+      setSnackbar({
+        open: true,
+        message: 'Comment deleted successfully!',
+        severity: 'success'
+      });
+    } catch (error) {
+      console.error('Error deleting comment:', error);
+      setSnackbar({
+        open: true,
+        message: 'Failed to delete comment. Please try again.',
+        severity: 'error'
+      });
+    }
+  };
+
+  const canDeleteReportComment = (comment) => {
+    if (!user) return false;
+    if (isAdmin) return true;
+    if (commentReport && user.id === commentReport.user?.id) return true;
+    if (comment.user && user.id === comment.user.id) return true;
+    return false;
   };
     
   const handleVote = async (reportId, voteType) => {
@@ -265,6 +454,16 @@ const Reports = () => {
         return;
       }
 
+      // Validate phone number if provided
+      if (phoneNumber && !validatePhoneNumber(phoneNumber, selectedCountryCode)) {
+        setSnackbar({
+          open: true,
+          message: `Please enter a valid phone number for ${countryCodes.find(c => c.code === selectedCountryCode)?.country}`,
+          severity: 'error'
+        });
+        return;
+      }
+
           const formData = new FormData();
       
       // Add basic report data
@@ -280,6 +479,11 @@ const Reports = () => {
       newReportForm.photos.forEach((photo, index) => {
         formData.append('files', photo.file);
       });
+
+      // Add images to remove (for edit mode)
+      if (imagesToRemove.length > 0) {
+        formData.append('images_to_remove', JSON.stringify(imagesToRemove));
+      }
 
       let response;
       const isEditMode = selectedReport && selectedReport.id;
@@ -320,6 +524,10 @@ const Reports = () => {
         phone_number: '',
         photos: []
       });
+      setSelectedCountryCode('+91');
+      setPhoneNumber('');
+      setExistingImages([]);
+      setImagesToRemove([]);
 
       fetchReports();
     } catch (error) {
@@ -406,6 +614,38 @@ const Reports = () => {
       phone_number: report.phone_number,
       photos: []
     });
+    
+    // Load existing images - handle both media and images arrays
+    if (report.media && report.media.length > 0) {
+      setExistingImages(report.media);
+    } else if (report.images && report.images.length > 0) {
+      // Convert images array to media format
+      const mediaFormat = report.images.map(img => ({ 
+        file_url: img, 
+        image_url: img, 
+        url: img,
+        filename: img.split('/').pop()
+      }));
+      setExistingImages(mediaFormat);
+    } else {
+      setExistingImages([]);
+    }
+    setImagesToRemove([]);
+    
+    // Parse phone number for country code and number
+    if (report.phone_number) {
+      const phoneMatch = report.phone_number.match(/^(\+\d{1,4})(\d+)$/);
+      if (phoneMatch) {
+        setSelectedCountryCode(phoneMatch[1]);
+        setPhoneNumber(phoneMatch[2]);
+      } else {
+        setSelectedCountryCode('+91');
+        setPhoneNumber(report.phone_number.replace(/\D/g, ''));
+      }
+    } else {
+      setSelectedCountryCode('+91');
+      setPhoneNumber('');
+    }
     
     // Set the report to edit
     setSelectedReport(report);
@@ -588,11 +828,11 @@ const Reports = () => {
   };
 
   const canEditReport = (report) => {
-    return isAdmin || (user && report.user && report.user.id === user.id);
+    return isAdmin || (user && (report.user_id === user.id || (report.user && report.user.id === user.id)));
   };
 
   const canDeleteReport = (report) => {
-    return isAdmin || (user && report.user && report.user.id === user.id);
+    return isAdmin || (user && (report.user_id === user.id || (report.user && report.user.id === user.id)));
   };
 
   const handleViewReport = (report) => {
@@ -629,9 +869,9 @@ const Reports = () => {
         display: 'flex', 
         justifyContent: 'space-between', 
         alignItems: 'center', 
-        mb: 3, 
-        p: 3,
-        borderRadius: 3,
+        mb: 2, 
+        p: 2,
+        borderRadius: 2,
         background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
         boxShadow: '0 6px 24px rgba(102, 126, 234, 0.3)',
         position: 'relative',
@@ -648,16 +888,16 @@ const Reports = () => {
         }
       }}>
         <Box sx={{ position: 'relative', zIndex: 1 }}>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 0.5 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.25 }}>
             <Box sx={{
-              width: 50,
-              height: 50,
+              width: 40,
+              height: 40,
               borderRadius: '50%',
               background: 'linear-gradient(45deg, #FF6B6B, #FF8E53)',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              fontSize: '1.5rem',
+              fontSize: '1.2rem',
               boxShadow: '0 3px 15px rgba(255, 107, 107, 0.4)',
               animation: 'pulse 2s infinite'
             }}>
@@ -671,60 +911,81 @@ const Reports = () => {
                 mb: 0.25,
                 fontSize: { xs: '1.5rem', md: '2rem' }
               }}>
-                Emergency Reports
+                Emergency Reports Command Center
               </Typography>
-              <Typography variant="subtitle1" sx={{ 
+              <Typography variant="body2" sx={{ 
                 color: 'rgba(255,255,255,0.9)',
                 fontWeight: 500,
-                fontSize: { xs: '0.8rem', md: '0.95rem' },
+                fontSize: { xs: '0.7rem', md: '0.8rem' },
                 textShadow: '0 1px 2px rgba(0,0,0,0.2)'
               }}>
-                Real-time emergency reporting and community response
+                Real-time disaster response management system
                 </Typography>
             </Box>
           </Box>
           
-          {/* Stats Row */}
+          {/* Stats Cards Row */}
           <Box sx={{ 
             display: 'flex', 
-            gap: 2, 
+            gap: 1.5, 
             mt: 1.5,
             flexWrap: 'wrap'
           }}>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-              <Box sx={{ 
-                width: 8, 
-                height: 8, 
-                borderRadius: '50%', 
-                bgcolor: '#4CAF50',
-                boxShadow: '0 0 10px rgba(76, 175, 80, 0.6)'
-              }} />
-              <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.8)', fontWeight: 500 }}>
-                {reports.length} Active Reports
+            {/* Total Reports Card */}
+            <Box sx={{
+              bgcolor: 'rgba(255,255,255,0.95)',
+              borderRadius: 0.5,
+              p: 1,
+              minWidth: 120,
+              height: 40,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              boxShadow: '0 2px 6px rgba(0,0,0,0.1)',
+              border: '1px solid rgba(255,255,255,0.2)'
+            }}>
+              <Typography variant="body2" sx={{ 
+                color: '#666',
+                fontWeight: 500,
+                fontSize: '0.8rem'
+              }}>
+                Total Reports
+              </Typography>
+              <Typography variant="h6" sx={{ 
+                fontWeight: 'bold', 
+                color: '#333',
+                fontSize: '1.2rem'
+              }}>
+                {stats.total_reports}
               </Typography>
             </Box>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-              <Box sx={{ 
-                width: 8, 
-                height: 8, 
-                borderRadius: '50%', 
-                bgcolor: '#FF9800',
-                boxShadow: '0 0 10px rgba(255, 152, 0, 0.6)'
-              }} />
-              <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.8)', fontWeight: 500 }}>
-                Community Monitored
+
+            {/* Critical Reports Card */}
+            <Box sx={{
+              bgcolor: 'rgba(255,255,255,0.95)',
+              borderRadius: 0.5,
+              p: 1,
+              minWidth: 120,
+              height: 40,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              boxShadow: '0 2px 6px rgba(0,0,0,0.1)',
+              border: '1px solid rgba(255,255,255,0.2)'
+            }}>
+              <Typography variant="body2" sx={{ 
+                color: '#666',
+                fontWeight: 500,
+                fontSize: '0.8rem'
+              }}>
+                Critical
               </Typography>
-            </Box>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-              <Box sx={{ 
-                width: 8, 
-                height: 8, 
-                borderRadius: '50%', 
-                bgcolor: '#2196F3',
-                boxShadow: '0 0 10px rgba(33, 150, 243, 0.6)'
-              }} />
-              <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.8)', fontWeight: 500 }}>
-                AI Verified
+              <Typography variant="h6" sx={{ 
+                fontWeight: 'bold', 
+                color: '#d32f2f',
+                fontSize: '1.2rem'
+              }}>
+                {stats.critical_reports}
               </Typography>
             </Box>
           </Box>
@@ -745,13 +1006,17 @@ const Reports = () => {
               phone_number: '',
               photos: []
             });
+            setSelectedCountryCode('+91');
+            setPhoneNumber('');
+            setExistingImages([]);
+            setImagesToRemove([]);
             setCreateDialogOpen(true);
           }}
           sx={{ 
-            borderRadius: 4,
-            px: 4,
-            py: 2,
-            fontSize: '1.1rem',
+            borderRadius: 3,
+            px: 3,
+            py: 1.5,
+            fontSize: '1rem',
             background: 'linear-gradient(45deg, #FF6B6B, #FF8E53)',
             boxShadow: '0 8px 32px rgba(255, 107, 107, 0.3)',
             '&:hover': {
@@ -1023,6 +1288,10 @@ const Reports = () => {
                 phone_number: '',
                 photos: []
               });
+              setSelectedCountryCode('+91');
+              setPhoneNumber('');
+              setExistingImages([]);
+              setImagesToRemove([]);
               setCreateDialogOpen(true);
             }}
                           sx={{ 
@@ -1052,7 +1321,7 @@ const Reports = () => {
                   height: '100%', 
                   display: 'flex', 
                   flexDirection: 'column',
-                  borderRadius: 2,
+                  borderRadius: 0.5,
                   boxShadow: '0 4px 16px rgba(0,0,0,0.1)',
                   transition: 'all 0.4s cubic-bezier(0.4, 0, 0.2, 1)',
                   background: 'linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%)',
@@ -1070,7 +1339,7 @@ const Reports = () => {
                       pb: 1,
                       background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
                       color: 'white',
-                      borderRadius: '8px 8px 0 0'
+                      borderRadius: '4px 4px 0 0'
                     }}
                     title={
                       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -1127,11 +1396,11 @@ const Reports = () => {
                     </Box>
 
                     {/* Enhanced Main Image */}
-                    {report.media && report.media.length > 0 ? (
+                    {((report.media && report.media.length > 0) || (report.images && report.images.length > 0)) ? (
                       <Box sx={{ 
                                 position: 'relative',
                         mb: 3, 
-                        borderRadius: 3, 
+                        borderRadius: 1, 
                                 overflow: 'hidden',
                                 cursor: 'pointer',
                         '&:hover .image-overlay': {
@@ -1143,7 +1412,13 @@ const Reports = () => {
                         <CardMedia
                           component="img"
                           height="160"
-                          image={report.media[0].file_url || report.media[0].image_url}
+                          image={
+                            (report.media && report.media.length > 0) 
+                              ? (report.media[0].file_url || report.media[0].image_url || report.media[0].url)
+                              : (report.images && report.images.length > 0)
+                                ? report.images[0]
+                                : null
+                          }
                           alt={report.disaster_type}
                           sx={{ 
                             objectFit: 'cover',
@@ -1171,16 +1446,22 @@ const Reports = () => {
                           <Box 
                             sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer' }}
                               onClick={() => {
-                              setSelectedPhotos(report.media);
+                              // Handle both media array and images array
+                              const photos = report.media && report.media.length > 0 
+                                ? report.media 
+                                : (report.images && report.images.length > 0 
+                                    ? report.images.map(img => ({ file_url: img, image_url: img, url: img }))
+                                    : []);
+                              setSelectedPhotos(photos);
                               setPhotoGalleryOpen(true);
                             }}
                           >
                             <Typography variant="body2" sx={{ fontWeight: 'bold' }}>
                               View All Photos
                             </Typography>
-                            {report.media.length > 1 && (
+                            {((report.media && report.media.length > 1) || (report.images && report.images.length > 1)) && (
                       <Chip
-                                label={`+${report.media.length - 1}`} 
+                                label={`+${(report.media ? report.media.length : report.images ? report.images.length : 0) - 1}`} 
                         size="small"
                         sx={{
                                   bgcolor: 'rgba(255,255,255,0.2)', 
@@ -1235,7 +1516,7 @@ const Reports = () => {
                       mb: 2, 
                       p: 1.5,
                       background: 'linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%)', 
-                      borderRadius: 1.5,
+                      borderRadius: 0.5,
                       border: '1px solid rgba(0,0,0,0.05)'
                     }}>
                       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1.5 }}>
@@ -1292,13 +1573,13 @@ const Reports = () => {
                             size="small" 
                             variant={report.user_vote === 'STILL_THERE' ? 'contained' : 'outlined'}
                             color="warning"
-                            onClick={() => handleVote(report.id, 'STILL_THERE')}
-                            disabled={voting[report.id]}
+                            onClick={() => handleVote(report.report_id, 'STILL_THERE')}
+                            disabled={voting[report.report_id]}
                             startIcon={<Timer sx={{ fontSize: 14 }} />}
                               sx={{
                               flex: 1, 
                               fontSize: '0.65rem',
-                                borderRadius: 1,
+                                borderRadius: 0.5,
                               py: 0.8,
                               fontWeight: 'bold',
                               minWidth: 0,
@@ -1316,13 +1597,13 @@ const Reports = () => {
                             size="small"
                             variant={report.user_vote === 'RESOLVED' ? 'contained' : 'outlined'}
                             color="success"
-                            onClick={() => handleVote(report.id, 'RESOLVED')}
-                            disabled={voting[report.id]}
+                            onClick={() => handleVote(report.report_id, 'RESOLVED')}
+                            disabled={voting[report.report_id]}
                             startIcon={<CheckCircle sx={{ fontSize: 14 }} />}
                             sx={{ 
                               flex: 1, 
                               fontSize: '0.65rem',
-                              borderRadius: 1,
+                              borderRadius: 0.5,
                               py: 0.8,
                               fontWeight: 'bold',
                               minWidth: 0,
@@ -1340,13 +1621,13 @@ const Reports = () => {
                             size="small"
                             variant={report.user_vote === 'FAKE_REPORT' ? 'contained' : 'outlined'}
                             color="error"
-                            onClick={() => handleVote(report.id, 'FAKE_REPORT')}
-                            disabled={voting[report.id]}
+                            onClick={() => handleVote(report.report_id, 'FAKE_REPORT')}
+                            disabled={voting[report.report_id]}
                             startIcon={<Flag sx={{ fontSize: 14 }} />}
                             sx={{ 
                               flex: 1, 
                               fontSize: '0.65rem',
-                              borderRadius: 1,
+                              borderRadius: 0.5,
                               py: 0.8,
                               fontWeight: 'bold',
                               minWidth: 0,
@@ -1390,21 +1671,34 @@ const Reports = () => {
                     </Box>
 
                       {/* Comments Count Opposite to Location */}
-                    <Box sx={{
+                    <Button
+                      variant="outlined"
+                      size="small"
+                      startIcon={<Comment />}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleOpenCommentDialog(report);
+                      }}
+                      sx={{
                         display: 'flex',
                         alignItems: 'center',
                         gap: 1,
-                        background: 'rgba(156, 39, 176, 0.1)',
+                        bgcolor: '#f3e5f5',
+                        borderColor: '#ce93d8',
+                        color: '#7b1fa2',
+                        fontWeight: 'bold',
                         borderRadius: 2,
                         px: 1.5,
                         py: 0.5,
-                        border: '1px solid rgba(156, 39, 176, 0.2)'
-                      }}>
-                        <Comment sx={{ fontSize: 18, color: '#9C27B0' }} />
-                        <Typography variant="body2" sx={{ fontWeight: 'bold', color: '#9C27B0' }}>
-                          {report.updates?.length || 0} comments
-                      </Typography>
-                      </Box>
+                        textTransform: 'none',
+                        '&:hover': { 
+                          bgcolor: '#e1bee7',
+                          borderColor: '#ba68c8'
+                        }
+                      }}
+                    >
+                      {report.updates?.length || 0} comments
+                    </Button>
                     </Box>
 
                   </CardContent>
@@ -1421,7 +1715,7 @@ const Reports = () => {
                             onClick={() => handleViewReport(report)}
                             sx={{ 
                             flex: 1, 
-                            borderRadius: 2,
+                            borderRadius: 0.5,
                             py: 1,
                             fontWeight: 'bold',
                             background: 'linear-gradient(45deg, #2196F3, #21CBF3)',
@@ -1443,7 +1737,7 @@ const Reports = () => {
                               onClick={() => handleEditReport(report)}
                               sx={{ 
                             flex: 1, 
-                            borderRadius: 2,
+                            borderRadius: 0.5,
                             py: 1,
                             fontWeight: 'bold',
                             background: 'linear-gradient(45deg, #FF9800, #FFB74D)',
@@ -1466,7 +1760,7 @@ const Reports = () => {
                           onClick={() => handleDeleteReport(report.id)}
                               sx={{ 
                             flex: 1,
-                            borderRadius: 2,
+                            borderRadius: 0.5,
                             py: 1,
                             fontWeight: 'bold',
                                 '&:hover': { 
@@ -1487,7 +1781,7 @@ const Reports = () => {
                         onClick={() => handleViewReport(report)}
                         fullWidth
                               sx={{ 
-                          borderRadius: 2,
+                          borderRadius: 0.5,
                           py: 1.5,
                           fontWeight: 'bold',
                           background: 'linear-gradient(45deg, #2196F3, #21CBF3)',
@@ -1519,7 +1813,7 @@ const Reports = () => {
         fullWidth
         PaperProps={{
           sx: {
-            borderRadius: 4,
+            borderRadius: 1,
             boxShadow: '0 20px 60px rgba(0,0,0,0.2)'
           }
         }}
@@ -1530,7 +1824,7 @@ const Reports = () => {
           display: 'flex',
           justifyContent: 'space-between',
           alignItems: 'center',
-          borderRadius: '16px 16px 0 0'
+          borderRadius: '4px 4px 0 0'
         }}>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
             {selectedReport && getDisasterIcon(selectedReport.disaster_type)}
@@ -1582,7 +1876,7 @@ const Reports = () => {
                     mb: 2, 
                     p: 3, 
                     bgcolor: 'grey.50', 
-                    borderRadius: 3,
+                    borderRadius: 1,
                     lineHeight: 1.6,
                     fontSize: '1.1rem'
                   }}>
@@ -1597,7 +1891,7 @@ const Reports = () => {
                     gap: 2, 
                     p: 3, 
                     bgcolor: 'grey.50', 
-                    borderRadius: 3,
+                    borderRadius: 1,
                     lineHeight: 1.6,
                     fontSize: '1.1rem'
                   }}>
@@ -1609,7 +1903,7 @@ const Reports = () => {
                   <Typography variant="body1" sx={{ 
                     p: 2, 
                     bgcolor: 'grey.50', 
-                    borderRadius: 2,
+                    borderRadius: 0.5,
                     fontFamily: 'monospace'
                   }}>
                     {selectedReport.phone_number}
@@ -1627,7 +1921,7 @@ const Reports = () => {
                         <Grid item xs={12} sm={6} md={4} key={index}>
                           <Box sx={{ 
                           position: 'relative',
-                            borderRadius: 2,
+                            borderRadius: 0.5,
                           overflow: 'hidden',
                             boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
                             '&:hover': {
@@ -1675,7 +1969,7 @@ const Reports = () => {
                     <Typography variant="subtitle1" color="text.secondary" gutterBottom sx={{ fontWeight: 'bold', mt: 2 }}>
                       🤖 AI Analysis
           </Typography>
-                    <Box sx={{ p: 2, bgcolor: 'grey.50', borderRadius: 2 }}>
+                    <Box sx={{ p: 2, bgcolor: 'grey.50', borderRadius: 0.5 }}>
                       <Grid container spacing={2}>
                         <Grid item xs={12} sm={4}>
                           <Typography variant="caption" color="text.secondary">Confidence</Typography>
@@ -1728,11 +2022,11 @@ const Reports = () => {
                   Community Poll
               </Typography>
               
-                <Paper sx={{ p: 3, borderRadius: 3, bgcolor: 'grey.50' }}>
+                <Paper sx={{ p: 3, borderRadius: 1, bgcolor: 'grey.50' }}>
                   {/* Vote Counts */}
                   <Grid container spacing={2} sx={{ mb: 3 }}>
                     <Grid item xs={4}>
-                      <Box sx={{ textAlign: 'center', p: 2, bgcolor: 'warning.light', borderRadius: 2 }}>
+                      <Box sx={{ textAlign: 'center', p: 2, bgcolor: 'warning.light', borderRadius: 0.5 }}>
                         <Typography variant="h4" sx={{ fontWeight: 'bold', color: 'warning.contrastText' }}>
                           {selectedReport.vote_counts?.still_there || 0}
               </Typography>
@@ -1742,7 +2036,7 @@ const Reports = () => {
                       </Box>
                     </Grid>
                     <Grid item xs={4}>
-                      <Box sx={{ textAlign: 'center', p: 2, bgcolor: 'success.light', borderRadius: 2 }}>
+                      <Box sx={{ textAlign: 'center', p: 2, bgcolor: 'success.light', borderRadius: 0.5 }}>
                         <Typography variant="h4" sx={{ fontWeight: 'bold', color: 'success.contrastText' }}>
                           {selectedReport.vote_counts?.resolved || 0}
                   </Typography>
@@ -1752,7 +2046,7 @@ const Reports = () => {
                 </Box>
                     </Grid>
                     <Grid item xs={4}>
-                      <Box sx={{ textAlign: 'center', p: 2, bgcolor: 'error.light', borderRadius: 2 }}>
+                      <Box sx={{ textAlign: 'center', p: 2, bgcolor: 'error.light', borderRadius: 0.5 }}>
                         <Typography variant="h4" sx={{ fontWeight: 'bold', color: 'error.contrastText' }}>
                           {selectedReport.vote_counts?.fake_report || 0}
                     </Typography>
@@ -1769,7 +2063,7 @@ const Reports = () => {
                       <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
                         Total Votes: {selectedReport.vote_counts.total}
                   </Typography>
-                      <Box sx={{ display: 'flex', height: 20, borderRadius: 2, overflow: 'hidden' }}>
+                      <Box sx={{ display: 'flex', height: 20, borderRadius: 0.5, overflow: 'hidden' }}>
                         <Box sx={{ 
                           flex: selectedReport.vote_percentages?.still_there || 0,
                           bgcolor: 'warning.main',
@@ -1816,10 +2110,10 @@ const Reports = () => {
                       variant={selectedReport.user_vote === 'STILL_THERE' ? 'contained' : 'outlined'}
                       color="warning"
                       startIcon={<ReportProblem />}
-                      onClick={() => handleVote(selectedReport.id, 'STILL_THERE')}
-                      disabled={voting[selectedReport.id]}
+                      onClick={() => handleVote(selectedReport.report_id, 'STILL_THERE')}
+                      disabled={voting[selectedReport.report_id]}
                       sx={{ 
-                        borderRadius: 3,
+                        borderRadius: 0.5,
                         px: 3,
                         py: 1.5,
                         fontWeight: 'bold',
@@ -1832,10 +2126,10 @@ const Reports = () => {
                       variant={selectedReport.user_vote === 'RESOLVED' ? 'contained' : 'outlined'}
                       color="success"
                       startIcon={<CheckCircleOutline />}
-                      onClick={() => handleVote(selectedReport.id, 'RESOLVED')}
-                      disabled={voting[selectedReport.id]}
+                      onClick={() => handleVote(selectedReport.report_id, 'RESOLVED')}
+                      disabled={voting[selectedReport.report_id]}
               sx={{
-                        borderRadius: 3,
+                        borderRadius: 0.5,
                         px: 3,
                         py: 1.5,
                         fontWeight: 'bold',
@@ -1848,10 +2142,10 @@ const Reports = () => {
                       variant={selectedReport.user_vote === 'FAKE_REPORT' ? 'contained' : 'outlined'}
                       color="error"
                       startIcon={<CancelOutlined />}
-                      onClick={() => handleVote(selectedReport.id, 'FAKE_REPORT')}
-                      disabled={voting[selectedReport.id]}
+                      onClick={() => handleVote(selectedReport.report_id, 'FAKE_REPORT')}
+                      disabled={voting[selectedReport.report_id]}
                       sx={{ 
-                        borderRadius: 3,
+                        borderRadius: 0.5,
                         px: 3,
                         py: 1.5,
                         fontWeight: 'bold',
@@ -1888,7 +2182,7 @@ const Reports = () => {
                   onClick={() => addComment(selectedReport.id)}
                   disabled={!newComment.trim()}
               sx={{
-                    borderRadius: 2,
+                    borderRadius: 0.5,
                     px: 3,
                     py: 1.5,
                     background: 'linear-gradient(45deg, #2196F3, #21CBF3)',
@@ -1934,7 +2228,7 @@ const Reports = () => {
                             whiteSpace: 'pre-wrap',
                             p: 2,
                             bgcolor: 'grey.50',
-                            borderRadius: 2,
+                            borderRadius: 0.5,
                             border: '1px solid #e0e0e0'
                           }}>
                             {comment.message}
@@ -1953,7 +2247,7 @@ const Reports = () => {
           <Button 
             onClick={() => setViewDialogOpen(false)} 
             sx={{ 
-              borderRadius: 2,
+              borderRadius: 0.5,
               px: 3,
               py: 1.5
             }}
@@ -2092,19 +2386,100 @@ const Reports = () => {
             </Grid>
             
               <Grid item xs={12}>
-              <TextField
-                fullWidth
-                label="Phone Number"
-                value={newReportForm.phone_number}
-                  onChange={(e) => setNewReportForm({ ...newReportForm, phone_number: e.target.value })}
-                  placeholder="+919876543210"
-              />
-            </Grid>
+                <Typography variant="subtitle2" gutterBottom sx={{ fontWeight: 'bold' }}>
+                  📞 Phone Number
+                </Typography>
+                <Box sx={{ display: 'flex', gap: 1 }}>
+                  {/* Country Code Selector */}
+                  <FormControl sx={{ minWidth: 120 }}>
+                    <Select
+                      value={selectedCountryCode}
+                      onChange={handleCountryCodeChange}
+                      displayEmpty
+                      sx={{ height: 56 }}
+                    >
+                      {countryCodes.map((country) => (
+                        <MenuItem key={country.code} value={country.code}>
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                            <span>{country.flag}</span>
+                            <span>{country.code}</span>
+                          </Box>
+                        </MenuItem>
+                      ))}
+                    </Select>
+                  </FormControl>
+                  
+                  {/* Phone Number Input */}
+                  <TextField
+                    fullWidth
+                    label="Phone Number"
+                    value={phoneNumber}
+                    onChange={handlePhoneNumberChange}
+                    placeholder="9876543210"
+                    error={phoneNumber && !validatePhoneNumber(phoneNumber, selectedCountryCode)}
+                    helperText={
+                      phoneNumber && !validatePhoneNumber(phoneNumber, selectedCountryCode)
+                        ? `Phone number must be ${countryCodes.find(c => c.code === selectedCountryCode)?.maxLength} digits`
+                        : phoneNumber
+                        ? `Valid ${countryCodes.find(c => c.code === selectedCountryCode)?.country} phone number`
+                        : `Enter ${countryCodes.find(c => c.code === selectedCountryCode)?.maxLength} digit phone number`
+                    }
+                    inputProps={{
+                      maxLength: countryCodes.find(c => c.code === selectedCountryCode)?.maxLength
+                    }}
+                  />
+                </Box>
+              </Grid>
             
               {/* Photo Upload */}
             <Grid item xs={12}>
                 <Typography variant="subtitle2" gutterBottom>
-                  📸 Upload Photos (Max 5)
+                  📸 Photos
+                </Typography>
+                
+                {/* Existing Images (Edit Mode) */}
+                {selectedReport && selectedReport.id && existingImages.length > 0 && (
+                  <Box sx={{ mb: 2 }}>
+                    <Typography variant="body2" sx={{ mb: 1, fontWeight: 'bold', color: 'text.secondary' }}>
+                      Current Images:
+                    </Typography>
+                    <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
+                      {existingImages.map((image, index) => (
+                        <Box key={image.id || index} sx={{ position: 'relative' }}>
+                          <img
+                            src={image.file_url || image.image_url}
+                            alt={`Existing ${index + 1}`}
+                            style={{
+                              width: 80,
+                              height: 80,
+                              objectFit: 'cover',
+                              borderRadius: 8,
+                              border: '2px solid #e0e0e0'
+                            }}
+                          />
+                          <IconButton
+                            size="small"
+                            onClick={() => handleRemoveExistingImage(image.id)}
+                            sx={{
+                              position: 'absolute',
+                              top: -8,
+                              right: -8,
+                              bgcolor: 'error.main',
+                              color: 'white',
+                              '&:hover': { bgcolor: 'error.dark' }
+                            }}
+                          >
+                            <DeleteIcon />
+                          </IconButton>
+                        </Box>
+                      ))}
+                    </Box>
+                  </Box>
+                )}
+                
+                {/* New Photo Upload */}
+                <Typography variant="body2" sx={{ mb: 1, fontWeight: 'bold', color: 'text.secondary' }}>
+                  Add New Photos (Max 5):
                 </Typography>
                 <input
                   accept="image/*"
@@ -2355,6 +2730,180 @@ const Reports = () => {
             </Box>
           )}
         </DialogContent>
+      </Dialog>
+
+      {/* Comment Dialog */}
+      <Dialog 
+        open={commentDialogOpen} 
+        onClose={() => setCommentDialogOpen(false)}
+        maxWidth="md"
+        fullWidth
+        sx={{
+          '& .MuiDialog-paper': {
+            borderRadius: 1,
+            maxHeight: '80vh'
+          }
+        }}
+      >
+        <DialogTitle sx={{ 
+          background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+          color: 'white',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          borderRadius: '4px 4px 0 0'
+        }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <Comment />
+            <Typography variant="h6">
+              Comments & Updates
+              {commentReport && (
+                <Typography component="span" variant="body2" sx={{ ml: 1, opacity: 0.9 }}>
+                  - {commentReport.disaster_type} Report
+                </Typography>
+              )}
+            </Typography>
+          </Box>
+          <IconButton 
+            onClick={() => setCommentDialogOpen(false)}
+            sx={{ color: 'white' }}
+          >
+            <Close />
+          </IconButton>
+        </DialogTitle>
+        
+        <DialogContent sx={{ p: 3 }}>
+          {commentReport && (
+            <Box>
+              {/* Report Info */}
+              <Box sx={{ 
+                mb: 3, 
+                p: 2, 
+                bgcolor: '#f5f5f5', 
+                borderRadius: 1,
+                border: '1px solid #e0e0e0'
+              }}>
+                <Typography variant="subtitle1" sx={{ fontWeight: 'bold', mb: 1 }}>
+                  {commentReport.disaster_type} - {commentReport.priority} Priority
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  {commentReport.description}
+                </Typography>
+                <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>
+                  Location: {commentReport.address}
+                </Typography>
+              </Box>
+
+              {/* Add Comment Section */}
+              <Box sx={{ mb: 3 }}>
+                <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                  <Comment color="primary" />
+                  Add Comment
+                </Typography>
+                <TextField
+                  fullWidth
+                  multiline
+                  rows={3}
+                  placeholder="Add a comment or update about this report..."
+                  value={newReportComment}
+                  onChange={(e) => setNewReportComment(e.target.value)}
+                  sx={{ mb: 2 }}
+                />
+                <Button
+                  variant="contained"
+                  onClick={handleAddReportComment}
+                  disabled={!newReportComment.trim()}
+                  sx={{
+                    borderRadius: 0.5,
+                    px: 3,
+                    py: 1,
+                    background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                    '&:hover': {
+                      background: 'linear-gradient(135deg, #5a6fd8 0%, #6a4190 100%)'
+                    }
+                  }}
+                >
+                  Add Comment
+                </Button>
+              </Box>
+
+              {/* Comments List */}
+              <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                <Comment color="primary" />
+                Comments ({reportComments.length})
+              </Typography>
+              
+              <List>
+                {reportComments.length === 0 ? (
+                  <ListItem>
+                    <ListItemText 
+                      primary="No comments yet"
+                      secondary="Be the first to add a comment or update about this report"
+                    />
+                  </ListItem>
+                ) : (
+                  reportComments.map((comment, index) => (
+                    <ListItem key={index} sx={{ alignItems: 'flex-start', mb: 2 }}>
+                      <ListItemAvatar>
+                        <Avatar sx={{ bgcolor: 'primary.main' }}>
+                          {comment.user?.first_name?.[0] || 'U'}
+                        </Avatar>
+                      </ListItemAvatar>
+                      <ListItemText
+                        primary={
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5 }}>
+                            <Typography variant="subtitle2" sx={{ fontWeight: 'bold' }}>
+                              {comment.user?.first_name} {comment.user?.last_name}
+                            </Typography>
+                            <Typography variant="caption" color="text.secondary">
+                              {new Date(comment.created_at).toLocaleString()}
+                            </Typography>
+                            {canDeleteReportComment(comment) && (
+                              <IconButton
+                                size="small"
+                                onClick={() => handleDeleteReportComment(comment.id)}
+                                sx={{ 
+                                  ml: 'auto',
+                                  color: 'error.main',
+                                  '&:hover': { bgcolor: 'error.light', color: 'white' }
+                                }}
+                              >
+                                <Delete />
+                              </IconButton>
+                            )}
+                          </Box>
+                        }
+                        secondary={
+                          <Typography variant="body2" sx={{ 
+                            bgcolor: '#f9f9f9',
+                            p: 1.5,
+                            borderRadius: 0.5,
+                            border: '1px solid #e0e0e0'
+                          }}>
+                            {comment.message}
+                          </Typography>
+                        }
+                      />
+                    </ListItem>
+                  ))
+                )}
+              </List>
+            </Box>
+          )}
+        </DialogContent>
+        
+        <DialogActions sx={{ p: 3 }}>
+          <Button 
+            onClick={() => setCommentDialogOpen(false)} 
+            sx={{ 
+              borderRadius: 0.5,
+              px: 3,
+              py: 1
+            }}
+          >
+            Close
+          </Button>
+        </DialogActions>
       </Dialog>
     </Container>
   );

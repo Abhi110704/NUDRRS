@@ -11,6 +11,7 @@ import {
   Menu as MenuIcon, Close, Logout, Settings, Person, ExitToApp
 } from '@mui/icons-material';
 import { useAuth } from '../contexts/AuthContext';
+import axios from 'axios';
 // import DemoToggle from './DemoToggle'; // Removed for production
 
 const Navbar = () => {
@@ -23,6 +24,8 @@ const Navbar = () => {
   const [notificationAnchor, setNotificationAnchor] = useState(null);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [currentTime, setCurrentTime] = useState(new Date());
+  const [notifications, setNotifications] = useState([]);
+  const [loading, setLoading] = useState(false);
 
   const { user, logout, isAuthenticated, isAdmin } = useAuth();
 
@@ -30,6 +33,78 @@ const Navbar = () => {
     const timer = setInterval(() => setCurrentTime(new Date()), 1000);
     return () => clearInterval(timer);
   }, []);
+
+  useEffect(() => {
+    if (isAuthenticated) {
+      fetchNotifications();
+      const interval = setInterval(fetchNotifications, 30000); // Fetch every 30 seconds
+      return () => clearInterval(interval);
+    }
+  }, [isAuthenticated]);
+
+  const fetchNotifications = async () => {
+    try {
+      setLoading(true);
+      const response = await axios.get('http://localhost:8000/api/notifications/list/', {
+        headers: {
+          'Authorization': `Token ${localStorage.getItem('token')}`
+        }
+      });
+      console.log('Notifications API Response:', response.data);
+      setNotifications(response.data.notifications || []);
+    } catch (error) {
+      console.error('Error fetching notifications:', error);
+      console.error('Error details:', error.response?.data);
+      setNotifications([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const getNotificationColor = (status) => {
+    switch (status?.toUpperCase()) {
+      case 'FAILED':
+        return '#ff1744';
+      case 'PENDING':
+        return '#ff9800';
+      case 'SENT':
+      case 'DELIVERED':
+        return '#4caf50';
+      case 'SMS':
+        return '#2196f3';
+      case 'EMAIL':
+        return '#9c27b0';
+      case 'PUSH':
+        return '#ff5722';
+      case 'WHATSAPP':
+        return '#25d366';
+      default:
+        return '#2196f3';
+    }
+  };
+
+  const getNotificationIcon = (status) => {
+    switch (status?.toUpperCase()) {
+      case 'FAILED':
+        return '❌';
+      case 'PENDING':
+        return '⏳';
+      case 'SENT':
+        return '✅';
+      case 'DELIVERED':
+        return '📨';
+      case 'SMS':
+        return '📱';
+      case 'EMAIL':
+        return '📧';
+      case 'PUSH':
+        return '🔔';
+      case 'WHATSAPP':
+        return '💬';
+      default:
+        return '📢';
+    }
+  };
 
   const navItems = [
     { path: '/', label: 'Command Center', icon: <Dashboard />, color: '#667eea' },
@@ -92,6 +167,7 @@ const Navbar = () => {
     <>
             <AppBar 
         position="static" 
+        elevation={0}
         sx={{ 
           background: 'rgba(255, 255, 255, 0.95)',
           backdropFilter: 'blur(20px)',
@@ -217,7 +293,7 @@ const Navbar = () => {
               <>
 
                 <Badge 
-                  badgeContent={3} 
+                  badgeContent={notifications.length} 
                   color="error"
                   sx={{
                     '& .MuiBadge-badge': {
@@ -517,36 +593,43 @@ const Navbar = () => {
           }
         }}
       >
-        <MenuItem onClick={handleNotificationClose}>
-          <Box sx={{ display: 'flex', flexDirection: 'column', width: '100%' }}>
-            <Typography variant="subtitle2" sx={{ fontWeight: 'bold', color: '#ff1744' }}>
-              🚨 Critical Alert
+        {loading ? (
+          <MenuItem>
+            <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+              Loading notifications...
             </Typography>
-            <Typography variant="body2" sx={{ color: 'text.secondary', mt: 0.5 }}>
-              Earthquake detected in Zone-A. Emergency teams dispatched.
+          </MenuItem>
+        ) : notifications.length === 0 ? (
+          <MenuItem>
+            <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+              No new notifications
             </Typography>
-          </Box>
-        </MenuItem>
-        <MenuItem onClick={handleNotificationClose}>
-          <Box sx={{ display: 'flex', flexDirection: 'column', width: '100%' }}>
-            <Typography variant="subtitle2" sx={{ fontWeight: 'bold', color: '#ff9800' }}>
-              ⚠️ High Priority
-            </Typography>
-            <Typography variant="body2" sx={{ color: 'text.secondary', mt: 0.5 }}>
-              Flood warning issued for coastal areas. Evacuation in progress.
-            </Typography>
-          </Box>
-        </MenuItem>
-        <MenuItem onClick={handleNotificationClose}>
-          <Box sx={{ display: 'flex', flexDirection: 'column', width: '100%' }}>
-            <Typography variant="subtitle2" sx={{ fontWeight: 'bold', color: '#2196f3' }}>
-              ℹ️ Information
-            </Typography>
-            <Typography variant="body2" sx={{ color: 'text.secondary', mt: 0.5 }}>
-              System maintenance scheduled for tonight 2:00 AM - 4:00 AM.
-            </Typography>
-          </Box>
-        </MenuItem>
+          </MenuItem>
+        ) : (
+          notifications.slice(0, 5).map((notification, index) => (
+            <MenuItem key={notification.id || index} onClick={handleNotificationClose}>
+              <Box sx={{ display: 'flex', flexDirection: 'column', width: '100%' }}>
+                <Typography variant="subtitle2" sx={{ 
+                  fontWeight: 'bold', 
+                  color: getNotificationColor(notification.status || notification.type)
+                }}>
+                  {getNotificationIcon(notification.status || notification.type)} {notification.type || 'Notification'}
+                </Typography>
+                <Typography variant="body2" sx={{ color: 'text.secondary', mt: 0.5 }}>
+                  {notification.message}
+                </Typography>
+                <Typography variant="caption" sx={{ color: 'text.secondary', mt: 0.5, fontSize: '0.7rem' }}>
+                  To: {notification.recipient}
+                </Typography>
+                {notification.created_at && (
+                  <Typography variant="caption" sx={{ color: 'text.secondary', mt: 0.5, fontSize: '0.7rem' }}>
+                    {new Date(notification.created_at).toLocaleString()}
+                  </Typography>
+                )}
+              </Box>
+            </MenuItem>
+          ))
+        )}
       </Menu>
 
       {/* Enhanced Styles */}

@@ -7,21 +7,42 @@ class EmergencyReport(Document):
     user_id = IntField(required=True)
     username = StringField(required=True)
     emergency_type = StringField(required=True)
+    disaster_type = StringField()  # Additional field for disaster type
     severity = StringField(required=True)
+    priority = StringField()  # Additional field for priority
     location = DictField()  # {lat: float, lng: float, address: string}
+    latitude = FloatField()  # Direct latitude field
+    longitude = FloatField()  # Direct longitude field
+    address = StringField()  # Direct address field
     description = StringField(required=True)
+    phone_number = StringField()  # Phone number field
     images = ListField(StringField())  # List of image URLs
+    media = ListField(DictField())  # Media objects
     status = StringField(default='pending')
     created_at = DateTimeField(default=datetime.utcnow)
     updated_at = DateTimeField(default=datetime.utcnow)
     
     # AI Analysis data
     ai_analysis = DictField()
+    ai_analysis_data = DictField()  # Additional AI analysis field
     fraud_score = FloatField(default=0.0)
+    ai_fraud_score = FloatField(default=0.0)  # Additional fraud score field
+    ai_confidence = FloatField(default=0.0)  # AI confidence score
+    ai_verified = StringField(default='pending')  # AI verification status
     verified = StringField(default='pending')
+    
+    # Voting system
+    vote_counts = DictField()  # Vote counts
+    vote_percentages = DictField()  # Vote percentages
+    user_vote = DictField()  # User votes
+    
+    # Updates/Comments
+    updates = ListField(DictField())  # Comments and updates
     
     # Additional metadata
     metadata = DictField()
+    source = StringField()  # Source of the report
+    migrated_at = DateTimeField()  # Migration timestamp
     
     meta = {
         'collection': 'emergency_reports',

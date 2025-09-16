@@ -6,9 +6,11 @@ from django.db.models import Q, Count
 from django.utils import timezone
 from .models import SOSReport, ReportMedia, ReportUpdate, ReportVote
 from .serializers import SOSReportSerializer, SOSReportCreateSerializer, ReportUpdateSerializer, ReportVoteSerializer
+from .mongodb_service import mongodb_service
 from ai_services.services import AIVerificationService
 import json
 import math
+import uuid
 
 class SOSReportViewSet(viewsets.ModelViewSet):
     queryset = SOSReport.objects.all()
@@ -35,114 +37,220 @@ class SOSReportViewSet(viewsets.ModelViewSet):
         return context
     
     def get_queryset(self):
-        queryset = SOSReport.objects.all()
-        
-        # Filter by user if specified and user is not admin
-        user_id = self.request.query_params.get('user')
-        if user_id and not (self.request.user.is_authenticated and 
-                           hasattr(self.request.user, 'profile') and 
-                           self.request.user.profile.role == 'ADMIN'):
-            queryset = queryset.filter(user_id=user_id)
-        
-        return queryset
+        # This method is kept for compatibility but we'll use MongoDB service directly
+        return SOSReport.objects.none()  # Return empty queryset since we're using MongoDB
     
-    def create(self, request, *args, **kwargs):
-        serializer = self.get_serializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        
-        # Get or create a default anonymous user for unauthenticated reports
-        from django.contrib.auth.models import User
-        if request.user.is_authenticated:
-            user = request.user
-        else:
-            # Create or get anonymous user
-            user, created = User.objects.get_or_create(
-                username='anonymous_user',
-                defaults={
-                    'first_name': 'Anonymous',
-                    'last_name': 'User',
-                    'email': 'anonymous@nudrrs.com'
-                }
-            )
-        
-        # Create the report
-        report = serializer.save(user=user)
-        
-        # Process uploaded media files and perform comprehensive AI analysis
-        files = request.FILES.getlist('files')
-        image_paths = []
-        
-        for file in files:
-            media_type = 'IMAGE' if file.content_type.startswith('image/') else 'VIDEO'
-            media = ReportMedia.objects.create(
-                report=report,
-                media_type=media_type,
-                file=file
+    def list(self, request, *args, **kwargs):
+        """List reports from MongoDB"""
+        try:
+            # Get query parameters
+            user_id = request.query_params.get('user')
+            limit = int(request.query_params.get('limit', 100))
+            skip = int(request.query_params.get('skip', 0))
+            
+            # Get reports from MongoDB
+            reports = mongodb_service.get_reports(
+                filters={},
+                limit=limit,
+                skip=skip,
+                user_id=int(user_id) if user_id else None
             )
             
-            if media_type == 'IMAGE':
-                image_paths.append(media.file.path)
-        
-        # Perform comprehensive AI analysis
-        ai_service = AIVerificationService()
-        comprehensive_analysis = ai_service.analyze_report(
-            text_description=report.description,
-            image_paths=image_paths
-        )
-        
-        # Update report with comprehensive analysis results
-        report.ai_verified = comprehensive_analysis.get('is_emergency', False)
-        report.ai_confidence = comprehensive_analysis.get('confidence', 0.0)
-        
-        # Store fraud score and detailed analysis in existing fields
-        fraud_score = comprehensive_analysis.get('fraud_score', 0.0)
-        report.ai_fraud_score = fraud_score
-        report.ai_analysis_data = {
-            'comprehensive_analysis': comprehensive_analysis,
-            'text_analysis': comprehensive_analysis.get('text_analysis', {}),
-            'image_analyses': comprehensive_analysis.get('image_analyses', []),
-            'combined_metrics': comprehensive_analysis.get('combined_metrics', {}),
-            'fraud_indicators': comprehensive_analysis.get('text_analysis', {}).get('fraud_keywords_found', []),
-            'emergency_indicators': comprehensive_analysis.get('text_analysis', {}).get('keywords_found', []),
-            'analysis_timestamp': timezone.now().isoformat(),
-            'analysis_version': '2.0_enhanced'
-        }
-        
-        # Enhanced priority determination based on AI analysis
-        suggested_priority = comprehensive_analysis.get('suggested_priority', 'MEDIUM')
-        confidence = comprehensive_analysis.get('confidence', 0.0)
-        
-        # Override priority based on confidence and fraud score
-        if fraud_score > 0.7 or confidence < 0.3:
-            report.priority = 'LOW'  # Mark as low priority if likely fraud
-        elif confidence > 0.8 and fraud_score < 0.2:
-            report.priority = 'HIGH'  # High confidence, low fraud = high priority
-        elif confidence > 0.6 and fraud_score < 0.4:
-            report.priority = 'MEDIUM'
-        else:
-            report.priority = suggested_priority
-        
-        # Enhanced status determination
-        if comprehensive_analysis.get('is_fraud', False) or fraud_score > 0.6:
-            report.status = 'REJECTED'
-        elif comprehensive_analysis.get('suggested_status'):
-            report.status = comprehensive_analysis.get('suggested_status', 'PENDING')
-        elif confidence > 0.8 and fraud_score < 0.2:
-            report.status = 'VERIFIED'  # Auto-verify high confidence reports
-        else:
-            report.status = 'PENDING'
-        
-        report.save()
-        
-        # Store detailed AI analysis in media records
-        for i, file in enumerate(files):
-            if file.content_type.startswith('image/'):
-                media = ReportMedia.objects.filter(report=report, file__icontains=file.name).first()
-                if media and i < len(comprehensive_analysis.get('image_analyses', [])):
-                    media.ai_analysis = comprehensive_analysis['image_analyses'][i]
-                    media.save()
-        
-        return Response(SOSReportSerializer(report).data, status=status.HTTP_201_CREATED)
+            return Response(reports)
+        except Exception as e:
+            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    
+    def retrieve(self, request, *args, **kwargs):
+        """Get a single report from MongoDB"""
+        try:
+            report_id = kwargs.get('pk')
+            report = mongodb_service.get_report_by_id(report_id)
+            
+            if report:
+                return Response(report)
+            else:
+                return Response({'error': 'Report not found'}, status=status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    
+    def create(self, request, *args, **kwargs):
+        try:
+            # Get user information
+            user_id = request.user.id if request.user.is_authenticated else 1  # Default to admin user
+            username = request.user.username if request.user.is_authenticated else 'anonymous_user'
+            
+            # Generate unique report ID
+            report_id = str(uuid.uuid4())
+            
+            # Prepare report data for MongoDB
+            report_data = {
+                'report_id': report_id,
+                'user_id': user_id,
+                'username': username,
+                'emergency_type': request.data.get('emergency_type', 'OTHER'),
+                'disaster_type': request.data.get('disaster_type', 'OTHER'),
+                'severity': request.data.get('severity', 'MEDIUM'),
+                'priority': request.data.get('priority', 'MEDIUM'),
+                'description': request.data.get('description', ''),
+                'phone_number': request.data.get('phone_number', ''),
+                'latitude': float(request.data.get('latitude', 0)) if request.data.get('latitude') else None,
+                'longitude': float(request.data.get('longitude', 0)) if request.data.get('longitude') else None,
+                'address': request.data.get('address', ''),
+                'location': {
+                    'lat': float(request.data.get('latitude', 0)) if request.data.get('latitude') else None,
+                    'lng': float(request.data.get('longitude', 0)) if request.data.get('longitude') else None,
+                    'address': request.data.get('address', '')
+                },
+                'status': 'PENDING',
+                'images': [],
+                'media': [],
+                'updates': [],
+                'vote_counts': {},
+                'vote_percentages': {},
+                'user_vote': {},
+                'ai_analysis_data': {},
+                'ai_fraud_score': 0.0,
+                'ai_confidence': 0.0,
+                'ai_verified': 'pending',
+                'verified': 'pending'
+            }
+            
+            # Process uploaded media files using ImageKit
+            files = request.FILES.getlist('files')
+            image_paths = []
+            
+            for file in files:
+                media_type = 'IMAGE' if file.content_type.startswith('image/') else 'VIDEO'
+                
+                if media_type == 'IMAGE':
+                    try:
+                        # Upload to ImageKit
+                        from imagekit_service import imagekit_service
+                        
+                        # Generate unique filename
+                        file_extension = file.name.split('.')[-1] if '.' in file.name else 'jpg'
+                        unique_filename = f"{report_id}_{uuid.uuid4().hex[:8]}.{file_extension}"
+                        
+                        # Upload to ImageKit
+                        upload_result = imagekit_service.upload_file(
+                            file=file,
+                            folder=f"nudrrs/reports/{report_id}",
+                            filename=unique_filename,
+                            tags=['nudrrs', 'emergency_report', report_data['disaster_type'].lower()]
+                        )
+                        
+                        if upload_result['success']:
+                            # Store ImageKit file info
+                            media_info = {
+                                'media_type': media_type,
+                                'filename': unique_filename,
+                                'content_type': file.content_type,
+                                'size': file.size,
+                                'file_id': upload_result['file_id'],
+                                'url': upload_result['url'],
+                                'imagekit_url': upload_result['url'],
+                                'file_url': upload_result['url'],
+                                'image_url': upload_result['url']
+                            }
+                            
+                            report_data['media'].append(media_info)
+                            image_paths.append(upload_result['url'])
+                            report_data['images'].append(upload_result['url'])
+                        else:
+                            print(f"ImageKit upload failed: {upload_result.get('error', 'Unknown error')}")
+                            # Fallback to local storage
+                            media_info = {
+                                'media_type': media_type,
+                                'filename': file.name,
+                                'content_type': file.content_type,
+                                'size': file.size,
+                                'url': f"/media/reports/{file.name}",
+                                'file_url': f"/media/reports/{file.name}",
+                                'image_url': f"/media/reports/{file.name}"
+                            }
+                            report_data['media'].append(media_info)
+                            image_paths.append(f"/media/reports/{file.name}")
+                            report_data['images'].append(f"/media/reports/{file.name}")
+                            
+                    except Exception as e:
+                        print(f"ImageKit upload error: {e}")
+                        # Fallback to local storage
+                        media_info = {
+                            'media_type': media_type,
+                            'filename': file.name,
+                            'content_type': file.content_type,
+                            'size': file.size,
+                            'url': f"/media/reports/{file.name}",
+                            'file_url': f"/media/reports/{file.name}",
+                            'image_url': f"/media/reports/{file.name}"
+                        }
+                        report_data['media'].append(media_info)
+                        image_paths.append(f"/media/reports/{file.name}")
+                        report_data['images'].append(f"/media/reports/{file.name}")
+                else:
+                    # For non-image files, store basic info
+                    media_info = {
+                        'media_type': media_type,
+                        'filename': file.name,
+                        'content_type': file.content_type,
+                        'size': file.size
+                    }
+                    report_data['media'].append(media_info)
+            
+            # Perform AI analysis if we have images or description
+            if image_paths or report_data['description']:
+                try:
+                    ai_service = AIVerificationService()
+                    comprehensive_analysis = ai_service.analyze_report(
+                        text_description=report_data['description'],
+                        image_paths=image_paths
+                    )
+                    
+                    # Update report with AI analysis results
+                    report_data['ai_verified'] = comprehensive_analysis.get('is_emergency', False)
+                    report_data['ai_confidence'] = comprehensive_analysis.get('confidence', 0.0)
+                    report_data['ai_fraud_score'] = comprehensive_analysis.get('fraud_score', 0.0)
+                    report_data['ai_analysis_data'] = comprehensive_analysis
+                    
+                    # Enhanced priority determination based on AI analysis
+                    suggested_priority = comprehensive_analysis.get('suggested_priority', 'MEDIUM')
+                    confidence = comprehensive_analysis.get('confidence', 0.0)
+                    fraud_score = comprehensive_analysis.get('fraud_score', 0.0)
+                    
+                    # Override priority based on confidence and fraud score
+                    if fraud_score > 0.7 or confidence < 0.3:
+                        report_data['priority'] = 'LOW'
+                    elif confidence > 0.8 and fraud_score < 0.2:
+                        report_data['priority'] = 'HIGH'
+                    elif confidence > 0.6 and fraud_score < 0.4:
+                        report_data['priority'] = 'MEDIUM'
+                    else:
+                        report_data['priority'] = suggested_priority
+                    
+                    # Enhanced status determination
+                    if comprehensive_analysis.get('is_fraud', False) or fraud_score > 0.6:
+                        report_data['status'] = 'REJECTED'
+                    elif comprehensive_analysis.get('suggested_status'):
+                        report_data['status'] = comprehensive_analysis.get('suggested_status', 'PENDING')
+                    elif confidence > 0.8 and fraud_score < 0.2:
+                        report_data['status'] = 'VERIFIED'
+                    else:
+                        report_data['status'] = 'PENDING'
+                        
+                except Exception as e:
+                    print(f"AI analysis failed: {e}")
+                    # Continue without AI analysis
+            
+            # Create report in MongoDB
+            created_report = mongodb_service.create_report(report_data)
+            
+            if created_report:
+                return Response(created_report, status=status.HTTP_201_CREATED)
+            else:
+                return Response({'error': 'Failed to create report'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+                
+        except Exception as e:
+            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
     
     @action(detail=False, methods=['get'])
     def nearby(self, request):
@@ -154,80 +262,112 @@ class SOSReportViewSet(viewsets.ModelViewSet):
             return Response({'error': 'lat and lng parameters required'}, 
                           status=status.HTTP_400_BAD_REQUEST)
         
-        # Simple distance calculation using Haversine formula
-        lat = float(lat)
-        lng = float(lng)
-        radius = float(radius)
-        
-        # Convert radius from km to degrees (approximate)
-        lat_range = radius / 111.0  # 1 degree lat ≈ 111 km
-        lng_range = radius / (111.0 * math.cos(math.radians(lat)))
-        
-        reports = SOSReport.objects.filter(
-            latitude__range=(lat - lat_range, lat + lat_range),
-            longitude__range=(lng - lng_range, lng + lng_range),
-            status__in=['PENDING', 'VERIFIED', 'IN_PROGRESS']
-        )
-        
-        serializer = self.get_serializer(reports, many=True)
-        return Response(serializer.data)
+        try:
+            lat = float(lat)
+            lng = float(lng)
+            radius = float(radius)
+            
+            # Get nearby reports from MongoDB
+            reports = mongodb_service.get_nearby_reports(lat, lng, radius)
+            
+            return Response(reports)
+        except Exception as e:
+            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
     
     @action(detail=True, methods=['get', 'post'])
     def updates(self, request, pk=None):
         """Get or create report updates/comments"""
-        report = self.get_object()
-        
-        if request.method == 'GET':
-            # Get all updates for this report
-            updates = report.updates.all()
-            serializer = ReportUpdateSerializer(updates, many=True)
-            return Response(serializer.data)
-        
-        elif request.method == 'POST':
-            # Create a new update/comment
-            serializer = ReportUpdateSerializer(data=request.data)
-            if serializer.is_valid():
-                serializer.save(report=report, user=request.user)
-                return Response(serializer.data, status=status.HTTP_201_CREATED)
-            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            report_id = pk
+            
+            if request.method == 'GET':
+                # Get all updates for this report from MongoDB
+                report = mongodb_service.get_report_by_id(report_id)
+                if report:
+                    updates = report.get('updates', [])
+                    return Response(updates)
+                else:
+                    return Response({'error': 'Report not found'}, status=status.HTTP_404_NOT_FOUND)
+            
+            elif request.method == 'POST':
+                # Create a new update/comment
+                user_id = request.user.id if request.user.is_authenticated else 1
+                username = request.user.username if request.user.is_authenticated else 'anonymous_user'
+                
+                comment_data = {
+                    'user_id': user_id,
+                    'username': username,
+                    'message': request.data.get('message', ''),
+                    'status_change': request.data.get('status_change', ''),
+                    'created_at': timezone.now().isoformat()
+                }
+                
+                # Add comment to MongoDB
+                result = mongodb_service.add_comment(report_id, comment_data)
+                
+                if result:
+                    return Response(result, status=status.HTTP_201_CREATED)
+                else:
+                    return Response({'error': 'Failed to add comment'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+                    
+        except Exception as e:
+            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
     
     @action(detail=True, methods=['get', 'post'])
     def votes(self, request, pk=None):
         """Get or create report votes"""
-        report = self.get_object()
-        
-        if request.method == 'GET':
-            # Get all votes for this report
-            votes = report.votes.all()
-            serializer = ReportVoteSerializer(votes, many=True)
-            return Response(serializer.data)
-        
-        elif request.method == 'POST':
-            # Create or update a vote
-            vote_type = request.data.get('vote_type')
-            if not vote_type:
-                return Response({'error': 'vote_type is required'}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            # Get report from MongoDB
+            report = mongodb_service.get_report_by_id(pk)
+            if not report:
+                return Response({'error': 'Report not found'}, status=status.HTTP_404_NOT_FOUND)
             
-            if vote_type not in ['STILL_THERE', 'RESOLVED', 'FAKE_REPORT']:
-                return Response({'error': 'Invalid vote_type'}, status=status.HTTP_400_BAD_REQUEST)
+            if request.method == 'GET':
+                # Get vote counts from the report
+                vote_counts = report.get('vote_counts', {})
+                return Response(vote_counts)
             
-            # Get or create vote
-            vote, created = ReportVote.objects.get_or_create(
-                report=report,
-                user=request.user,
-                defaults={'vote_type': vote_type}
-            )
-            
-            if not created:
-                # Update existing vote
-                vote.vote_type = vote_type
-                vote.save()
-            
-            # Check and update report status based on votes
-            report.check_and_update_status()
-            
-            serializer = ReportVoteSerializer(vote)
-            return Response(serializer.data, status=status.HTTP_201_CREATED if created else status.HTTP_200_OK)
+            elif request.method == 'POST':
+                # Create or update a vote
+                vote_type = request.data.get('vote_type')
+                if not vote_type:
+                    return Response({'error': 'vote_type is required'}, status=status.HTTP_400_BAD_REQUEST)
+                
+                if vote_type not in ['STILL_THERE', 'RESOLVED', 'FAKE_REPORT']:
+                    return Response({'error': 'Invalid vote_type'}, status=status.HTTP_400_BAD_REQUEST)
+                
+                # Get user ID
+                user_id = request.user.id if hasattr(request.user, 'id') else None
+                if not user_id:
+                    return Response({'error': 'User not authenticated'}, status=status.HTTP_401_UNAUTHORIZED)
+                
+                # Prepare vote data
+                vote_data = {
+                    'user_id': str(user_id),
+                    'username': request.user.username,
+                    'vote_type': vote_type,
+                    'created_at': timezone.now().isoformat()
+                }
+                
+                # Record vote in MongoDB
+                result = mongodb_service.add_vote(pk, vote_data)
+                
+                if result:
+                    # Get updated report with new vote counts
+                    updated_report = mongodb_service.get_report_by_id(pk)
+                    vote_counts = updated_report.get('vote_counts', {})
+                    
+                    return Response({
+                        'success': True,
+                        'message': f'Vote recorded: {vote_type}',
+                        'vote_counts': vote_counts,
+                        'user_vote': vote_type
+                    }, status=status.HTTP_200_OK)
+                else:
+                    return Response({'error': 'Failed to record vote'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+                    
+        except Exception as e:
+            return Response({'error': f'Voting error: {str(e)}'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
     
     def update(self, request, *args, **kwargs):
         """Custom update method to handle file uploads for existing reports"""
@@ -302,29 +442,17 @@ class SOSReportViewSet(viewsets.ModelViewSet):
     
     @action(detail=False, methods=['get'])
     def dashboard_stats(self, request):
-        # Use the filtered queryset from get_queryset
-        reports = self.get_queryset()
-        
-        stats = {
-            'total_reports': reports.count(),
-            'pending_reports': reports.filter(status='PENDING').count(),
-            'active_reports': reports.filter(status__in=['VERIFIED', 'IN_PROGRESS']).count(),
-            'resolved_reports': reports.filter(status='RESOLVED').count(),
-            'by_disaster_type': {},
-            'by_priority': {}
-        }
-        
-        # Disaster type breakdown
-        for disaster_type, _ in SOSReport.DISASTER_TYPES:
-            count = reports.filter(disaster_type=disaster_type).count()
-            stats['by_disaster_type'][disaster_type] = count
-        
-        # Priority breakdown
-        for priority, _ in SOSReport.PRIORITY_CHOICES:
-            count = reports.filter(priority=priority).count()
-            stats['by_priority'][priority] = count
-        
-        return Response(stats)
+        try:
+            # Get user ID for filtering if needed
+            user_id = request.query_params.get('user')
+            user_id = int(user_id) if user_id else None
+            
+            # Get dashboard stats from MongoDB
+            stats = mongodb_service.get_dashboard_stats(user_id)
+            
+            return Response(stats)
+        except Exception as e:
+            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
     
     @action(detail=True, methods=['patch'], permission_classes=[IsAuthenticated])
     def verify(self, request, pk=None):
@@ -374,3 +502,47 @@ class SOSReportViewSet(viewsets.ModelViewSet):
         }
         
         return Response(stats)
+    
+    def destroy(self, request, *args, **kwargs):
+        """Delete a report from MongoDB"""
+        try:
+            # Get the report_id from URL parameters
+            report_id = kwargs.get('pk')
+            
+            if not report_id:
+                return Response({'error': 'Report ID is required'}, status=status.HTTP_400_BAD_REQUEST)
+            
+            # Check if report exists
+            report = mongodb_service.get_report_by_id(report_id)
+            if not report:
+                return Response({'error': 'Report not found'}, status=status.HTTP_404_NOT_FOUND)
+            
+            # Check if user has permission to delete (admin or report owner)
+            user_id = None
+            if hasattr(request.user, '_user_data'):
+                user_id = request.user._user_data.get('id')
+            elif hasattr(request.user, 'id'):
+                user_id = str(request.user.id)
+            
+            # Check permissions
+            is_admin = False
+            if hasattr(request.user, '_user_data'):
+                is_admin = request.user._user_data.get('role') == 'ADMIN'
+            elif hasattr(request.user, 'profile'):
+                is_admin = request.user.profile.role == 'ADMIN'
+            
+            is_owner = user_id and (report.get('user_id') == user_id)
+            
+            if not (is_admin or is_owner):
+                return Response({'error': 'Permission denied'}, status=status.HTTP_403_FORBIDDEN)
+            
+            # Delete the report from MongoDB
+            success = mongodb_service.delete_report(report_id)
+            
+            if success:
+                return Response({'message': 'Report deleted successfully'}, status=status.HTTP_204_NO_CONTENT)
+            else:
+                return Response({'error': 'Failed to delete report'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+                
+        except Exception as e:
+            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
