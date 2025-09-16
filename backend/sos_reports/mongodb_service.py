@@ -24,9 +24,12 @@ class SOSReportMongoDBService:
     def connect(self):
         """Connect to MongoDB Atlas"""
         try:
-            connection_string = "mongodb+srv://NUDDRS:HackerXhacker%400921@cluster0.jvsnjs4.mongodb.net/NUDDRS?retryWrites=true&w=majority&ssl=true&ssl_cert_reqs=CERT_NONE"
+            # Get connection string from environment variables
+            connection_string = settings.MONGODB_SETTINGS['host']
+            database_name = settings.MONGODB_SETTINGS['db']
+            
             self.client = MongoClient(connection_string, serverSelectionTimeoutMS=10000, ssl_cert_reqs=ssl.CERT_NONE)
-            self.db = self.client['NUDDRS']
+            self.db = self.client[database_name]
             
             # Test connection
             self.client.admin.command('ping')

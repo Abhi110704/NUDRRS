@@ -11,7 +11,7 @@
 3. Select "Python" and version "3.6 or later"
 4. Copy the connection string (it will look like):
    ```
-   mongodb+srv://username:password@cluster.mongodb.net/
+   mongodb+srv://YOUR_USERNAME:YOUR_PASSWORD@YOUR_CLUSTER.mongodb.net/
    ```
 
 ## Step 3: Configure Environment Variables
@@ -19,7 +19,8 @@ Create a `.env` file in the backend directory with:
 
 ```bash
 # MongoDB Atlas Configuration
-MONGODB_ATLAS_URI=mongodb+srv://username:password@cluster.mongodb.net/
+MONGODB_CONNECTION_STRING=mongodb+srv://YOUR_USERNAME:YOUR_PASSWORD@YOUR_CLUSTER.mongodb.net/YOUR_DATABASE?retryWrites=true&w=majority&ssl=true&ssl_cert_reqs=CERT_NONE
+MONGODB_DATABASE_NAME=your_database_name
 
 
 # Django Settings
@@ -51,7 +52,7 @@ Replace the placeholders in your `.env` file:
 
 ## Example Connection String
 ```
-mongodb+srv://nudrrs_user:your_password@nudrrs-cluster.abc123.mongodb.net/
+mongodb+srv://YOUR_USERNAME:YOUR_PASSWORD@YOUR_CLUSTER.mongodb.net/YOUR_DATABASE?retryWrites=true&w=majority&ssl=true&ssl_cert_reqs=CERT_NONE
 ```
 
 ## Testing the Connection
