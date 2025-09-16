@@ -770,9 +770,9 @@ const Reports = () => {
       console.error('Error generating AI description:', error);
       
       // Fallback: Generate a basic description locally
-      const disasterType = newReportForm.disaster_type.toLowerCase();
-      const location = newReportForm.address;
-      const priority = newReportForm.priority.toLowerCase();
+      const disasterType = newReportForm.disaster_type?.toLowerCase() || 'emergency';
+      const location = newReportForm.address || 'unknown location';
+      const priority = newReportForm.priority?.toLowerCase() || 'medium';
       
       const basicDescription = `Emergency ${disasterType} situation reported at ${location}. This is a ${priority} priority incident requiring immediate attention. The situation is developing and poses potential risk to public safety. Emergency services have been notified and are responding to the scene.`;
       
@@ -790,6 +790,8 @@ const Reports = () => {
   };
 
   const getPriorityColor = (priority) => {
+    if (!priority) return '#9E9E9E';
+    
     switch (priority) {
       case 'CRITICAL': return '#FF1744';
       case 'HIGH': return '#FF9800';
@@ -800,6 +802,8 @@ const Reports = () => {
   };
 
   const getStatusColor = (status) => {
+    if (!status) return '#9E9E9E';
+    
     switch (status) {
       case 'PENDING': return '#FF9800';
       case 'VERIFIED': return '#9C27B0';
@@ -811,6 +815,8 @@ const Reports = () => {
   };
 
   const getDisasterIcon = (disasterType) => {
+    if (!disasterType) return <CrisisAlert sx={{ color: '#9C27B0', fontSize: 28 }} />;
+    
     switch (disasterType) {
       case 'FLOOD': return <Water sx={{ color: '#2196F3', fontSize: 28 }} />;
       case 'EARTHQUAKE': return <Terrain sx={{ color: '#795548', fontSize: 28 }} />;
@@ -1348,7 +1354,7 @@ const Reports = () => {
                           </Typography>
                           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5 }}>
                       <Chip
-                              label={`${report.priority.toLowerCase()} priority`}
+                              label={`${report.priority?.toLowerCase() || 'medium'} priority`}
                         size="small"
                         sx={{
                           fontWeight: 'bold',
