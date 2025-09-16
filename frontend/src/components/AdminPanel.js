@@ -32,9 +32,9 @@ const AdminPanel = () => {
   const fetchReports = async () => {
     try {
       setLoading(true);
-      const response = await axios.get('http://localhost:8000/api/sos_reports/sos_reports/');
+      const response = await axios.get('http://localhost:8000/api/sos_reports/');
       console.log('🔍 AdminPanel API response:', response.data);
-      const reportsData = response.data.results || response.data || [];
+      const reportsData = Array.isArray(response.data) ? response.data : [];
       console.log('🔍 AdminPanel reports data:', reportsData);
       setReports(reportsData);
     } catch (error) {
@@ -72,7 +72,7 @@ const AdminPanel = () => {
   const handleVerifyReport = async (reportId, action) => {
     try {
       const newStatus = action === 'verify' ? 'VERIFIED' : 'REJECTED';
-      await axios.patch(`http://localhost:8000/api/sos_reports/sos_reports/${reportId}/`, {
+      await axios.patch(`http://localhost:8000/api/sos_reports/${reportId}/`, {
         status: newStatus,
         verified_by: user.id,
         verified_at: new Date().toISOString()

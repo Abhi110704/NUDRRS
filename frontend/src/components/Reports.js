@@ -20,6 +20,7 @@ import {
 } from '@mui/icons-material';
 import axios from 'axios';
 import { useAuth } from '../contexts/AuthContext';
+import { formatTimeAgo } from '../utils/timeUtils';
 
 const Reports = () => {
   const { user, isAdmin } = useAuth();
@@ -156,7 +157,7 @@ const Reports = () => {
 
   const fetchStats = async () => {
     try {
-      const response = await axios.get('http://localhost:8000/api/sos_reports/sos_reports/dashboard_stats/');
+      const response = await axios.get('http://localhost:8000/api/sos_reports/dashboard_stats/');
       const statsData = response.data;
       setStats({
         total_reports: statsData.total_reports || 0,
@@ -179,8 +180,8 @@ const Reports = () => {
       setLoading(true);
       setUpdateStatus('updating');
       
-        const response = await axios.get('http://localhost:8000/api/sos_reports/sos_reports/');
-        const reportsData = response.data.results || response.data || [];
+        const response = await axios.get('http://localhost:8000/api/sos_reports/');
+        const reportsData = Array.isArray(response.data) ? response.data : [];
         
       setReports(reportsData);
       await fetchStats();
@@ -196,7 +197,7 @@ const Reports = () => {
 
   const fetchComments = async (reportId) => {
     try {
-      const response = await axios.get(`http://localhost:8000/api/sos_reports/sos_reports/${reportId}/updates/`);
+      const response = await axios.get(`http://localhost:8000/api/sos_reports/${reportId}/updates/`);
       setComments(response.data || []);
     } catch (error) {
       console.error('Error fetching comments:', error);
@@ -208,7 +209,7 @@ const Reports = () => {
     if (!newComment.trim()) return;
 
     try {
-      const response = await axios.post(`http://localhost:8000/api/sos_reports/sos_reports/${reportId}/updates/`, {
+      const response = await axios.post(`http://localhost:8000/api/sos_reports/${reportId}/updates/`, {
         message: newComment.trim()
       }, {
         headers: {
@@ -243,7 +244,7 @@ const Reports = () => {
 
   const fetchReportComments = async (reportId) => {
     try {
-      const response = await axios.get(`http://localhost:8000/api/sos_reports/sos_reports/${reportId}/updates/`);
+      const response = await axios.get(`http://localhost:8000/api/sos_reports/${reportId}/updates/`);
       setReportComments(response.data || []);
     } catch (error) {
       console.error('Error fetching comments:', error);
@@ -255,7 +256,7 @@ const Reports = () => {
     if (!newReportComment.trim() || !commentReport) return;
 
     try {
-      const response = await axios.post(`http://localhost:8000/api/sos_reports/sos_reports/${commentReport.id}/updates/`, {
+      const response = await axios.post(`http://localhost:8000/api/sos_reports/${commentReport.id}/updates/`, {
         message: newReportComment.trim()
       }, {
         headers: {
@@ -285,10 +286,13 @@ const Reports = () => {
     if (!commentReport) return;
 
     try {
-      await axios.delete(`http://localhost:8000/api/sos_reports/sos_reports/${commentReport.id}/updates/${commentId}/`, {
+      await axios.delete(`http://localhost:8000/api/sos_reports/${commentReport.id}/updates/`, {
         headers: {
           'Authorization': `Token ${localStorage.getItem('token')}`,
           'Content-Type': 'application/json'
+        },
+        data: {
+          comment_id: commentId
         }
       });
 
@@ -312,7 +316,8 @@ const Reports = () => {
     if (!user) return false;
     if (isAdmin) return true;
     if (commentReport && user.id === commentReport.user?.id) return true;
-    if (comment.user && user.id === comment.user.id) return true;
+    // Check if current user is the comment author (using user_id field)
+    if (comment.user_id && user.id === comment.user_id) return true;
     return false;
   };
     
@@ -329,7 +334,7 @@ const Reports = () => {
     setVoting(prev => ({ ...prev, [reportId]: true }));
 
     try {
-      const response = await axios.post(`http://localhost:8000/api/sos_reports/sos_reports/${reportId}/votes/`, {
+      const response = await axios.post(`http://localhost:8000/api/sos_reports/${reportId}/votes/`, {
         vote_type: voteType
       }, {
           headers: {
@@ -389,7 +394,7 @@ const Reports = () => {
   };
 
   const filterReports = () => {
-    let filtered = reports;
+    let filtered = Array.isArray(reports) ? reports : [];
 
     if (filters.disaster_type) {
       filtered = filtered.filter(report => report.disaster_type === filters.disaster_type);
@@ -490,7 +495,7 @@ const Reports = () => {
       
       if (isEditMode) {
         // Update existing report
-        response = await axios.put(`http://localhost:8000/api/sos_reports/sos_reports/${selectedReport.id}/`, formData, {
+        response = await axios.put(`http://localhost:8000/api/sos_reports/${selectedReport.id}/`, formData, {
             headers: {
             'Authorization': `Token ${localStorage.getItem('token')}`,
             'Content-Type': 'multipart/form-data'
@@ -498,7 +503,7 @@ const Reports = () => {
           });
         } else {
         // Create new report
-        response = await axios.post('http://localhost:8000/api/sos_reports/sos_reports/', formData, {
+        response = await axios.post('http://localhost:8000/api/sos_reports/', formData, {
         headers: {
             'Authorization': `Token ${localStorage.getItem('token')}`,
             'Content-Type': 'multipart/form-data'
@@ -579,7 +584,7 @@ const Reports = () => {
     }
 
     try {
-      await axios.delete(`http://localhost:8000/api/sos_reports/sos_reports/${reportId}/`, {
+      await axios.delete(`http://localhost:8000/api/sos_reports/${reportId}/`, {
         headers: {
           'Authorization': `Token ${localStorage.getItem('token')}`
         }
@@ -816,16 +821,6 @@ const Reports = () => {
     }
   };
 
-  const formatTimeAgo = (dateString) => {
-    const date = new Date(dateString);
-    const now = new Date();
-    const diffInMinutes = Math.floor((now - date) / (1000 * 60));
-    
-    if (diffInMinutes < 1) return 'Just now';
-    if (diffInMinutes < 60) return `${diffInMinutes}m ago`;
-    if (diffInMinutes < 1440) return `${Math.floor(diffInMinutes / 60)}h ago`;
-    return `${Math.floor(diffInMinutes / 1440)}d ago`;
-  };
 
   const canEditReport = (report) => {
     return isAdmin || (user && (report.user_id === user.id || (report.user && report.user.id === user.id)));
@@ -1314,7 +1309,7 @@ const Reports = () => {
             </Paper>
         ) : (
         <Grid container spacing={4}>
-          {filteredReports.map((report, index) => (
+          {(Array.isArray(filteredReports) ? filteredReports : []).map((report, index) => (
             <Grid item xs={12} md={6} lg={4} key={report.id}>
               <Zoom in={true} timeout={300 + index * 100}>
                 <Card sx={{
@@ -1999,12 +1994,11 @@ const Reports = () => {
                           </Box>
                         </Grid>
                         <Grid item xs={12} sm={4}>
-                          <Typography variant="caption" color="text.secondary">Status</Typography>
+                          <Typography variant="caption" color="text.secondary" sx={{ mb: 1, display: 'block' }}>Status</Typography>
                 <Chip 
                             label={selectedReport.ai_verified ? 'Verified' : 'Pending Review'}
                             color={selectedReport.ai_verified ? 'success' : 'warning'}
                   size="small"
-                            sx={{ mt: 0.5 }}
                 />
                         </Grid>
                       </Grid>
@@ -2856,7 +2850,7 @@ const Reports = () => {
                               {comment.user?.first_name} {comment.user?.last_name}
                             </Typography>
                             <Typography variant="caption" color="text.secondary">
-                              {new Date(comment.created_at).toLocaleString()}
+                              {formatTimeAgo(comment.created_at)}
                             </Typography>
                             {canDeleteReportComment(comment) && (
                               <IconButton

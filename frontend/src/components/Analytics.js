@@ -27,8 +27,8 @@ const Analytics = () => {
       // Try to fetch real data first, fallback to demo data
       try {
         const [statsResponse, reportsResponse] = await Promise.all([
-          axios.get('http://localhost:8000/api/sos_reports/sos_reports/dashboard_stats/'),
-          axios.get('http://localhost:8000/api/sos_reports/sos_reports/')
+          axios.get('http://localhost:8000/api/sos_reports/dashboard_stats/'),
+          axios.get('http://localhost:8000/api/sos_reports/')
         ]);
         
         const realStats = statsResponse.data;

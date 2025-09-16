@@ -104,8 +104,8 @@ const ReportsMap = () => {
     try {
       // Try real API first, fallback to demo data
       try {
-        const response = await axios.get('http://localhost:8000/api/sos_reports/sos_reports/');
-        const reportsData = response.data.results || response.data || [];
+        const response = await axios.get('http://localhost:8000/api/sos_reports/');
+        const reportsData = Array.isArray(response.data) ? response.data : [];
         
         // Transform the data to include coordinates if not present
         const transformedReports = reportsData.map(report => ({

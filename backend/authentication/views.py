@@ -248,15 +248,15 @@ def upload_profile_image(request):
         if hasattr(request.user, '_user_data'):
             # This is a MongoDBUser
             from .mongodb_service import auth_mongodb_service
-            from imagekit_service import imagekit_service
+            from cloudinary_service import cloudinary_service
             import uuid
             
             # Generate unique filename
             file_extension = image_file.name.split('.')[-1] if '.' in image_file.name else 'jpg'
             unique_filename = f"{request.user.id}_{uuid.uuid4().hex[:8]}.{file_extension}"
             
-            # Upload to ImageKit
-            upload_result = imagekit_service.upload_file(
+            # Upload to Cloudinary
+            upload_result = cloudinary_service.upload_file(
                 file=image_file,
                 folder=f"nudrrs/profile_images/{request.user.id}",
                 filename=unique_filename,
@@ -264,15 +264,15 @@ def upload_profile_image(request):
             )
             
             if upload_result['success']:
-                # Get ImageKit URL
+                # Get Cloudinary URL
                 image_url = upload_result['url']
-                file_id = upload_result['file_id']
+                file_id = upload_result['public_id']
                 
                 # Update user profile in MongoDB
                 update_data = {
-                    'profile_image': image_url,  # Store ImageKit URL
+                    'profile_image': image_url,  # Store Cloudinary URL
                     'profile_image_url': image_url,
-                    'profile_image_file_id': file_id,  # Store ImageKit file ID
+                    'profile_image_file_id': file_id,  # Store Cloudinary public_id
                     'updated_at': timezone.now().isoformat()
                 }
                 
@@ -283,7 +283,7 @@ def upload_profile_image(request):
                 if updated_user:
                     return Response({
                         'success': True,
-                        'message': 'Profile image uploaded successfully to ImageKit',
+                        'message': 'Profile image uploaded successfully to Cloudinary',
                         'image_url': image_url,
                         'file_id': file_id
                     }, status=status.HTTP_200_OK)
@@ -295,7 +295,7 @@ def upload_profile_image(request):
             else:
                 return Response({
                     'success': False,
-                    'error': f'ImageKit upload failed: {upload_result.get("error", "Unknown error")}'
+                    'error': f'Cloudinary upload failed: {upload_result.get("error", "Unknown error")}'
                 }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         
         else:

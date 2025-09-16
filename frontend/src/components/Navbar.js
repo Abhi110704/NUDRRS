@@ -341,11 +341,11 @@ const Navbar = () => {
                   }}
                 >
                   <Avatar 
-                    src={user?.profile?.profile_image_url || null}
+                    src={user?.profile_image_url || null}
                     sx={{ 
                       width: 28, 
                       height: 28, 
-                      background: user?.profile?.profile_image_url 
+                      background: user?.profile_image_url 
                         ? 'transparent' 
                         : 'linear-gradient(45deg, #2563eb, #7c3aed)',
                       fontSize: '0.8rem',
@@ -354,7 +354,7 @@ const Navbar = () => {
                       border: '1px solid rgba(255, 255, 255, 0.2)'
                     }}
                   >
-                    {!user?.profile?.profile_image_url && (user?.first_name?.[0] || user?.username?.[0] || 'U')}
+                    {!user?.profile_image_url && (user?.first_name?.[0] || user?.username?.[0] || 'U')}
                   </Avatar>
                 </IconButton>
               </>

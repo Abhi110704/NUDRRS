@@ -24,9 +24,9 @@ class AIVerificationService:
             # For now, return a mock verification result
             # In production, this will use YOLO or other AI models
             
-            # Simulate AI processing delay
+            # Simulate AI processing delay (reduced for better performance)
             import time
-            time.sleep(0.1)
+            time.sleep(0.01)  # Reduced from 0.1 to 0.01 seconds
             
             # Mock emergency detection based on image size/format
             try:

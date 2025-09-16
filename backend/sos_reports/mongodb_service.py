@@ -6,8 +6,10 @@ from pymongo import MongoClient
 import ssl
 from django.conf import settings
 from datetime import datetime
+from django.utils import timezone
 import json
 import math
+import uuid
 from typing import List, Dict, Optional, Any
 from bson import ObjectId
 
@@ -86,12 +88,12 @@ class SOSReportMongoDBService:
                 if 'updated_at' in report and isinstance(report['updated_at'], datetime):
                     report['updated_at'] = report['updated_at'].isoformat()
                 
-                # Fix image URLs - handle both ImageKit and local storage
+                # Fix image URLs - handle both Cloudinary and local storage
                 if 'media' in report and report['media']:
                     for media_item in report['media']:
-                        # Check if it's already an ImageKit URL
+                        # Check if it's already a Cloudinary URL
                         if 'url' in media_item and media_item['url'] and media_item['url'].startswith('http'):
-                            # ImageKit URL - use as is
+                            # Cloudinary URL - use as is
                             media_item['file_url'] = media_item['url']
                             media_item['image_url'] = media_item['url']
                             if 'file' not in media_item:
@@ -130,13 +132,22 @@ class SOSReportMongoDBService:
             return []
     
     def get_report_by_id(self, report_id: str) -> Optional[Dict]:
-        """Get a single report by ID"""
+        """Get a single report by ID (supports both MongoDB ObjectId and report_id)"""
         try:
             if not self.db:
                 return None
             
             collection = self.db['emergency_reports']
-            report = collection.find_one({'report_id': report_id})
+            
+            # Try to find by MongoDB ObjectId first, then by report_id
+            from bson import ObjectId
+            try:
+                # Try as MongoDB ObjectId
+                object_id = ObjectId(report_id)
+                report = collection.find_one({'_id': object_id})
+            except:
+                # If not a valid ObjectId, try as report_id
+                report = collection.find_one({'report_id': report_id})
             
             if report:
                 if '_id' in report:
@@ -150,12 +161,12 @@ class SOSReportMongoDBService:
                 if 'updated_at' in report and isinstance(report['updated_at'], datetime):
                     report['updated_at'] = report['updated_at'].isoformat()
                 
-                # Fix image URLs - handle both ImageKit and local storage
+                # Fix image URLs - handle both Cloudinary and local storage
                 if 'media' in report and report['media']:
                     for media_item in report['media']:
-                        # Check if it's already an ImageKit URL
+                        # Check if it's already a Cloudinary URL
                         if 'url' in media_item and media_item['url'] and media_item['url'].startswith('http'):
-                            # ImageKit URL - use as is
+                            # Cloudinary URL - use as is
                             media_item['file_url'] = media_item['url']
                             media_item['image_url'] = media_item['url']
                             if 'file' not in media_item:
@@ -224,7 +235,7 @@ class SOSReportMongoDBService:
             return None
     
     def update_report(self, report_id: str, update_data: Dict) -> Optional[Dict]:
-        """Update a report in MongoDB"""
+        """Update a report in MongoDB (supports both MongoDB ObjectId and report_id)"""
         try:
             if not self.db:
                 return None
@@ -234,9 +245,19 @@ class SOSReportMongoDBService:
             # Add updated timestamp
             update_data['updated_at'] = datetime.utcnow()
             
+            # Try to find by MongoDB ObjectId first, then by report_id
+            from bson import ObjectId
+            try:
+                # Try as MongoDB ObjectId
+                object_id = ObjectId(report_id)
+                query = {'_id': object_id}
+            except:
+                # If not a valid ObjectId, try as report_id
+                query = {'report_id': report_id}
+            
             # Update the report
             result = collection.update_one(
-                {'report_id': report_id},
+                query,
                 {'$set': update_data}
             )
             
@@ -250,13 +271,22 @@ class SOSReportMongoDBService:
             return None
     
     def delete_report(self, report_id: str) -> bool:
-        """Delete a report from MongoDB"""
+        """Delete a report from MongoDB (supports both MongoDB ObjectId and report_id)"""
         try:
             if not self.db:
                 return False
             
             collection = self.db['emergency_reports']
-            result = collection.delete_one({'report_id': report_id})
+            
+            # Try to delete by MongoDB ObjectId first, then by report_id
+            from bson import ObjectId
+            try:
+                # Try as MongoDB ObjectId
+                object_id = ObjectId(report_id)
+                result = collection.delete_one({'_id': object_id})
+            except:
+                # If not a valid ObjectId, try as report_id
+                result = collection.delete_one({'report_id': report_id})
             
             return result.deleted_count > 0
         except Exception as e:
@@ -299,12 +329,12 @@ class SOSReportMongoDBService:
                 if 'updated_at' in report and isinstance(report['updated_at'], datetime):
                     report['updated_at'] = report['updated_at'].isoformat()
                 
-                # Fix image URLs - handle both ImageKit and local storage
+                # Fix image URLs - handle both Cloudinary and local storage
                 if 'media' in report and report['media']:
                     for media_item in report['media']:
-                        # Check if it's already an ImageKit URL
+                        # Check if it's already a Cloudinary URL
                         if 'url' in media_item and media_item['url'] and media_item['url'].startswith('http'):
-                            # ImageKit URL - use as is
+                            # Cloudinary URL - use as is
                             media_item['file_url'] = media_item['url']
                             media_item['image_url'] = media_item['url']
                             if 'file' not in media_item:
@@ -386,19 +416,31 @@ class SOSReportMongoDBService:
             return {}
     
     def add_comment(self, report_id: str, comment_data: Dict) -> Optional[Dict]:
-        """Add a comment/update to a report"""
+        """Add a comment/update to a report (supports both MongoDB ObjectId and report_id)"""
         try:
             if not self.db:
                 return None
             
             collection = self.db['emergency_reports']
             
-            # Add timestamp to comment
-            comment_data['created_at'] = datetime.utcnow().isoformat()
+            # Add timestamp and unique ID to comment
+            comment_data['created_at'] = timezone.now().isoformat()
+            comment_data['id'] = str(uuid.uuid4())  # Add unique comment ID
+            comment_data['_id'] = comment_data['id']  # For MongoDB compatibility
+            
+            # Try to find by MongoDB ObjectId first, then by report_id
+            from bson import ObjectId
+            try:
+                # Try as MongoDB ObjectId
+                object_id = ObjectId(report_id)
+                query = {'_id': object_id}
+            except:
+                # If not a valid ObjectId, try as report_id
+                query = {'report_id': report_id}
             
             # Add comment to the updates array
             result = collection.update_one(
-                {'report_id': report_id},
+                query,
                 {'$push': {'updates': comment_data}}
             )
             
@@ -437,6 +479,62 @@ class SOSReportMongoDBService:
             print(f"Error deleting comment from report in MongoDB: {e}")
             return False
     
+    def delete_comment_by_id(self, report_id: str, comment_id: str) -> bool:
+        """Delete a comment from a report by comment ID (supports both MongoDB ObjectId and report_id)"""
+        try:
+            if not self.db:
+                return False
+            
+            collection = self.db['emergency_reports']
+            
+            # Try to find by MongoDB ObjectId first, then by report_id
+            from bson import ObjectId
+            try:
+                # Try as MongoDB ObjectId
+                object_id = ObjectId(report_id)
+                query = {'_id': object_id}
+            except:
+                # If not a valid ObjectId, try as report_id
+                query = {'report_id': report_id}
+            
+            # Get the report to find the comment index
+            report = collection.find_one(query)
+            if not report:
+                return False
+            
+            # Find the comment index by matching comment_id
+            comment_index = None
+            for i, comment in enumerate(report.get('updates', [])):
+                # Check both _id and id fields, and also check if comment_id matches any identifier
+                if (str(comment.get('_id', '')) == str(comment_id) or 
+                    str(comment.get('id', '')) == str(comment_id) or
+                    str(comment.get('user_id', '')) == str(comment_id) or
+                    comment.get('message', '') == str(comment_id)):
+                    comment_index = i
+                    break
+            
+            if comment_index is None:
+                return False
+            
+            # Remove comment from the updates array by index
+            result = collection.update_one(
+                query,
+                {'$unset': {f'updates.{comment_index}': 1}}
+            )
+            
+            if result.modified_count > 0:
+                # Clean up the array (remove null values)
+                collection.update_one(
+                    query,
+                    {'$pull': {'updates': None}}
+                )
+                return True
+            
+            return False
+        except Exception as e:
+            print(f"Error deleting comment by ID from report in MongoDB: {e}")
+            return False
+    
     def add_vote(self, report_id: str, vote_data: Dict) -> Optional[Dict]:
         """Add or update a vote for a report with automatic status change logic"""
         try:
@@ -451,7 +549,7 @@ class SOSReportMongoDBService:
                 return None
             
             # Add timestamp to vote
-            vote_data['created_at'] = datetime.utcnow().isoformat()
+            vote_data['created_at'] = timezone.now().isoformat()
             
             # Check if this is the report owner voting
             is_owner_vote = report.get('user_id') == vote_data.get('user_id')

@@ -25,7 +25,7 @@ const Profile = () => {
   
   // Image upload states
   const [profileImage, setProfileImage] = useState(null);
-  const [imagePreview, setImagePreview] = useState(user?.profile?.profile_image_url || null);
+  const [imagePreview, setImagePreview] = useState(user?.profile_image_url || null);
   const [uploadingImage, setUploadingImage] = useState(false);
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'info' });
   const fileInputRef = useRef(null);
@@ -35,10 +35,10 @@ const Profile = () => {
 
   // Update image preview when user data changes
   useEffect(() => {
-    if (user?.profile?.profile_image_url) {
-      setImagePreview(user.profile.profile_image_url);
+    if (user?.profile_image_url) {
+      setImagePreview(user.profile_image_url);
     }
-  }, [user?.profile?.profile_image_url]);
+  }, [user?.profile_image_url]);
 
   const handleEdit = () => {
     setIsEditing(true);
@@ -125,14 +125,15 @@ const Profile = () => {
           severity: 'success'
         });
         
-        // Refresh user profile to get updated data
-        const updatedUser = await refreshUserProfile();
-        
-        // Update the image preview with the new URL
+        // Update the image preview with the new URL immediately
         if (response.data.image_url) {
           setImagePreview(response.data.image_url);
-        } else if (updatedUser?.profile?.profile_image_url) {
-          setImagePreview(updatedUser.profile.profile_image_url);
+        }
+        
+        // Refresh user profile to get updated data and update global state
+        const updatedUser = await refreshUserProfile();
+        if (updatedUser?.profile_image_url) {
+          setImagePreview(updatedUser.profile_image_url);
         }
         
         // Clear the selected file

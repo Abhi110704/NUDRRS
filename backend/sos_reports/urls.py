@@ -3,7 +3,7 @@ from rest_framework.routers import DefaultRouter
 from .views import SOSReportViewSet
 
 router = DefaultRouter()
-router.register(r'sos_reports', SOSReportViewSet)
+router.register(r'', SOSReportViewSet)
 
 urlpatterns = [
     path('', include(router.urls)),

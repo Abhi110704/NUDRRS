@@ -18,6 +18,7 @@ import {
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import { formatTimeAgo } from '../utils/timeUtils';
 import { useTheme } from '@mui/material/styles';
 import axios from 'axios';
 
@@ -61,7 +62,7 @@ const Dashboard = () => {
   // Fetch comments for a report
   const fetchComments = async (reportId) => {
     try {
-      const response = await axios.get(`http://localhost:8000/api/sos_reports/sos_reports/${reportId}/updates/`, {
+      const response = await axios.get(`http://localhost:8000/api/sos_reports/${reportId}/updates/`, {
         headers: {
           'Authorization': `Token ${localStorage.getItem('token')}`
         }
@@ -79,7 +80,7 @@ const Dashboard = () => {
 
     try {
       const response = await axios.post(
-        `http://localhost:8000/api/sos_reports/sos_reports/${selectedReport.id}/updates/`,
+        `http://localhost:8000/api/sos_reports/${selectedReport.id}/updates/`,
         { message: newComment },
         {
           headers: {
@@ -139,7 +140,7 @@ const Dashboard = () => {
 
     try {
       await axios.delete(
-        `http://localhost:8000/api/sos_reports/sos_reports/${selectedReport.id}/updates/${commentId}/`,
+        `http://localhost:8000/api/sos_reports/${selectedReport.id}/updates/${commentId}/`,
         {
           headers: {
             'Authorization': `Token ${localStorage.getItem('token')}`,
@@ -166,8 +167,8 @@ const Dashboard = () => {
     // Report owner can delete any comment on their report
     if (selectedReport.user === user.id) return true;
     
-    // Comment author can delete their own comment
-    if (comment.user === user.id) return true;
+    // Comment author can delete their own comment (using user_id field)
+    if (comment.user_id && comment.user_id === user.id) return true;
     
     return false;
   };
@@ -182,7 +183,7 @@ const Dashboard = () => {
   // Fetch comments for a specific report
   const fetchReportComments = async (reportId) => {
     try {
-      const response = await axios.get(`http://localhost:8000/api/sos_reports/sos_reports/${reportId}/updates/`, {
+      const response = await axios.get(`http://localhost:8000/api/sos_reports/${reportId}/updates/`, {
         headers: {
           'Authorization': `Token ${localStorage.getItem('token')}`
         }
@@ -200,7 +201,7 @@ const Dashboard = () => {
 
     try {
       const response = await axios.post(
-        `http://localhost:8000/api/sos_reports/sos_reports/${commentReport.id}/updates/`,
+        `http://localhost:8000/api/sos_reports/${commentReport.id}/updates/`,
         { message: newReportComment },
         {
           headers: {
@@ -225,11 +226,14 @@ const Dashboard = () => {
 
     try {
       await axios.delete(
-        `http://localhost:8000/api/sos_reports/sos_reports/${commentReport.id}/updates/${commentId}/`,
+        `http://localhost:8000/api/sos_reports/${commentReport.id}/updates/`,
         {
           headers: {
             'Authorization': `Token ${localStorage.getItem('token')}`,
             'Content-Type': 'application/json'
+          },
+          data: {
+            comment_id: commentId
           }
         }
       );
@@ -251,8 +255,8 @@ const Dashboard = () => {
     // Report owner can delete any comment on their report
     if (commentReport.user === user.id) return true;
     
-    // Comment author can delete their own comment
-    if (comment.user === user.id) return true;
+    // Comment author can delete their own comment (using user_id field)
+    if (comment.user_id && comment.user_id === user.id) return true;
     
     return false;
   };
@@ -269,7 +273,7 @@ const Dashboard = () => {
       const reportsWithComments = await Promise.all(
         reports.map(async (report) => {
           try {
-            const response = await axios.get(`http://localhost:8000/api/sos_reports/sos_reports/${report.id}/updates/`, {
+            const response = await axios.get(`http://localhost:8000/api/sos_reports/${report.id}/updates/`, {
               headers: {
                 'Authorization': `Token ${localStorage.getItem('token')}`
               }
@@ -300,8 +304,8 @@ const Dashboard = () => {
       
       // Fetch real data from backend
         const [statsResponse, reportsResponse] = await Promise.all([
-            axios.get(`http://localhost:8000/api/sos_reports/sos_reports/dashboard_stats/`),
-            axios.get(`http://localhost:8000/api/sos_reports/sos_reports/?limit=2`)
+            axios.get(`http://localhost:8000/api/sos_reports/dashboard_stats/`),
+            axios.get(`http://localhost:8000/api/sos_reports/?limit=2`)
           ]);
           
           // Transform the data to ensure proper structure
@@ -335,7 +339,7 @@ const Dashboard = () => {
           // Fetch user-specific reports if user is logged in
           if (user) {
             try {
-              const userReportsResponse = await axios.get(`http://localhost:8000/api/sos_reports/sos_reports/?user=${user.id}`);
+              const userReportsResponse = await axios.get(`http://localhost:8000/api/sos_reports/?user=${user.id}`);
               const userReportsData = userReportsResponse.data.results || userReportsResponse.data || [];
               const transformedUserReports = (Array.isArray(userReportsData) ? userReportsData : []).map(report => ({
                 ...report,
@@ -400,16 +404,6 @@ const Dashboard = () => {
     }
   };
 
-  const formatTimeAgo = (dateString) => {
-    const date = new Date(dateString);
-    const now = new Date();
-    const diffInMinutes = Math.floor((now - date) / (1000 * 60));
-    
-    if (diffInMinutes < 1) return 'Just now';
-    if (diffInMinutes < 60) return `${diffInMinutes}m ago`;
-    if (diffInMinutes < 1440) return `${Math.floor(diffInMinutes / 60)}h ago`;
-    return `${Math.floor(diffInMinutes / 1440)}d ago`;
-  };
 
 
   if (loading && !stats) {

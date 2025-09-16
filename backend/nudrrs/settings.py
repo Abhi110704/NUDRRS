@@ -82,8 +82,8 @@ DATABASES = {
 
 # MongoDB Atlas Configuration (Primary Database)
 MONGODB_SETTINGS = {
-    'host': 'mongodb+srv://NUDDRS:HackerXhacker%400921@cluster0.jvsnjs4.mongodb.net/NUDDRS?retryWrites=true&w=majority&ssl=true&ssl_cert_reqs=CERT_NONE',
-    'db': 'NUDDRS',
+    'host': os.environ.get('MONGODB_CONNECTION_STRING', 'mongodb://localhost:27017/'),
+    'db': os.environ.get('MONGODB_DATABASE_NAME', 'nudrrs_mongodb'),
     'port': 27017,
 }
 
@@ -168,10 +168,15 @@ OPENAI_API_KEY = os.environ.get('OPENAI_API_KEY', '')
 TWILIO_ACCOUNT_SID = os.environ.get('TWILIO_ACCOUNT_SID', '')
 TWILIO_AUTH_TOKEN = os.environ.get('TWILIO_AUTH_TOKEN', '')
 
-# ImageKit Configuration
+# ImageKit Configuration (Legacy - being replaced by Cloudinary)
 IMAGEKIT_PUBLIC_KEY = os.environ.get('IMAGEKIT_PUBLIC_KEY', '')
 IMAGEKIT_PRIVATE_KEY = os.environ.get('IMAGEKIT_PRIVATE_KEY', '')
 IMAGEKIT_URL_ENDPOINT = os.environ.get('IMAGEKIT_URL_ENDPOINT', '')
+
+# Cloudinary Configuration
+CLOUDINARY_CLOUD_NAME = os.environ.get('CLOUDINARY_CLOUD_NAME', '')
+CLOUDINARY_API_KEY = os.environ.get('CLOUDINARY_API_KEY', '')
+CLOUDINARY_API_SECRET = os.environ.get('CLOUDINARY_API_SECRET', '')
 
 # Logging
 LOGGING = {

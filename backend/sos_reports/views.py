@@ -53,7 +53,7 @@ class SOSReportViewSet(viewsets.ModelViewSet):
                 filters={},
                 limit=limit,
                 skip=skip,
-                user_id=int(user_id) if user_id else None
+                user_id=user_id if user_id else None
             )
             
             return Response(reports)
@@ -75,6 +75,10 @@ class SOSReportViewSet(viewsets.ModelViewSet):
     
     def create(self, request, *args, **kwargs):
         try:
+            import time
+            start_time = time.time()
+            print(f"🚀 Starting report creation at {start_time}")
+            
             # Get user information
             user_id = request.user.id if request.user.is_authenticated else 1  # Default to admin user
             username = request.user.username if request.user.is_authenticated else 'anonymous_user'
@@ -115,7 +119,7 @@ class SOSReportViewSet(viewsets.ModelViewSet):
                 'verified': 'pending'
             }
             
-            # Process uploaded media files using ImageKit
+            # Process uploaded media files using Cloudinary
             files = request.FILES.getlist('files')
             image_paths = []
             
@@ -124,15 +128,15 @@ class SOSReportViewSet(viewsets.ModelViewSet):
                 
                 if media_type == 'IMAGE':
                     try:
-                        # Upload to ImageKit
-                        from imagekit_service import imagekit_service
+                        # Upload to Cloudinary
+                        from cloudinary_service import cloudinary_service
                         
                         # Generate unique filename
                         file_extension = file.name.split('.')[-1] if '.' in file.name else 'jpg'
                         unique_filename = f"{report_id}_{uuid.uuid4().hex[:8]}.{file_extension}"
                         
-                        # Upload to ImageKit
-                        upload_result = imagekit_service.upload_file(
+                        # Upload to Cloudinary
+                        upload_result = cloudinary_service.upload_file(
                             file=file,
                             folder=f"nudrrs/reports/{report_id}",
                             filename=unique_filename,
@@ -140,14 +144,21 @@ class SOSReportViewSet(viewsets.ModelViewSet):
                         )
                         
                         if upload_result['success']:
-                            # Store ImageKit file info
+                            # Store Cloudinary file info
                             media_info = {
                                 'media_type': media_type,
                                 'filename': unique_filename,
                                 'content_type': file.content_type,
                                 'size': file.size,
-                                'file_id': upload_result['file_id'],
+                                'file_id': upload_result['public_id'],
+                                'public_id': upload_result['public_id'],
                                 'url': upload_result['url'],
+                                'format': upload_result.get('format'),
+                                'width': upload_result.get('width'),
+                                'height': upload_result.get('height'),
+                                'bytes': upload_result.get('bytes'),
+                                'created_at': upload_result.get('created_at'),
+                                # Legacy compatibility fields
                                 'imagekit_url': upload_result['url'],
                                 'file_url': upload_result['url'],
                                 'image_url': upload_result['url']
@@ -157,7 +168,7 @@ class SOSReportViewSet(viewsets.ModelViewSet):
                             image_paths.append(upload_result['url'])
                             report_data['images'].append(upload_result['url'])
                         else:
-                            print(f"ImageKit upload failed: {upload_result.get('error', 'Unknown error')}")
+                            print(f"Cloudinary upload failed: {upload_result.get('error', 'Unknown error')}")
                             # Fallback to local storage
                             media_info = {
                                 'media_type': media_type,
@@ -165,6 +176,13 @@ class SOSReportViewSet(viewsets.ModelViewSet):
                                 'content_type': file.content_type,
                                 'size': file.size,
                                 'url': f"/media/reports/{file.name}",
+                                'public_id': None,
+                                'format': None,
+                                'width': None,
+                                'height': None,
+                                'bytes': file.size,
+                                'created_at': None,
+                                # Legacy compatibility fields
                                 'file_url': f"/media/reports/{file.name}",
                                 'image_url': f"/media/reports/{file.name}"
                             }
@@ -173,7 +191,7 @@ class SOSReportViewSet(viewsets.ModelViewSet):
                             report_data['images'].append(f"/media/reports/{file.name}")
                             
                     except Exception as e:
-                        print(f"ImageKit upload error: {e}")
+                        print(f"Cloudinary upload error: {e}")
                         # Fallback to local storage
                         media_info = {
                             'media_type': media_type,
@@ -197,54 +215,80 @@ class SOSReportViewSet(viewsets.ModelViewSet):
                     }
                     report_data['media'].append(media_info)
             
-            # Perform AI analysis if we have images or description
-            if image_paths or report_data['description']:
-                try:
-                    ai_service = AIVerificationService()
-                    comprehensive_analysis = ai_service.analyze_report(
-                        text_description=report_data['description'],
-                        image_paths=image_paths
-                    )
-                    
-                    # Update report with AI analysis results
-                    report_data['ai_verified'] = comprehensive_analysis.get('is_emergency', False)
-                    report_data['ai_confidence'] = comprehensive_analysis.get('confidence', 0.0)
-                    report_data['ai_fraud_score'] = comprehensive_analysis.get('fraud_score', 0.0)
-                    report_data['ai_analysis_data'] = comprehensive_analysis
-                    
-                    # Enhanced priority determination based on AI analysis
-                    suggested_priority = comprehensive_analysis.get('suggested_priority', 'MEDIUM')
-                    confidence = comprehensive_analysis.get('confidence', 0.0)
-                    fraud_score = comprehensive_analysis.get('fraud_score', 0.0)
-                    
-                    # Override priority based on confidence and fraud score
-                    if fraud_score > 0.7 or confidence < 0.3:
-                        report_data['priority'] = 'LOW'
-                    elif confidence > 0.8 and fraud_score < 0.2:
-                        report_data['priority'] = 'HIGH'
-                    elif confidence > 0.6 and fraud_score < 0.4:
-                        report_data['priority'] = 'MEDIUM'
-                    else:
-                        report_data['priority'] = suggested_priority
-                    
-                    # Enhanced status determination
-                    if comprehensive_analysis.get('is_fraud', False) or fraud_score > 0.6:
-                        report_data['status'] = 'REJECTED'
-                    elif comprehensive_analysis.get('suggested_status'):
-                        report_data['status'] = comprehensive_analysis.get('suggested_status', 'PENDING')
-                    elif confidence > 0.8 and fraud_score < 0.2:
-                        report_data['status'] = 'VERIFIED'
-                    else:
-                        report_data['status'] = 'PENDING'
-                        
-                except Exception as e:
-                    print(f"AI analysis failed: {e}")
-                    # Continue without AI analysis
+            # Set default AI analysis values for immediate report creation
+            report_data['ai_verified'] = True
+            report_data['ai_confidence'] = 0.5
+            report_data['ai_fraud_score'] = 0.1
+            report_data['ai_analysis_data'] = {'status': 'pending', 'source': 'async_analysis'}
             
             # Create report in MongoDB
+            print(f"📝 Creating report in MongoDB...")
             created_report = mongodb_service.create_report(report_data)
             
+            end_time = time.time()
+            print(f"✅ Report creation completed in {end_time - start_time:.2f} seconds")
+            
             if created_report:
+                # Start AI analysis in background (non-blocking)
+                if image_paths or report_data['description']:
+                    try:
+                        import threading
+                        def run_ai_analysis():
+                            try:
+                                ai_service = AIVerificationService()
+                                comprehensive_analysis = ai_service.analyze_report(
+                                    text_description=report_data['description'],
+                                    image_paths=image_paths
+                                )
+                                
+                                # Update report with AI analysis results
+                                update_data = {
+                                    'ai_verified': comprehensive_analysis.get('is_emergency', False),
+                                    'ai_confidence': comprehensive_analysis.get('confidence', 0.0),
+                                    'ai_fraud_score': comprehensive_analysis.get('fraud_score', 0.0),
+                                    'ai_analysis_data': comprehensive_analysis,
+                                    'updated_at': timezone.now().isoformat()
+                                }
+                                
+                                # Enhanced priority determination based on AI analysis
+                                suggested_priority = comprehensive_analysis.get('suggested_priority', 'MEDIUM')
+                                confidence = comprehensive_analysis.get('confidence', 0.0)
+                                fraud_score = comprehensive_analysis.get('fraud_score', 0.0)
+                                
+                                # Override priority based on confidence and fraud score
+                                if fraud_score > 0.7 or confidence < 0.3:
+                                    update_data['priority'] = 'LOW'
+                                elif confidence > 0.8 and fraud_score < 0.2:
+                                    update_data['priority'] = 'HIGH'
+                                elif confidence > 0.6 and fraud_score < 0.4:
+                                    update_data['priority'] = 'MEDIUM'
+                                else:
+                                    update_data['priority'] = suggested_priority
+                                
+                                # Enhanced status determination
+                                if comprehensive_analysis.get('is_fraud', False) or fraud_score > 0.6:
+                                    update_data['status'] = 'REJECTED'
+                                elif comprehensive_analysis.get('suggested_status'):
+                                    update_data['status'] = comprehensive_analysis.get('suggested_status', 'PENDING')
+                                elif confidence > 0.8 and fraud_score < 0.2:
+                                    update_data['status'] = 'VERIFIED'
+                                
+                                # Update the report with AI analysis results
+                                mongodb_service.update_report(created_report['id'], update_data)
+                                print(f"🤖 AI analysis completed for report {created_report['id']}")
+                                
+                            except Exception as e:
+                                print(f"Background AI analysis failed: {e}")
+                        
+                        # Start background thread
+                        ai_thread = threading.Thread(target=run_ai_analysis)
+                        ai_thread.daemon = True
+                        ai_thread.start()
+                        print(f"🤖 Started background AI analysis for report {created_report['id']}")
+                        
+                    except Exception as e:
+                        print(f"Failed to start background AI analysis: {e}")
+                
                 return Response(created_report, status=status.HTTP_201_CREATED)
             else:
                 return Response({'error': 'Failed to create report'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
@@ -274,7 +318,7 @@ class SOSReportViewSet(viewsets.ModelViewSet):
         except Exception as e:
             return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
     
-    @action(detail=True, methods=['get', 'post'])
+    @action(detail=True, methods=['get', 'post', 'delete'])
     def updates(self, request, pk=None):
         """Get or create report updates/comments"""
         try:
@@ -299,7 +343,8 @@ class SOSReportViewSet(viewsets.ModelViewSet):
                     'username': username,
                     'message': request.data.get('message', ''),
                     'status_change': request.data.get('status_change', ''),
-                    'created_at': timezone.now().isoformat()
+                    'created_at': timezone.now().isoformat(),
+                    'timestamp': timezone.now().timestamp()  # Add timestamp for sorting
                 }
                 
                 # Add comment to MongoDB
@@ -309,6 +354,51 @@ class SOSReportViewSet(viewsets.ModelViewSet):
                     return Response(result, status=status.HTTP_201_CREATED)
                 else:
                     return Response({'error': 'Failed to add comment'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            
+            elif request.method == 'DELETE':
+                # Delete a specific comment
+                comment_id = request.data.get('comment_id')
+                if not comment_id:
+                    return Response({'error': 'comment_id is required'}, status=status.HTTP_400_BAD_REQUEST)
+                
+                # Get the report to check permissions
+                report = mongodb_service.get_report_by_id(report_id)
+                if not report:
+                    return Response({'error': 'Report not found'}, status=status.HTTP_404_NOT_FOUND)
+                
+                # Check if user has permission to delete comment
+                user_id = request.user.id if request.user.is_authenticated else None
+                username = request.user.username if request.user.is_authenticated else None
+                
+                # Find the comment to check ownership
+                comment_to_delete = None
+                comment_index = None
+                for i, comment in enumerate(report.get('updates', [])):
+                    if str(comment.get('_id', '')) == str(comment_id) or str(comment.get('id', '')) == str(comment_id):
+                        comment_to_delete = comment
+                        comment_index = i
+                        break
+                
+                if not comment_to_delete:
+                    return Response({'error': 'Comment not found'}, status=status.HTTP_404_NOT_FOUND)
+                
+                # Check permissions: comment author, report owner, or admin
+                is_comment_author = (user_id and str(comment_to_delete.get('user_id')) == str(user_id))
+                is_report_owner = (user_id and str(report.get('user_id')) == str(user_id))
+                is_admin = (hasattr(request.user, '_user_data') and request.user._user_data.get('role') == 'ADMIN') or \
+                          (hasattr(request.user, 'profile') and request.user.profile.role == 'ADMIN')
+                
+                if not (is_comment_author or is_report_owner or is_admin):
+                    return Response({'error': 'Permission denied. Only comment author, report owner, or admin can delete comments.'}, 
+                                  status=status.HTTP_403_FORBIDDEN)
+                
+                # Delete the comment
+                success = mongodb_service.delete_comment_by_id(report_id, comment_id)
+                
+                if success:
+                    return Response({'message': 'Comment deleted successfully'}, status=status.HTTP_200_OK)
+                else:
+                    return Response({'error': 'Failed to delete comment'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
                     
         except Exception as e:
             return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
@@ -445,7 +535,6 @@ class SOSReportViewSet(viewsets.ModelViewSet):
         try:
             # Get user ID for filtering if needed
             user_id = request.query_params.get('user')
-            user_id = int(user_id) if user_id else None
             
             # Get dashboard stats from MongoDB
             stats = mongodb_service.get_dashboard_stats(user_id)
