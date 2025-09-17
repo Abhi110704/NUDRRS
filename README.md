@@ -139,7 +139,7 @@ npm start
 ┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
 │   User Interface│    │   Data Storage  │    │   External APIs │
 │                 │    │                 │    │                 │
-│ • Material-UI   │    │ • SQLite/PostgreSQL│  │ • Google Maps  │
+│ • Material-UI   │    │ • SQLite/MongoDB│    │ • Google Maps   │
 │ • Responsive    │    │ • Media Files   │    │ • Weather APIs  │
 │ • Real-time     │    │ • User Sessions │    │ • SMS/Email     │
 └─────────────────┘    └─────────────────┘    └─────────────────┘
