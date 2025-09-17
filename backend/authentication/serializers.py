@@ -102,7 +102,8 @@ class PasswordResetSerializer(serializers.Serializer):
     email = serializers.EmailField()
 
 class PasswordResetConfirmSerializer(serializers.Serializer):
-    token = serializers.CharField()
+    email = serializers.EmailField()
+    otp = serializers.CharField(max_length=6, min_length=6)
     new_password = serializers.CharField(validators=[validate_password])
     new_password2 = serializers.CharField()
     
@@ -110,3 +111,10 @@ class PasswordResetConfirmSerializer(serializers.Serializer):
         if attrs['new_password'] != attrs['new_password2']:
             raise serializers.ValidationError({"new_password": "Password fields didn't match."})
         return attrs
+
+class PasswordResetOTPSerializer(serializers.Serializer):
+    email = serializers.EmailField()
+
+class PasswordResetVerifyOTPSerializer(serializers.Serializer):
+    email = serializers.EmailField()
+    otp = serializers.CharField(max_length=6, min_length=6)

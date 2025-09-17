@@ -5,7 +5,7 @@ Handles all user authentication operations using MongoDB
 from pymongo import MongoClient
 import ssl
 from django.conf import settings
-from datetime import datetime
+from datetime import datetime, timedelta
 import hashlib
 import secrets
 from typing import Dict, Optional, List
@@ -221,6 +221,35 @@ class AuthMongoDBService:
             print(f"Error getting user by username from MongoDB: {e}")
             return None
     
+    def get_user_by_email(self, email: str) -> Optional[Dict]:
+        """Get user by email address"""
+        try:
+            if not self.db:
+                return None
+            
+            collection = self.db['users']
+            user = collection.find_one({'email': email})
+            
+            if user:
+                user['id'] = str(user['_id'])
+                del user['_id']
+                del user['password']  # Remove password
+                
+                # Format dates
+                if 'created_at' in user and isinstance(user['created_at'], datetime):
+                    user['created_at'] = user['created_at'].isoformat()
+                if 'updated_at' in user and isinstance(user['updated_at'], datetime):
+                    user['updated_at'] = user['updated_at'].isoformat()
+                if 'last_login' in user and isinstance(user['last_login'], datetime):
+                    user['last_login'] = user['last_login'].isoformat()
+                
+                return user
+            
+            return None
+        except Exception as e:
+            print(f"Error getting user by email from MongoDB: {e}")
+            return None
+    
     def update_user(self, user_id: str, update_data: Dict) -> Optional[Dict]:
         """Update user information"""
         try:
@@ -402,6 +431,174 @@ class AuthMongoDBService:
             print(f"Error getting all users from MongoDB: {e}")
             return []
     
+    def create_password_reset_token(self, email: str) -> Optional[Dict]:
+        """Create password reset token for email"""
+        try:
+            if not self.db:
+                return None
+            
+            # Check if user exists
+            user = self.get_user_by_email(email)
+            if not user:
+                return None
+            
+            # Generate OTP
+            from .email_service import EmailService
+            otp = EmailService.generate_otp()
+            
+            # Create reset token document
+            reset_data = {
+                'email': email,
+                'otp': otp,
+                'user_id': user['id'],
+                'created_at': datetime.now(),
+                'expires_at': datetime.now() + timedelta(seconds=900),  # 15 minutes
+                'is_used': False,
+                'attempts': 0
+            }
+            
+            collection = self.db['password_reset_tokens']
+            result = collection.insert_one(reset_data)
+            
+            if result.inserted_id:
+                # Send OTP email
+                email_sent = EmailService.send_otp_email(
+                    email=email,
+                    otp=otp,
+                    user_name=f"{user.get('first_name', '')} {user.get('last_name', '')}".strip()
+                )
+                
+                if email_sent:
+                    return {
+                        'id': str(result.inserted_id),
+                        'email': email,
+                        'expires_at': reset_data['expires_at'].isoformat(),
+                        'message': 'OTP sent successfully'
+                    }
+                else:
+                    # If email failed, delete the token
+                    collection.delete_one({'_id': result.inserted_id})
+                    return None
+            
+            return None
+        except Exception as e:
+            print(f"Error creating password reset token: {e}")
+            return None
+    
+    def verify_password_reset_otp(self, email: str, otp: str) -> Optional[Dict]:
+        """Verify password reset OTP"""
+        try:
+            if not self.db:
+                return None
+            
+            collection = self.db['password_reset_tokens']
+            
+            # Find valid token
+            token_doc = collection.find_one({
+                'email': email,
+                'otp': otp,
+                'is_used': False,
+                'expires_at': {'$gt': datetime.now()}
+            })
+            
+            if not token_doc:
+                # Increment attempts for failed verification
+                collection.update_one(
+                    {'email': email, 'is_used': False},
+                    {'$inc': {'attempts': 1}}
+                )
+                return None
+            
+            # Mark token as verified but not used yet
+            collection.update_one(
+                {'_id': token_doc['_id']},
+                {'$set': {'verified_at': datetime.now()}}
+            )
+            
+            return {
+                'id': str(token_doc['_id']),
+                'user_id': token_doc['user_id'],
+                'email': email,
+                'verified_at': datetime.now().isoformat()
+            }
+        except Exception as e:
+            print(f"Error verifying password reset OTP: {e}")
+            return None
+    
+    def reset_password_with_token(self, email: str, new_password: str) -> bool:
+        """Reset password using verified token"""
+        try:
+            if not self.db:
+                return False
+            
+            # Find verified token (either used or recently verified)
+            collection = self.db['password_reset_tokens']
+            token_doc = collection.find_one({
+                'email': email,
+                '$or': [
+                    {'is_used': True, 'verified_at': {'$exists': True}},
+                    {'is_used': False, 'verified_at': {'$exists': True}}
+                ]
+            })
+            
+            if not token_doc:
+                return False
+            
+            # Update user password
+            user_id = token_doc['user_id']
+            hashed_password = self.hash_password(new_password)
+            
+            from bson import ObjectId
+            users_collection = self.db['users']
+            result = users_collection.update_one(
+                {'_id': ObjectId(user_id)},
+                {
+                    '$set': {
+                        'password': hashed_password,
+                        'updated_at': datetime.now()
+                    }
+                }
+            )
+            
+            if result.modified_count > 0:
+                # Mark token as used and completed
+                collection.update_one(
+                    {'_id': token_doc['_id']},
+                    {'$set': {'is_used': True, 'completed_at': datetime.now()}}
+                )
+                
+                # Send success email
+                from .email_service import EmailService
+                user = self.get_user_by_id(user_id)
+                if user:
+                    EmailService.send_password_reset_success_email(
+                        email=email,
+                        user_name=f"{user.get('first_name', '')} {user.get('last_name', '')}".strip()
+                    )
+                
+                return True
+            
+            return False
+        except Exception as e:
+            print(f"Error resetting password: {e}")
+            return False
+    
+    def cleanup_expired_tokens(self):
+        """Clean up expired password reset tokens"""
+        try:
+            if not self.db:
+                return
+            
+            collection = self.db['password_reset_tokens']
+            result = collection.delete_many({
+                'expires_at': {'$lt': datetime.now()}
+            })
+            
+            if result.deleted_count > 0:
+                print(f"Cleaned up {result.deleted_count} expired password reset tokens")
+        except Exception as e:
+            print(f"Error cleaning up expired tokens: {e}")
+
     def close(self):
         """Close MongoDB connection"""
         if self.client:

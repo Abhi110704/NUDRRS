@@ -9,6 +9,7 @@ import {
   Visibility, VisibilityOff, Email, Lock, Person, Phone
 } from '@mui/icons-material';
 import { useAuth } from '../contexts/AuthContext';
+import { useNavigate } from 'react-router-dom';
 
 const Login = () => {
   const [isLogin, setIsLogin] = useState(true);
@@ -29,6 +30,7 @@ const Login = () => {
   const { login, register } = useAuth();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
+  const navigate = useNavigate();
 
   // Country codes for phone numbers
   const countryCodes = [
@@ -403,6 +405,23 @@ const Login = () => {
               </Grid>
             </Grid>
           </form>
+
+          {/* Forgot Password Link - Only show for login mode */}
+          {isLogin && (
+            <Box sx={{ textAlign: 'center', mt: 2 }}>
+              <Button
+                variant="text"
+                onClick={() => navigate('/password-reset')}
+                sx={{ 
+                  color: 'text.secondary',
+                  fontSize: '0.9rem',
+                  '&:hover': { color: '#d32f2f' }
+                }}
+              >
+                Forgot your password?
+              </Button>
+            </Box>
+          )}
 
           {/* Divider */}
           <Divider sx={{ my: 3 }}>

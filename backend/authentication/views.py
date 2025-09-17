@@ -12,7 +12,8 @@ from .models import UserProfile, Organization
 from .mongodb_service import auth_mongodb_service
 from .serializers import (
     UserSerializer, UserRegistrationSerializer, LoginSerializer, UserProfileSerializer, 
-    ChangePasswordSerializer, PasswordResetSerializer, OrganizationSerializer
+    ChangePasswordSerializer, PasswordResetSerializer, PasswordResetConfirmSerializer,
+    PasswordResetOTPSerializer, PasswordResetVerifyOTPSerializer, OrganizationSerializer
 )
 
 class RegisterView(generics.CreateAPIView):
@@ -193,19 +194,102 @@ def change_password(request):
 
 @api_view(['POST'])
 @permission_classes([AllowAny])
-def password_reset(request):
-    serializer = PasswordResetSerializer(data=request.data)
-    if serializer.is_valid():
-        email = serializer.validated_data['email']
-        try:
-            user = User.objects.get(email=email)
-            # Here you would typically send a password reset email
-            # For now, just return success
-            return Response({'message': 'Password reset email sent'})
-        except User.DoesNotExist:
-            return Response({'error': 'User not found'}, status=status.HTTP_404_NOT_FOUND)
-    
-    return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+def password_reset_request(request):
+    """Request password reset - sends OTP to email"""
+    try:
+        serializer = PasswordResetOTPSerializer(data=request.data)
+        if serializer.is_valid():
+            email = serializer.validated_data['email']
+            
+            # Create password reset token and send OTP
+            result = auth_mongodb_service.create_password_reset_token(email)
+            
+            if result:
+                return Response({
+                    'message': 'OTP sent to your email address',
+                    'email': email,
+                    'expires_at': result['expires_at']
+                }, status=status.HTTP_200_OK)
+            else:
+                # For security, always return 200 even if user not found
+                return Response({
+                    'message': 'If the email exists in our system, an OTP has been sent'
+                }, status=status.HTTP_200_OK)
+        
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        
+    except Exception as e:
+        return Response({
+            'error': f'Password reset request failed: {str(e)}'
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def password_reset_verify_otp(request):
+    """Verify OTP for password reset"""
+    try:
+        serializer = PasswordResetVerifyOTPSerializer(data=request.data)
+        if serializer.is_valid():
+            email = serializer.validated_data['email']
+            otp = serializer.validated_data['otp']
+            
+            # Verify OTP
+            result = auth_mongodb_service.verify_password_reset_otp(email, otp)
+            
+            if result:
+                return Response({
+                    'message': 'OTP verified successfully',
+                    'email': email,
+                    'verified_at': result['verified_at']
+                }, status=status.HTTP_200_OK)
+            else:
+                return Response({
+                    'error': 'Invalid or expired OTP'
+                }, status=status.HTTP_400_BAD_REQUEST)
+        
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        
+    except Exception as e:
+        return Response({
+            'error': f'OTP verification failed: {str(e)}'
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def password_reset_confirm(request):
+    """Confirm password reset with new password"""
+    try:
+        serializer = PasswordResetConfirmSerializer(data=request.data)
+        if serializer.is_valid():
+            email = serializer.validated_data['email']
+            otp = serializer.validated_data['otp']
+            new_password = serializer.validated_data['new_password']
+            
+            # Check if OTP is already verified
+            otp_result = auth_mongodb_service.verify_password_reset_otp(email, otp)
+            if not otp_result:
+                return Response({
+                    'error': 'Invalid or expired OTP'
+                }, status=status.HTTP_400_BAD_REQUEST)
+            
+            # Reset password
+            success = auth_mongodb_service.reset_password_with_token(email, new_password)
+            
+            if success:
+                return Response({
+                    'message': 'Password reset successfully'
+                }, status=status.HTTP_200_OK)
+            else:
+                return Response({
+                    'error': 'Failed to reset password'
+                }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        
+    except Exception as e:
+        return Response({
+            'error': f'Password reset confirmation failed: {str(e)}'
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 class OrganizationListView(generics.ListCreateAPIView):
     queryset = Organization.objects.filter(is_active=True)

@@ -178,6 +178,29 @@ CLOUDINARY_CLOUD_NAME = os.environ.get('CLOUDINARY_CLOUD_NAME', '')
 CLOUDINARY_API_KEY = os.environ.get('CLOUDINARY_API_KEY', '')
 CLOUDINARY_API_SECRET = os.environ.get('CLOUDINARY_API_SECRET', '')
 
+# Email Configuration
+EMAIL_BACKEND = 'authentication.email_backend.CustomSMTPEmailBackend'
+EMAIL_HOST = os.environ.get('EMAIL_HOST', 'smtp.gmail.com')
+EMAIL_PORT = int(os.environ.get('EMAIL_PORT', '587'))
+EMAIL_USE_TLS = os.environ.get('EMAIL_USE_TLS', 'True') == 'True'
+EMAIL_USE_SSL = False  # Use TLS, not SSL
+EMAIL_HOST_USER = os.environ.get('EMAIL_HOST_USER', '')
+EMAIL_HOST_PASSWORD = os.environ.get('EMAIL_HOST_PASSWORD', '')
+DEFAULT_FROM_EMAIL = os.environ.get('DEFAULT_FROM_EMAIL', 'noreply@nudrrs.com')
+
+# Email timeout settings
+EMAIL_TIMEOUT = 30
+
+# SSL Context for email (fixes certificate issues on macOS)
+import ssl
+EMAIL_SSL_CONTEXT = ssl.create_default_context()
+EMAIL_SSL_CONTEXT.check_hostname = False
+EMAIL_SSL_CONTEXT.verify_mode = ssl.CERT_NONE
+
+# Password Reset Settings
+PASSWORD_RESET_TIMEOUT = 900  # 15 minutes in seconds
+OTP_LENGTH = 6
+
 # Logging
 LOGGING = {
     'version': 1,

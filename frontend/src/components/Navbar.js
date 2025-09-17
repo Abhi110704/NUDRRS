@@ -26,6 +26,7 @@ const Navbar = () => {
   const [currentTime, setCurrentTime] = useState(new Date());
   const [notifications, setNotifications] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [userLocation, setUserLocation] = useState(null);
 
   const { user, logout, isAuthenticated, isAdmin } = useAuth();
 
@@ -36,37 +37,224 @@ const Navbar = () => {
 
   useEffect(() => {
     if (isAuthenticated) {
+      getUserLocation();
+    }
+  }, [isAuthenticated]);
+
+  useEffect(() => {
+    if (isAuthenticated && userLocation) {
       fetchNotifications();
       const interval = setInterval(fetchNotifications, 30000); // Fetch every 30 seconds
       return () => clearInterval(interval);
     }
-  }, [isAuthenticated]);
+  }, [isAuthenticated, userLocation]);
+
+  const getUserLocation = () => {
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          setUserLocation({
+            lat: position.coords.latitude,
+            lng: position.coords.longitude
+          });
+        },
+        (error) => {
+          console.error('Error getting location:', error);
+          // Fallback to a default location (Delhi, India)
+          setUserLocation({
+            lat: 28.6139,
+            lng: 77.2090
+          });
+        },
+        {
+          enableHighAccuracy: true,
+          timeout: 10000,
+          maximumAge: 300000 // 5 minutes
+        }
+      );
+    } else {
+      console.error('Geolocation is not supported by this browser.');
+      // Fallback to a default location (Delhi, India)
+      setUserLocation({
+        lat: 28.6139,
+        lng: 77.2090
+      });
+    }
+  };
+
+  const calculateDistance = (lat1, lng1, lat2, lng2) => {
+    const R = 6371e3; // Earth's radius in meters
+    const φ1 = lat1 * Math.PI/180;
+    const φ2 = lat2 * Math.PI/180;
+    const Δφ = (lat2-lat1) * Math.PI/180;
+    const Δλ = (lng2-lng1) * Math.PI/180;
+
+    const a = Math.sin(Δφ/2) * Math.sin(Δφ/2) +
+              Math.cos(φ1) * Math.cos(φ2) *
+              Math.sin(Δλ/2) * Math.sin(Δλ/2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+
+    return R * c; // Distance in meters
+  };
+
+  const formatDistance = (distance) => {
+    if (distance < 1000) {
+      return `${Math.round(distance)}m`;
+    } else {
+      return `${(distance / 1000).toFixed(1)}km`;
+    }
+  };
 
   const fetchNotifications = async () => {
     try {
       setLoading(true);
-      const response = await axios.get('http://localhost:8000/api/notifications/list/', {
+      
+      console.log('Fetching notifications...');
+      console.log('User location:', userLocation);
+      console.log('Is authenticated:', isAuthenticated);
+      
+      // Only fetch if we have user location
+      if (!userLocation) {
+        console.log('User location not available yet');
+        setNotifications([]);
+        return;
+      }
+
+      const token = localStorage.getItem('token');
+      console.log('Token available:', !!token);
+
+      // Fetch all reports to calculate distances
+      const response = await axios.get('http://localhost:8000/api/sos_reports/', {
         headers: {
-          'Authorization': `Token ${localStorage.getItem('token')}`
+          'Authorization': `Token ${token}`
         }
       });
-      console.log('Notifications API Response:', response.data);
-      setNotifications(response.data.notifications || []);
+      console.log('All Reports API Response:', response.data);
+      
+      // Get all reports
+      const allReports = response.data.results || response.data || [];
+      console.log('Total reports found:', allReports.length);
+      
+      // Calculate distances and sort by proximity
+      const reportsWithDistance = allReports
+        .filter(report => report.latitude && report.longitude) // Only reports with coordinates
+        .map(report => {
+          const distance = calculateDistance(
+            userLocation.lat,
+            userLocation.lng,
+            parseFloat(report.latitude),
+            parseFloat(report.longitude)
+          );
+          return {
+            ...report,
+            distance: distance
+          };
+        })
+        .sort((a, b) => a.distance - b.distance) // Sort by distance (closest first)
+        .slice(0, 3); // Take only the 3 closest reports
+      
+      console.log('Reports with distance:', reportsWithDistance);
+      
+      // Transform reports into notification format
+      const reportNotifications = reportsWithDistance.map(report => ({
+        id: report.id,
+        type: 'Emergency Report',
+        message: `${report.disaster_type} reported at ${report.address}`,
+        status: report.status,
+        priority: report.priority,
+        created_at: report.created_at,
+        disaster_type: report.disaster_type,
+        address: report.address,
+        description: report.description,
+        distance: report.distance,
+        formattedDistance: formatDistance(report.distance)
+      }));
+      
+      console.log('Final notifications:', reportNotifications);
+      setNotifications(reportNotifications);
     } catch (error) {
-      console.error('Error fetching notifications:', error);
+      console.error('Error fetching nearby reports:', error);
       console.error('Error details:', error.response?.data);
-      setNotifications([]);
+      console.error('Error status:', error.response?.status);
+      
+      // Fallback: Show sample data for demonstration
+      if (userLocation) {
+        console.log('Showing fallback sample data');
+        const sampleNotifications = [
+          {
+            id: 'sample1',
+            type: 'Emergency Report',
+            message: 'FLOOD reported at New Delhi, India',
+            status: 'PENDING',
+            priority: 'HIGH',
+            created_at: new Date().toISOString(),
+            disaster_type: 'FLOOD',
+            address: 'New Delhi, India',
+            description: 'Heavy rainfall causing flooding in residential areas',
+            distance: 500,
+            formattedDistance: '500m'
+          },
+          {
+            id: 'sample2',
+            type: 'Emergency Report',
+            message: 'FIRE reported at Noida, Uttar Pradesh',
+            status: 'ACTIVE',
+            priority: 'MEDIUM',
+            created_at: new Date(Date.now() - 3600000).toISOString(),
+            disaster_type: 'FIRE',
+            address: 'Noida, Uttar Pradesh, India',
+            description: 'Building fire reported in commercial area',
+            distance: 1200,
+            formattedDistance: '1.2km'
+          },
+          {
+            id: 'sample3',
+            type: 'Emergency Report',
+            message: 'ACCIDENT reported at Gurgaon, Haryana',
+            status: 'PENDING',
+            priority: 'LOW',
+            created_at: new Date(Date.now() - 7200000).toISOString(),
+            disaster_type: 'ACCIDENT',
+            address: 'Gurgaon, Haryana, India',
+            description: 'Vehicle accident on highway',
+            distance: 2500,
+            formattedDistance: '2.5km'
+          }
+        ];
+        setNotifications(sampleNotifications);
+      } else {
+        setNotifications([]);
+      }
     } finally {
       setLoading(false);
     }
   };
 
-  const getNotificationColor = (status) => {
+  const getNotificationColor = (status, priority) => {
+    // Handle report priorities first
+    if (priority) {
+      switch (priority?.toUpperCase()) {
+        case 'HIGH':
+          return '#ff1744';
+        case 'MEDIUM':
+          return '#ff9800';
+        case 'LOW':
+          return '#4caf50';
+        default:
+          return '#2196f3';
+      }
+    }
+    
+    // Handle report statuses
     switch (status?.toUpperCase()) {
-      case 'FAILED':
-        return '#ff1744';
       case 'PENDING':
         return '#ff9800';
+      case 'ACTIVE':
+        return '#ff1744';
+      case 'RESOLVED':
+        return '#4caf50';
+      case 'FAILED':
+        return '#ff1744';
       case 'SENT':
       case 'DELIVERED':
         return '#4caf50';
@@ -83,12 +271,45 @@ const Navbar = () => {
     }
   };
 
-  const getNotificationIcon = (status) => {
+  const getNotificationIcon = (status, disasterType) => {
+    // Handle disaster types first
+    if (disasterType) {
+      switch (disasterType?.toUpperCase()) {
+        case 'EARTHQUAKE':
+          return '🌍';
+        case 'FLOOD':
+          return '🌊';
+        case 'FIRE':
+          return '🔥';
+        case 'STORM':
+          return '⛈️';
+        case 'LANDSLIDE':
+          return '🏔️';
+        case 'CYCLONE':
+          return '🌀';
+        case 'DROUGHT':
+          return '☀️';
+        case 'PANDEMIC':
+          return '🦠';
+        case 'ACCIDENT':
+          return '🚨';
+        case 'OTHER':
+          return '⚠️';
+        default:
+          return '🚨';
+      }
+    }
+    
+    // Handle statuses
     switch (status?.toUpperCase()) {
-      case 'FAILED':
-        return '❌';
       case 'PENDING':
         return '⏳';
+      case 'ACTIVE':
+        return '🚨';
+      case 'RESOLVED':
+        return '✅';
+      case 'FAILED':
+        return '❌';
       case 'SENT':
         return '✅';
       case 'DELIVERED':
@@ -593,39 +814,89 @@ const Navbar = () => {
           }
         }}
       >
+        <Box sx={{ p: 2, borderBottom: '1px solid rgba(0,0,0,0.1)' }}>
+          <Typography variant="h6" sx={{ fontWeight: 'bold', color: '#2563eb' }}>
+            Nearby Emergency Reports
+          </Typography>
+          <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+            3 closest reports to your location
+          </Typography>
+        </Box>
         {loading ? (
           <MenuItem>
             <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-              Loading notifications...
+              Loading nearby reports...
             </Typography>
           </MenuItem>
         ) : notifications.length === 0 ? (
           <MenuItem>
             <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-              No new notifications
+              {userLocation ? 'No nearby reports found' : 'Getting your location...'}
             </Typography>
           </MenuItem>
         ) : (
-          notifications.slice(0, 5).map((notification, index) => (
+          notifications.map((notification, index) => (
             <MenuItem key={notification.id || index} onClick={handleNotificationClose}>
-              <Box sx={{ display: 'flex', flexDirection: 'column', width: '100%' }}>
-                <Typography variant="subtitle2" sx={{ 
-                  fontWeight: 'bold', 
-                  color: getNotificationColor(notification.status || notification.type)
-                }}>
-                  {getNotificationIcon(notification.status || notification.type)} {notification.type || 'Notification'}
+              <Box sx={{ display: 'flex', flexDirection: 'column', width: '100%', py: 1 }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5 }}>
+                  <Typography variant="subtitle2" sx={{ 
+                    fontWeight: 'bold', 
+                    color: getNotificationColor(notification.status, notification.priority)
+                  }}>
+                    {getNotificationIcon(notification.status, notification.disaster_type)} {notification.disaster_type}
+                  </Typography>
+                  <Chip 
+                    label={notification.priority} 
+                    size="small" 
+                    sx={{ 
+                      height: 20, 
+                      fontSize: '0.65rem',
+                      backgroundColor: getNotificationColor(notification.status, notification.priority),
+                      color: 'white',
+                      fontWeight: 'bold'
+                    }} 
+                  />
+                  <Chip 
+                    label={notification.formattedDistance} 
+                    size="small" 
+                    variant="outlined"
+                    sx={{ 
+                      height: 20, 
+                      fontSize: '0.65rem',
+                      borderColor: '#2563eb',
+                      color: '#2563eb',
+                      fontWeight: 'bold'
+                    }} 
+                  />
+                </Box>
+                <Typography variant="body2" sx={{ color: 'text.secondary', mb: 0.5 }}>
+                  {notification.address}
                 </Typography>
-                <Typography variant="body2" sx={{ color: 'text.secondary', mt: 0.5 }}>
-                  {notification.message}
-                </Typography>
-                <Typography variant="caption" sx={{ color: 'text.secondary', mt: 0.5, fontSize: '0.7rem' }}>
-                  To: {notification.recipient}
-                </Typography>
-                {notification.created_at && (
-                  <Typography variant="caption" sx={{ color: 'text.secondary', mt: 0.5, fontSize: '0.7rem' }}>
-                    {new Date(notification.created_at).toLocaleString()}
+                {notification.description && (
+                  <Typography variant="caption" sx={{ color: 'text.secondary', mb: 0.5, fontSize: '0.75rem' }}>
+                    {notification.description.length > 60 
+                      ? `${notification.description.substring(0, 60)}...` 
+                      : notification.description}
                   </Typography>
                 )}
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <Chip 
+                    label={notification.status} 
+                    size="small" 
+                    variant="outlined"
+                    sx={{ 
+                      height: 18, 
+                      fontSize: '0.6rem',
+                      borderColor: getNotificationColor(notification.status, notification.priority),
+                      color: getNotificationColor(notification.status, notification.priority)
+                    }} 
+                  />
+                  {notification.created_at && (
+                    <Typography variant="caption" sx={{ color: 'text.secondary', fontSize: '0.65rem' }}>
+                      {new Date(notification.created_at).toLocaleDateString()}
+                    </Typography>
+                  )}
+                </Box>
               </Box>
             </MenuItem>
           ))

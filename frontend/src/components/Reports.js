@@ -107,7 +107,7 @@ const Reports = () => {
     // Remove any non-digit characters
     const cleanPhone = phone.replace(/\D/g, '');
     
-    // Check length
+    // Check length - must be exactly the expected length
     if (cleanPhone.length !== country.maxLength) return false;
     
     // Basic format validation (all digits)
@@ -119,12 +119,20 @@ const Reports = () => {
     const value = e.target.value;
     // Only allow digits
     const cleanValue = value.replace(/\D/g, '');
-    console.log('Phone number input:', value, 'Clean value:', cleanValue);
-    setPhoneNumber(cleanValue);
+    
+    // Get the current country's max length
+    const country = countryCodes.find(c => c.code === selectedCountryCode);
+    const maxLength = country ? country.maxLength : 10;
+    
+    // Limit to max length for the selected country
+    const limitedValue = cleanValue.substring(0, maxLength);
+    
+    console.log('Phone number input:', value, 'Clean value:', limitedValue, 'Max length:', maxLength);
+    setPhoneNumber(limitedValue);
     
     // Update the form with full phone number (ensure country code is properly set)
     const countryCode = selectedCountryCode || '+91';
-    const fullPhoneNumber = countryCode + cleanValue;
+    const fullPhoneNumber = countryCode + limitedValue;
     console.log('Full phone number being saved:', fullPhoneNumber);
     setNewReportForm({ ...newReportForm, phone_number: fullPhoneNumber });
   };
@@ -135,8 +143,16 @@ const Reports = () => {
     console.log('Country code changed to:', newCountryCode);
     setSelectedCountryCode(newCountryCode);
     
-    // Update the form with new country code
-    const fullPhoneNumber = newCountryCode + (phoneNumber || '');
+    // Get the new country's max length and adjust phone number if needed
+    const newCountry = countryCodes.find(c => c.code === newCountryCode);
+    const newMaxLength = newCountry ? newCountry.maxLength : 10;
+    
+    // Truncate phone number if it's longer than the new country's max length
+    const adjustedPhoneNumber = phoneNumber ? phoneNumber.substring(0, newMaxLength) : '';
+    setPhoneNumber(adjustedPhoneNumber);
+    
+    // Update the form with new country code and adjusted phone number
+    const fullPhoneNumber = newCountryCode + adjustedPhoneNumber;
     setNewReportForm({ ...newReportForm, phone_number: fullPhoneNumber });
   };
 
@@ -815,43 +831,45 @@ const Reports = () => {
     if (report.phone_number) {
       console.log('Parsing phone number:', report.phone_number);
       
-      // Try to match country code pattern first (e.g., +919866363666)
-      const phoneMatch = report.phone_number.match(/^(\+\d{1,4})(\d+)$/);
-      if (phoneMatch) {
-        console.log('Matched country code pattern:', phoneMatch[1], phoneMatch[2]);
-        setSelectedCountryCode(phoneMatch[1]);
-        setPhoneNumber(phoneMatch[2]);
+      // Clean the number first
+      const cleanNumber = report.phone_number.replace(/\D/g, '');
+      console.log('Clean number:', cleanNumber);
+      
+      // Try to find a matching country code from our list (longest first to avoid partial matches)
+      const sortedCountries = countryCodes.sort((a, b) => b.code.length - a.code.length);
+      let foundCountry = null;
+      let phoneDigits = '';
+      
+      // Check if it starts with a known country code
+      for (const country of sortedCountries) {
+        const countryCodeDigits = country.code.replace('+', '');
+        if (cleanNumber.startsWith(countryCodeDigits)) {
+          foundCountry = country;
+          phoneDigits = cleanNumber.substring(countryCodeDigits.length);
+          console.log('Found country:', country.code, 'Phone digits:', phoneDigits);
+          break;
+        }
+      }
+      
+      if (foundCountry) {
+        setSelectedCountryCode(foundCountry.code);
+        setPhoneNumber(phoneDigits);
       } else {
-        // If no country code found, try to detect from the number
-        const cleanNumber = report.phone_number.replace(/\D/g, '');
-        console.log('Clean number:', cleanNumber);
-        
-        // Special handling for common cases
-        if (cleanNumber.startsWith('91') && cleanNumber.length >= 12) {
-          // Indian number without + prefix
-          console.log('Detected Indian number without + prefix');
+        // Special handling for Indian numbers without country code
+        if (cleanNumber.length === 10) {
+          console.log('10-digit number detected, assuming India');
+          setSelectedCountryCode('+91');
+          setPhoneNumber(cleanNumber);
+        } else if (cleanNumber.startsWith('91') && cleanNumber.length === 12) {
+          // Indian number with country code but no + prefix
+          console.log('12-digit number starting with 91, assuming India');
           setSelectedCountryCode('+91');
           setPhoneNumber(cleanNumber.substring(2));
         } else {
-          // Check if it starts with a known country code (try longest matches first)
-          const sortedCountries = countryCodes.sort((a, b) => b.code.length - a.code.length);
-          const foundCountry = sortedCountries.find(country => {
-            const countryCodeDigits = country.code.replace('+', '');
-            return cleanNumber.startsWith(countryCodeDigits);
-          });
-          
-          if (foundCountry) {
-            const countryCodeDigits = foundCountry.code.replace('+', '');
-            const phoneDigits = cleanNumber.substring(countryCodeDigits.length);
-            console.log('Found country:', foundCountry.code, 'Phone digits:', phoneDigits);
-            setSelectedCountryCode(foundCountry.code);
-            setPhoneNumber(phoneDigits);
-          } else {
-            // Default to India if no country code detected
-            console.log('No country code found, defaulting to India');
-            setSelectedCountryCode('+91');
-            setPhoneNumber(cleanNumber);
-          }
+          // Default to India if no pattern matches
+          console.log('No pattern matched, defaulting to India');
+          setSelectedCountryCode('+91');
+          setPhoneNumber(cleanNumber);
         }
       }
     } else {
@@ -2697,7 +2715,7 @@ const Reports = () => {
                     label="Phone Number"
                     value={phoneNumber}
                     onChange={handlePhoneNumberChange}
-                    placeholder="9876543210"
+                    placeholder={countryCodes.find(c => c.code === selectedCountryCode)?.format || 'XXXXXXXXXX'}
                     error={phoneNumber && selectedCountryCode && !validatePhoneNumber(phoneNumber, selectedCountryCode)}
                     helperText={
                       phoneNumber && selectedCountryCode && !validatePhoneNumber(phoneNumber, selectedCountryCode)

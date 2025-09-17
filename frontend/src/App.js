@@ -11,6 +11,7 @@ import Analytics from './components/Analytics';
 import EmergencyContacts from './components/EmergencyContacts';
 import Navbar from './components/Navbar';
 import Login from './components/Login';
+import PasswordReset from './components/PasswordReset';
 import Profile from './components/Profile';
 import AdminPanel from './components/AdminPanel';
 import Footer from './components/Footer';
@@ -539,6 +540,7 @@ function AppContent({ toggleTheme, isDarkMode }) {
           <Box component="main" sx={{ flex: 1 }}>
             <Routes>
               <Route path="/login" element={<PublicRoute><Login /></PublicRoute>} />
+              <Route path="/password-reset" element={<PublicRoute><PasswordReset /></PublicRoute>} />
               <Route path="/" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
               <Route path="/map" element={<ProtectedRoute><ReportsMap /></ProtectedRoute>} />
               <Route path="/reports" element={<ProtectedRoute><Reports /></ProtectedRoute>} />

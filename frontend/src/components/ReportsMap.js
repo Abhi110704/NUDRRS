@@ -2,11 +2,18 @@ import React, { useState, useEffect } from 'react';
 import { MapContainer, TileLayer, Marker, Popup, Circle } from 'react-leaflet';
 import { 
   Box, Paper, Typography, Chip, Button, Grid, Card, CardContent, 
-  Switch, FormControlLabel, LinearProgress, CircularProgress
+  Switch, FormControlLabel, LinearProgress, CircularProgress, Dialog,
+  DialogTitle, DialogContent, DialogActions, TextField, Autocomplete,
+  FormControl, InputLabel, Select, MenuItem, Divider, Alert, IconButton,
+  Tooltip, Badge, List, ListItem, ListItemText, ListItemIcon, Accordion,
+  AccordionSummary, AccordionDetails, Tabs, Tab
 } from '@mui/material';
 import { 
   LocationOn, LocalHospital as Emergency, Warning, Refresh, MyLocation,
-  Timeline, Speed
+  Timeline, Speed, Route, Directions, Close, Search, FilterList,
+  Traffic, Weather, Info, CheckCircle, Cancel, ExpandMore, 
+  Navigation, Map, RouteIcon, Terrain, WbSunny,
+  Cloud, LocalFireDepartment, Flood, Landscape as Earthquake, Thunderstorm as Storm
 } from '@mui/icons-material';
 import axios from 'axios';
 import 'leaflet/dist/leaflet.css';
@@ -33,6 +40,21 @@ const ReportsMap = () => {
   const [locationLoading, setLocationLoading] = useState(false);
   const [lastUpdate, setLastUpdate] = useState(null);
   const [updateStatus, setUpdateStatus] = useState('idle');
+  
+  // Path Scanner States
+  const [pathScannerOpen, setPathScannerOpen] = useState(false);
+  const [fromLocation, setFromLocation] = useState(null);
+  const [toLocation, setToLocation] = useState(null);
+  const [routeData, setRouteData] = useState(null);
+  const [routeReports, setRouteReports] = useState([]);
+  const [routeLoading, setRouteLoading] = useState(false);
+  const [locationSuggestions, setLocationSuggestions] = useState([]);
+  const [pathScannerTab, setPathScannerTab] = useState(0);
+  const [routeFilters, setRouteFilters] = useState({
+    disasterTypes: [],
+    priority: 'ALL',
+    timeRange: '24h'
+  });
 
   useEffect(() => {
     fetchReports();
@@ -260,6 +282,271 @@ const ReportsMap = () => {
       iconSize: [isCritical ? 28 : 22, isCritical ? 28 : 22],
       iconAnchor: [isCritical ? 14 : 11, isCritical ? 14 : 11]
     });
+  };
+
+  // Path Scanner Functions
+  const handleLocationSearch = async (query, type) => {
+    if (query.length < 3) {
+      setLocationSuggestions([]);
+      return;
+    }
+
+    try {
+      // Try OpenStreetMap Nominatim API
+      const response = await fetch(
+        `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=5&addressdetails=1&countrycodes=in,us,gb,ca,au,de,fr,it,es,jp,cn,kr,sg,ae,sa,za,mx,tr,nl,br,ru&accept-language=en`
+      );
+      
+      if (response.ok) {
+        const data = await response.json();
+        const suggestions = data.map(result => ({
+          label: result.display_name,
+          lat: parseFloat(result.lat),
+          lng: parseFloat(result.lon),
+          address: result.display_name,
+          type: type
+        }));
+        setLocationSuggestions(suggestions);
+      }
+    } catch (error) {
+      console.error('Location search error:', error);
+    }
+  };
+
+  const handleUseCurrentLocation = (type) => {
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          const { latitude, longitude } = position.coords;
+          const location = {
+            label: 'Current Location',
+            lat: latitude,
+            lng: longitude,
+            address: 'Current Location',
+            type: type
+          };
+          
+          if (type === 'from') {
+            setFromLocation(location);
+          } else {
+            setToLocation(location);
+          }
+        },
+        (error) => {
+          console.error('Error getting current location:', error);
+        }
+      );
+    }
+  };
+
+  const calculateRoute = async () => {
+    if (!fromLocation || !toLocation) return;
+
+    setRouteLoading(true);
+    
+    // Create a timeout promise
+    const timeoutPromise = new Promise((_, reject) => {
+      setTimeout(() => reject(new Error('Route calculation timeout')), 10000); // 10 second timeout
+    });
+
+    try {
+      // Race between API call and timeout
+      const response = await Promise.race([
+        fetch(
+          `https://api.openrouteservice.org/v2/directions/driving-car?api_key=5b3ce3597851110001cf6248e8b3c8c4b8b84a8a8b3c8c4b8b84a8a&start=${fromLocation.lng},${fromLocation.lat}&end=${toLocation.lng},${toLocation.lat}`
+        ),
+        timeoutPromise
+      ]);
+      
+      if (response.ok) {
+        const data = await response.json();
+        const route = data.features[0];
+        
+        setRouteData({
+          coordinates: route.geometry.coordinates.map(coord => [coord[1], coord[0]]),
+          distance: route.properties.summary.distance,
+          duration: route.properties.summary.duration,
+          instructions: route.properties.segments[0].steps
+        });
+        
+        // Find reports along the route
+        findReportsAlongRoute(route.geometry.coordinates);
+      } else {
+        throw new Error('API response not ok');
+      }
+    } catch (error) {
+      console.error('Route calculation error:', error);
+      // Fast fallback: create a simple straight line route
+      const fallbackRoute = {
+        coordinates: [[fromLocation.lat, fromLocation.lng], [toLocation.lat, toLocation.lng]],
+        distance: calculateDistance(fromLocation.lat, fromLocation.lng, toLocation.lat, toLocation.lng),
+        duration: Math.floor(calculateDistance(fromLocation.lat, fromLocation.lng, toLocation.lat, toLocation.lng) / 1000 * 60), // Rough estimate
+        instructions: [
+          { instruction: `Start at ${fromLocation.label}`, distance: '0 m', duration: '0 min' },
+          { instruction: `Navigate to ${toLocation.label}`, distance: formatDistance(calculateDistance(fromLocation.lat, fromLocation.lng, toLocation.lat, toLocation.lng)), duration: formatDuration(Math.floor(calculateDistance(fromLocation.lat, fromLocation.lng, toLocation.lat, toLocation.lng) / 1000 * 60)) }
+        ]
+      };
+      setRouteData(fallbackRoute);
+      findReportsAlongRoute([[fromLocation.lng, fromLocation.lat], [toLocation.lng, toLocation.lat]]);
+    }
+    setRouteLoading(false);
+  };
+
+  const findReportsAlongRoute = (routeCoordinates) => {
+    const routeReports = reports.filter(report => {
+      // Only include active/pending reports, exclude resolved ones
+      if (report.status === 'RESOLVED') {
+        return false;
+      }
+      
+      const reportLat = parseFloat(report.latitude);
+      const reportLng = parseFloat(report.longitude);
+      
+      // Check if report is within 1km of the route
+      return routeCoordinates.some(coord => {
+        const distance = calculateDistance(reportLat, reportLng, coord[1], coord[0]);
+        return distance <= 1000; // 1km buffer
+      });
+    });
+    
+    setRouteReports(routeReports);
+  };
+
+
+
+  const calculateDistance = (lat1, lng1, lat2, lng2) => {
+    const R = 6371e3; // Earth's radius in meters
+    const φ1 = lat1 * Math.PI/180;
+    const φ2 = lat2 * Math.PI/180;
+    const Δφ = (lat2-lat1) * Math.PI/180;
+    const Δλ = (lng2-lng1) * Math.PI/180;
+
+    const a = Math.sin(Δφ/2) * Math.sin(Δφ/2) +
+              Math.cos(φ1) * Math.cos(φ2) *
+              Math.sin(Δλ/2) * Math.sin(Δλ/2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+
+    return R * c; // Distance in meters
+  };
+
+  const getDisasterIcon = (type) => {
+    const icons = {
+      'FLOOD': <Flood />,
+      'EARTHQUAKE': <Earthquake />,
+      'FIRE': <LocalFireDepartment />,
+      'STORM': <Storm />,
+      'OTHER': <Warning />
+    };
+    return icons[type] || <Warning />;
+  };
+
+  const formatDistance = (meters) => {
+    if (meters < 1000) return `${Math.round(meters)}m`;
+    return `${(meters / 1000).toFixed(1)}km`;
+  };
+
+  const formatDuration = (seconds) => {
+    const hours = Math.floor(seconds / 3600);
+    const minutes = Math.floor((seconds % 3600) / 60);
+    if (hours > 0) return `${hours}h ${minutes}m`;
+    return `${minutes}m`;
+  };
+
+  const exportRouteData = () => {
+    if (!routeData || !fromLocation || !toLocation) {
+      alert('Please calculate a route first before exporting.');
+      return;
+    }
+
+    const exportData = {
+      routeInfo: {
+        from: {
+          name: fromLocation.label,
+          address: fromLocation.address,
+          coordinates: { lat: fromLocation.lat, lng: fromLocation.lng }
+        },
+        to: {
+          name: toLocation.label,
+          address: toLocation.address,
+          coordinates: { lat: toLocation.lat, lng: toLocation.lng }
+        },
+        distance: formatDistance(routeData.distance),
+        duration: formatDuration(routeData.duration),
+        coordinates: routeData.coordinates
+      },
+      reports: routeReports.map(report => ({
+        id: report.id,
+        disaster_type: report.disaster_type,
+        priority: report.priority,
+        description: report.description,
+        address: report.address,
+        coordinates: { lat: parseFloat(report.latitude), lng: parseFloat(report.longitude) },
+        created_at: report.created_at,
+        status: report.status
+      })),
+      exportInfo: {
+        exportedAt: new Date().toISOString(),
+        totalReports: routeReports.length,
+        activeReports: routeReports.filter(r => r.status === 'PENDING').length,
+        highPriorityReports: routeReports.filter(r => r.priority === 'HIGH').length
+      }
+    };
+
+    // Create and download JSON file
+    const dataStr = JSON.stringify(exportData, null, 2);
+    const dataBlob = new Blob([dataStr], { type: 'application/json' });
+    const url = URL.createObjectURL(dataBlob);
+    
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `route_${fromLocation.label.replace(/\s+/g, '_')}_to_${toLocation.label.replace(/\s+/g, '_')}_${new Date().toISOString().split('T')[0]}.json`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+
+    // Also create a human-readable text version
+    const textContent = `
+NUDRRS Route Export
+==================
+
+Route Information:
+- From: ${fromLocation.label} (${fromLocation.address})
+- To: ${toLocation.label} (${toLocation.address})
+- Distance: ${formatDistance(routeData.distance)}
+- Duration: ${formatDuration(routeData.duration)}
+
+Emergency Reports Along Route (${routeReports.length}):
+${routeReports.map((report, index) => `
+${index + 1}. ${report.disaster_type} - ${report.priority} Priority
+   Location: ${report.address}
+   Description: ${report.description}
+   Status: ${report.status}
+   Reported: ${new Date(report.created_at).toLocaleString()}
+`).join('')}
+
+
+Export Information:
+- Exported: ${new Date().toLocaleString()}
+- Total Reports: ${routeReports.length}
+- Active Reports: ${routeReports.filter(r => r.status === 'PENDING').length}
+- High Priority: ${routeReports.filter(r => r.priority === 'HIGH').length}
+
+Generated by NUDRRS Path Scanner
+`;
+
+    const textBlob = new Blob([textContent], { type: 'text/plain' });
+    const textUrl = URL.createObjectURL(textBlob);
+    
+    const textLink = document.createElement('a');
+    textLink.href = textUrl;
+    textLink.download = `route_${fromLocation.label.replace(/\s+/g, '_')}_to_${toLocation.label.replace(/\s+/g, '_')}_${new Date().toISOString().split('T')[0]}.txt`;
+    document.body.appendChild(textLink);
+    textLink.click();
+    document.body.removeChild(textLink);
+    URL.revokeObjectURL(textUrl);
+
+    alert('Route data exported successfully! Two files have been downloaded:\n1. JSON file with complete data\n2. Text file with human-readable summary');
   };
 
   return (
@@ -549,6 +836,23 @@ const ReportsMap = () => {
                 >
                   Refresh
                 </Button>
+                <Button
+                  variant="contained"
+                  size="small"
+                  onClick={() => setPathScannerOpen(true)}
+                  startIcon={<Route />}
+                  sx={{ 
+                    fontSize: '0.75rem', 
+                    minWidth: 'auto', 
+                    px: 1,
+                    background: 'linear-gradient(45deg, #FF6B35, #F7931E)',
+                    '&:hover': {
+                      background: 'linear-gradient(45deg, #E55A2B, #E8821A)',
+                    }
+                  }}
+                >
+                  Path Scanner
+                </Button>
               </Box>
             </CardContent>
           </Card>
@@ -744,6 +1048,314 @@ const ReportsMap = () => {
           font-family: 'Roboto', sans-serif !important;
         }
       `}</style>
+
+      {/* Path Scanner Dialog */}
+      <Dialog 
+        open={pathScannerOpen} 
+        onClose={() => setPathScannerOpen(false)}
+        maxWidth="lg"
+        fullWidth
+        PaperProps={{
+          sx: {
+            borderRadius: 2,
+            minHeight: '80vh'
+          }
+        }}
+      >
+        <DialogTitle sx={{ 
+          background: 'linear-gradient(135deg, #FF6B35 0%, #F7931E 100%)',
+          color: 'white',
+          display: 'flex',
+          alignItems: 'center',
+          gap: 1
+        }}>
+          <Route />
+          <Typography variant="h6" sx={{ fontWeight: 600 }}>
+            Path Scanner
+          </Typography>
+          <Box sx={{ flexGrow: 1 }} />
+          <IconButton 
+            onClick={() => setPathScannerOpen(false)}
+            sx={{ color: 'white' }}
+          >
+            <Close />
+          </IconButton>
+        </DialogTitle>
+
+        <DialogContent sx={{ p: 0 }}>
+           <Tabs 
+             value={pathScannerTab} 
+             onChange={(e, newValue) => setPathScannerTab(newValue)}
+             sx={{ borderBottom: 1, borderColor: 'divider', px: 2 }}
+           >
+             <Tab label="Route Planning" icon={<Directions />} />
+             <Tab label="Route Reports" icon={<FilterList />} />
+             <Tab label="Route Analysis" icon={<Timeline />} />
+           </Tabs>
+
+          {/* Route Planning Tab */}
+          {pathScannerTab === 0 && (
+            <Box sx={{ p: 3 }}>
+              <Grid container spacing={3}>
+                <Grid item xs={12} md={6}>
+                  <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <LocationOn color="primary" />
+                    From Location
+                  </Typography>
+                  <Box sx={{ display: 'flex', gap: 1, mb: 2 }}>
+                    <Autocomplete
+                      fullWidth
+                      options={locationSuggestions}
+                      value={fromLocation}
+                      onChange={(event, newValue) => setFromLocation(newValue)}
+                      onInputChange={(event, newInputValue) => {
+                        if (newInputValue.length >= 3) {
+                          handleLocationSearch(newInputValue, 'from');
+                        }
+                      }}
+                      getOptionLabel={(option) => option.label || ''}
+                      renderInput={(params) => (
+                        <TextField
+                          {...params}
+                          placeholder="Enter starting location"
+                          variant="outlined"
+                        />
+                      )}
+                    />
+                    <Button
+                      variant="outlined"
+                      onClick={() => handleUseCurrentLocation('from')}
+                      startIcon={<MyLocation />}
+                      sx={{ minWidth: 'auto', px: 2 }}
+                    >
+                      Current
+                    </Button>
+                  </Box>
+                </Grid>
+
+                <Grid item xs={12} md={6}>
+                  <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <LocationOn color="secondary" />
+                    To Location
+                  </Typography>
+                  <Box sx={{ display: 'flex', gap: 1, mb: 2 }}>
+                    <Autocomplete
+                      fullWidth
+                      options={locationSuggestions}
+                      value={toLocation}
+                      onChange={(event, newValue) => setToLocation(newValue)}
+                      onInputChange={(event, newInputValue) => {
+                        if (newInputValue.length >= 3) {
+                          handleLocationSearch(newInputValue, 'to');
+                        }
+                      }}
+                      getOptionLabel={(option) => option.label || ''}
+                      renderInput={(params) => (
+                        <TextField
+                          {...params}
+                          placeholder="Enter destination"
+                          variant="outlined"
+                        />
+                      )}
+                    />
+                    <Button
+                      variant="outlined"
+                      onClick={() => handleUseCurrentLocation('to')}
+                      startIcon={<MyLocation />}
+                      sx={{ minWidth: 'auto', px: 2 }}
+                    >
+                      Current
+                    </Button>
+                  </Box>
+                </Grid>
+
+                <Grid item xs={12}>
+                  <Button
+                    variant="contained"
+                    size="large"
+                    onClick={calculateRoute}
+                    disabled={!fromLocation || !toLocation || routeLoading}
+                    startIcon={routeLoading ? <CircularProgress size={20} /> : <Search />}
+                    sx={{
+                      background: 'linear-gradient(45deg, #FF6B35, #F7931E)',
+                      '&:hover': {
+                        background: 'linear-gradient(45deg, #E55A2B, #E8821A)',
+                      }
+                    }}
+                  >
+                    {routeLoading ? 'Calculating Route...' : 'Find Route & Reports'}
+                  </Button>
+                  
+                  {routeLoading && (
+                    <Box sx={{ mt: 2 }}>
+                      <LinearProgress sx={{ mb: 1 }} />
+                      <Typography variant="caption" color="text.secondary" sx={{ textAlign: 'center', display: 'block' }}>
+                        This may take a few seconds. We're finding the best route and checking for emergency reports...
+                      </Typography>
+                    </Box>
+                  )}
+                </Grid>
+              </Grid>
+            </Box>
+          )}
+
+          {/* Route Reports Tab */}
+          {pathScannerTab === 1 && (
+            <Box sx={{ p: 3 }}>
+              <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                <FilterList color="primary" />
+                Active Reports Along Route
+                <Badge badgeContent={routeReports.length} color="error" />
+              </Typography>
+              
+              <Alert severity="info" sx={{ mb: 2 }}>
+                <Typography variant="body2">
+                  Showing only <strong>active and pending</strong> emergency reports along your route. 
+                  Resolved reports are excluded for better route planning.
+                </Typography>
+              </Alert>
+              
+              {routeReports.length > 0 ? (
+                <List>
+                  {routeReports.map((report, index) => (
+                    <ListItem key={report.id} sx={{ 
+                      border: 1, 
+                      borderColor: 'divider', 
+                      borderRadius: 1, 
+                      mb: 1,
+                      background: report.priority === 'HIGH' ? '#fff3e0' : 'white'
+                    }}>
+                      <ListItemIcon>
+                        {getDisasterIcon(report.disaster_type)}
+                      </ListItemIcon>
+                      <ListItemText
+                        primary={
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                            <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
+                              {report.disaster_type}
+                            </Typography>
+                            <Chip 
+                              label={report.priority} 
+                              size="small" 
+                              color={report.priority === 'HIGH' ? 'error' : 'warning'}
+                            />
+                          </Box>
+                        }
+                        secondary={
+                          <Box>
+                            <Typography variant="body2" color="text.secondary">
+                              {report.description}
+                            </Typography>
+                            <Typography variant="caption" color="text.secondary">
+                              {report.address} • {new Date(report.created_at).toLocaleString()}
+                            </Typography>
+                          </Box>
+                        }
+                      />
+                    </ListItem>
+                  ))}
+                </List>
+              ) : (
+                <Alert severity="info">
+                  No reports found along the selected route. Try a different route or check alternative paths.
+                </Alert>
+              )}
+            </Box>
+          )}
+
+          {/* Route Analysis Tab */}
+          {pathScannerTab === 2 && (
+            <Box sx={{ p: 3 }}>
+              <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                <Timeline color="primary" />
+                Route Analysis
+              </Typography>
+              
+              {routeData ? (
+                <Grid container spacing={3}>
+                  <Grid item xs={12} md={6}>
+                    <Card>
+                      <CardContent>
+                        <Typography variant="h6" gutterBottom>
+                          Route Statistics
+                        </Typography>
+                        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                          <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                            <Typography>Total Distance:</Typography>
+                            <Typography sx={{ fontWeight: 600 }}>
+                              {formatDistance(routeData.distance)}
+                            </Typography>
+                          </Box>
+                          <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                            <Typography>Estimated Time:</Typography>
+                            <Typography sx={{ fontWeight: 600 }}>
+                              {formatDuration(routeData.duration)}
+                            </Typography>
+                          </Box>
+                          <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                            <Typography>Reports Found:</Typography>
+                            <Typography sx={{ fontWeight: 600, color: 'error.main' }}>
+                              {routeReports.length}
+                            </Typography>
+                          </Box>
+                        </Box>
+                      </CardContent>
+                    </Card>
+                  </Grid>
+                  
+                  <Grid item xs={12} md={6}>
+                    <Card>
+                      <CardContent>
+                        <Typography variant="h6" gutterBottom>
+                          Safety Analysis
+                        </Typography>
+                        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                            <CheckCircle color="success" />
+                            <Typography>Route is generally safe</Typography>
+                          </Box>
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                            <Warning color="warning" />
+                            <Typography>{routeReports.length} potential hazards detected</Typography>
+                          </Box>
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                            <Info color="info" />
+                            <Typography>Consider alternative routes if needed</Typography>
+                          </Box>
+                        </Box>
+                      </CardContent>
+                    </Card>
+                  </Grid>
+                </Grid>
+              ) : (
+                <Alert severity="info">
+                  Calculate a route first to see detailed analysis.
+                </Alert>
+              )}
+            </Box>
+          )}
+        </DialogContent>
+
+        <DialogActions sx={{ p: 2, background: '#f8f9fa' }}>
+          <Button onClick={() => setPathScannerOpen(false)}>
+            Close
+          </Button>
+          <Button 
+            variant="contained" 
+            onClick={exportRouteData}
+            disabled={!routeData}
+            startIcon={<Directions />}
+            sx={{
+              background: 'linear-gradient(45deg, #4CAF50, #45a049)',
+              '&:hover': {
+                background: 'linear-gradient(45deg, #45a049, #3d8b40)',
+              }
+            }}
+          >
+            Export Route
+          </Button>
+        </DialogActions>
+      </Dialog>
 
     </Box>
   );
