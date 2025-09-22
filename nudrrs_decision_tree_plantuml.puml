@@ -1,0 +1,61 @@
+@startuml NUDRRS_Decision_Tree
+!theme plain
+skinparam backgroundColor #FFFFFF
+skinparam rectangle {
+  BackgroundColor #E8F4FD
+  BorderColor #2E86AB
+  FontColor #1A365D
+}
+skinparam diamond {
+  BackgroundColor #FFE6E6
+  BorderColor #E53E3E
+  FontColor #742A2A
+}
+
+title NUDRRS - Emergency Decision Tree
+
+rectangle "Emergency Agency Registration" as Start {
+  
+  if (Plan Selection) then (Free Plan)
+    rectangle "Basic Features" as Free {
+      - Basic emergency templates
+      - Limited emergency exports
+      - Standard emergency sharing
+    }
+  else (Pro Plan)
+    rectangle "Advanced Features" as Pro {
+      - All emergency templates
+      - Government agency branding
+      - Advanced emergency analytics
+      - Priority emergency support
+    }
+  endif
+  
+  if (Content Type) then (Emergency Report)
+    rectangle "Disaster Types" as Disaster {
+      - Flood response
+      - Earthquake relief
+      - Fire incident
+    }
+  elseif (Incident Briefing) then (yes)
+    rectangle "Briefing Types" as Briefing {
+      - Situation report
+      - Response plan
+      - Status update
+    }
+  elseif (Public Alert) then (yes)
+    rectangle "Alert Types" as Alert {
+      - Evacuation notice
+      - Safety warning
+      - Emergency contact
+    }
+  else (Agency Report)
+    rectangle "Agency Types" as Agency {
+      - Government briefing
+      - NGO coordination
+      - Multi-agency report
+    }
+  endif
+}
+
+@enduml
