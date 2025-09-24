@@ -1,3 +1,4 @@
+import json
 from rest_framework import status, generics
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
@@ -8,6 +9,10 @@ from django.contrib.auth.models import User
 from django.db import transaction
 from django.conf import settings
 from django.utils import timezone
+from django.views.decorators.csrf import csrf_exempt
+from django.utils.decorators import method_decorator
+from django.http import JsonResponse
+from django.middleware.csrf import get_token
 from .models import UserProfile, Organization
 from .mongodb_service import auth_mongodb_service
 from .serializers import (
@@ -16,12 +21,21 @@ from .serializers import (
     PasswordResetOTPSerializer, PasswordResetVerifyOTPSerializer, OrganizationSerializer
 )
 
+@method_decorator(csrf_exempt, name='dispatch')
 class RegisterView(generics.CreateAPIView):
     queryset = User.objects.all()
     permission_classes = [AllowAny]
     serializer_class = UserRegistrationSerializer
     
     def create(self, request, *args, **kwargs):
+        # Handle CORS preflight
+        if request.method == 'OPTIONS':
+            response = JsonResponse({}, status=200)
+            response['Access-Control-Allow-Origin'] = request.headers.get('Origin', '*')
+            response['Access-Control-Allow-Methods'] = 'POST, OPTIONS'
+            response['Access-Control-Allow-Headers'] = 'Content-Type, Authorization'
+            response['Access-Control-Allow-Credentials'] = 'true'
+            return response
         try:
             serializer = self.get_serializer(data=request.data)
             serializer.is_valid(raise_exception=True)
@@ -46,24 +60,39 @@ class RegisterView(generics.CreateAPIView):
                 # Generate token
                 token = auth_mongodb_service.create_token(created_user['id'])
                 
-                return Response({
+                response = Response({
                     'user': created_user,
                     'token': token,
                     'message': 'User registered successfully'
                 }, status=status.HTTP_201_CREATED)
+                response['Access-Control-Allow-Origin'] = request.headers.get('Origin', '*')
+                response['Access-Control-Allow-Credentials'] = 'true'
+                return response
             else:
                 return Response({
                     'error': 'User already exists or registration failed'
                 }, status=status.HTTP_400_BAD_REQUEST)
                 
         except Exception as e:
-            return Response({
+            response = Response({
                 'error': str(e)
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            response['Access-Control-Allow-Origin'] = request.headers.get('Origin', '*')
+            response['Access-Control-Allow-Credentials'] = 'true'
+            return response
 
-@api_view(['POST'])
+@api_view(['POST', 'OPTIONS'])
 @permission_classes([AllowAny])
+@csrf_exempt
 def login_view(request):
+    # Handle CORS preflight
+    if request.method == 'OPTIONS':
+        response = JsonResponse({}, status=200)
+        response['Access-Control-Allow-Origin'] = request.headers.get('Origin', '*')
+        response['Access-Control-Allow-Methods'] = 'POST, OPTIONS'
+        response['Access-Control-Allow-Headers'] = 'Content-Type, Authorization'
+        response['Access-Control-Allow-Credentials'] = 'true'
+        return response
     try:
         serializer = LoginSerializer(data=request.data)
         if serializer.is_valid():
@@ -79,11 +108,14 @@ def login_view(request):
                     token = auth_mongodb_service.create_token(user['id'])
                     
                     if token:
-                        return Response({
+                        response = Response({
                             'token': token,
                             'user': user,
                             'message': 'Login successful'
                         })
+                        response['Access-Control-Allow-Origin'] = request.headers.get('Origin', '*')
+                        response['Access-Control-Allow-Credentials'] = 'true'
+                        return response
                     else:
                         return Response({'error': 'Failed to generate token'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
                 else:
@@ -94,11 +126,23 @@ def login_view(request):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
         
     except Exception as e:
-        return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        response = Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        response['Access-Control-Allow-Origin'] = request.headers.get('Origin', '*')
+        response['Access-Control-Allow-Credentials'] = 'true'
+        return response
 
-@api_view(['POST'])
+@api_view(['POST', 'OPTIONS'])
 @permission_classes([IsAuthenticated])
+@csrf_exempt
 def logout_view(request):
+    # Handle CORS preflight
+    if request.method == 'OPTIONS':
+        response = JsonResponse({}, status=200)
+        response['Access-Control-Allow-Origin'] = request.headers.get('Origin', '*')
+        response['Access-Control-Allow-Methods'] = 'POST, OPTIONS'
+        response['Access-Control-Allow-Headers'] = 'Content-Type, Authorization'
+        response['Access-Control-Allow-Credentials'] = 'true'
+        return response
     try:
         # Get token from request headers
         auth_header = request.META.get('HTTP_AUTHORIZATION', '')
@@ -107,13 +151,31 @@ def logout_view(request):
             # Delete the token from MongoDB
             auth_mongodb_service.delete_token(token)
         
-        return Response({'message': 'Logout successful'})
+        response = Response({'message': 'Successfully logged out'})
+        response['Access-Control-Allow-Origin'] = request.headers.get('Origin', '*')
+        response['Access-Control-Allow-Credentials'] = 'true'
+        # Clear the session cookie
+        response.delete_cookie('sessionid')
+        response.delete_cookie('csrftoken')
+        return response
     except Exception as e:
-        return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        response = Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        response['Access-Control-Allow-Origin'] = request.headers.get('Origin', '*')
+        response['Access-Control-Allow-Credentials'] = 'true'
+        return response
 
-@api_view(['GET', 'PUT'])
+@api_view(['GET', 'OPTIONS'])
 @permission_classes([IsAuthenticated])
+@csrf_exempt
 def profile_view(request):
+    # Handle CORS preflight
+    if request.method == 'OPTIONS':
+        response = JsonResponse({}, status=200)
+        response['Access-Control-Allow-Origin'] = request.headers.get('Origin', '*')
+        response['Access-Control-Allow-Methods'] = 'GET, OPTIONS'
+        response['Access-Control-Allow-Headers'] = 'Content-Type, Authorization'
+        response['Access-Control-Allow-Credentials'] = 'true'
+        return response
     try:
         # Get user ID from token
         auth_header = request.META.get('HTTP_AUTHORIZATION', '')
@@ -156,7 +218,10 @@ def profile_view(request):
             return Response({'error': 'Invalid authorization header'}, status=status.HTTP_401_UNAUTHORIZED)
             
     except Exception as e:
-        return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        response = Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        response['Access-Control-Allow-Origin'] = request.headers.get('Origin', '*')
+        response['Access-Control-Allow-Credentials'] = 'true'
+        return response
 
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
@@ -190,7 +255,10 @@ def change_password(request):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
         
     except Exception as e:
-        return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        response = Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        response['Access-Control-Allow-Origin'] = request.headers.get('Origin', '*')
+        response['Access-Control-Allow-Credentials'] = 'true'
+        return response
 
 @api_view(['POST'])
 @permission_classes([AllowAny])

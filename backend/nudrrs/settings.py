@@ -11,7 +11,16 @@ SECRET_KEY = os.environ.get('SECRET_KEY', 'django-insecure-demo-key-for-developm
 
 DEBUG = os.environ.get('DEBUG', 'True') == 'True'
 
-ALLOWED_HOSTS = ['localhost', '127.0.0.1', '0.0.0.0', '*', '.vercel.app']
+ALLOWED_HOSTS = [
+    'localhost', 
+    '127.0.0.1', 
+    '0.0.0.0', 
+    '*',
+    '.vercel.app',
+    '.onrender.com',
+    'nudrrs-backend.onrender.com',
+    'nudrrs.vercel.app'
+]
 
 INSTALLED_APPS = [
     'django.contrib.admin',
@@ -38,6 +47,10 @@ MIDDLEWARE = [
     'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
+    'django.middleware.csrf.CsrfViewMiddleware',
+    'django.contrib.auth.middleware.AuthenticationMiddleware',
+    'django.contrib.messages.middleware.MessageMiddleware',
+    'django.middleware.clickjacking.XFrameOptionsMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
@@ -139,15 +152,34 @@ REST_FRAMEWORK = {
     'PAGE_SIZE': 20
 }
 
-# CORS settings
+# CORS and Security Settings
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:3000",
     "http://127.0.0.1:3000",
     "http://localhost:19006",
     "exp://localhost:19000",
-    "https://nudrrs.vercel.app",  # Your Vercel frontend URL
+    "https://nudrrs.vercel.app",
     "https://nudrrs.vercel.app:3000",
+    "https://nudrrs.vercel.app:443",
+    "https://nudrrs.vercel.app:80",
+    "https://nudrrs-frontend.onrender.com",
+    "https://nudrrs-backend.onrender.com"
 ]
+
+# Security settings
+CORS_ALLOW_CREDENTIALS = True
+SESSION_COOKIE_SAMESITE = 'None'
+SESSION_COOKIE_SECURE = True
+CSRF_COOKIE_SECURE = True
+SESSION_COOKIE_HTTPONLY = True
+CSRF_COOKIE_HTTPONLY = True
+CSRF_TRUSTED_ORIGINS = CORS_ALLOWED_ORIGINS.copy()
+
+# For development only - remove in production
+if DEBUG:
+    CORS_ALLOW_ALL_ORIGINS = True
+    CORS_ALLOWED_ORIGINS = ["*"]
+    CSRF_TRUSTED_ORIGINS = ["*"]
 
 # For development, you can allow all origins
 # In production, it's better to specify allowed origins

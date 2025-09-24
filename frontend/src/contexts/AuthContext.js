@@ -19,6 +19,9 @@ export const AuthProvider = ({ children }) => {
 
   // Configure axios defaults
   useEffect(() => {
+    // Set default base URL and credentials
+    axios.defaults.withCredentials = true;
+    
     if (token) {
       axios.defaults.headers.common['Authorization'] = `Token ${token}`;
       fetchUserProfile();
