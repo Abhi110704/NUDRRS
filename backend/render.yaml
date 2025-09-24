@@ -1,0 +1,40 @@
+services:
+  - type: web
+    name: nudrrs-backend
+    env: python
+    buildCommand: "pip install -r requirements.txt && python manage.py migrate"
+    startCommand: "gunicorn nudrrs.wsgi:application --log-file -"
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.9.16
+      - key: DJANGO_SETTINGS_MODULE
+        value: nudrrs.production_settings
+      - key: SECRET_KEY
+        generateValue: true
+      - key: WEB_CONCURRENCY
+        value: 4
+      - key: MONGODB_CONNECTION_STRING
+        sync: false  # Set this in Render dashboard
+      - key: CLOUDINARY_CLOUD_NAME
+        sync: false  # Set this in Render dashboard
+      - key: CLOUDINARY_API_KEY
+        sync: false  # Set this in Render dashboard
+      - key: CLOUDINARY_API_SECRET
+        sync: false  # Set this in Render dashboard
+      - key: EMAIL_HOST_USER
+        sync: false  # Set this in Render dashboard
+      - key: EMAIL_HOST_PASSWORD
+        sync: false  # Set this in Render dashboard
+      - key: ALLOWED_HOSTS
+        value: "*"
+      - key: DEBUG
+        value: "False"
+
+    plan: free
+    region: oregon  # Choose the region closest to your users
+    buildPlan: free
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.9.16
+    numInstances: 1
+    healthCheckPath: /api/health/
