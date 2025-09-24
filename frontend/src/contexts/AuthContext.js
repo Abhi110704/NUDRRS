@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import axios from 'axios';
+import { API_URL, API_ENDPOINTS } from '../config';
 
 const AuthContext = createContext();
 
@@ -28,11 +29,14 @@ export const AuthProvider = ({ children }) => {
 
   const fetchUserProfile = async () => {
     try {
-      const response = await axios.get('http://localhost:8000/api/auth/profile/');
+      const response = await axios.get(`${API_URL}${API_ENDPOINTS.AUTH.PROFILE}`);
       setUser(response.data);
     } catch (error) {
       console.error('Error fetching user profile:', error);
-      logout();
+      if (error.response?.status === 401) {
+        // Token is invalid or expired
+        logout();
+      }
     } finally {
       setLoading(false);
     }
@@ -40,7 +44,7 @@ export const AuthProvider = ({ children }) => {
 
   const login = async (username, password) => {
     try {
-      const response = await axios.post('http://localhost:8000/api/auth/login/', {
+      const response = await axios.post(`${API_URL}${API_ENDPOINTS.AUTH.LOGIN}`, {
         username,
         password
       });
@@ -65,8 +69,8 @@ export const AuthProvider = ({ children }) => {
 
   const register = async (userData) => {
     try {
-      console.log('Sending registration data:', userData);
-      const response = await axios.post('http://localhost:8000/api/auth/register/', userData);
+      console.log('Sending registration data to:', `${API_URL}${API_ENDPOINTS.AUTH.REGISTER}`);
+      const response = await axios.post(`${API_URL}${API_ENDPOINTS.AUTH.REGISTER}`, userData);
       
       const { token: newToken, user: newUser } = response.data;
       
@@ -113,11 +117,14 @@ export const AuthProvider = ({ children }) => {
   const refreshUserProfile = async () => {
     if (token) {
       try {
-        const response = await axios.get('http://localhost:8000/api/auth/profile/');
+        const response = await axios.get(`${API_URL}${API_ENDPOINTS.AUTH.PROFILE}`);
         setUser(response.data);
         return response.data;
       } catch (error) {
         console.error('Error refreshing user profile:', error);
+        if (error.response?.status === 401) {
+          logout();
+        }
         return null;
       }
     }

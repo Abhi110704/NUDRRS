@@ -139,14 +139,44 @@ REST_FRAMEWORK = {
     'PAGE_SIZE': 20
 }
 
+# CORS settings
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:3000",
     "http://127.0.0.1:3000",
     "http://localhost:19006",
     "exp://localhost:19000",
+    "https://nudrrs.vercel.app",  # Your Vercel frontend URL
+    "https://nudrrs.vercel.app:3000",
 ]
 
-CORS_ALLOW_ALL_ORIGINS = DEBUG
+# For development, you can allow all origins
+# In production, it's better to specify allowed origins
+CORS_ALLOW_ALL_ORIGINS = DEBUG  # Set to False in production
+
+# Allow credentials
+CORS_ALLOW_CREDENTIALS = True
+
+# Allowed methods and headers
+CORS_ALLOW_METHODS = [
+    'DELETE',
+    'GET',
+    'OPTIONS',
+    'PATCH',
+    'POST',
+    'PUT',
+]
+
+CORS_ALLOW_HEADERS = [
+    'accept',
+    'accept-encoding',
+    'authorization',
+    'content-type',
+    'dnt',
+    'origin',
+    'user-agent',
+    'x-csrftoken',
+    'x-requested-with',
+]
 
 # Channel layers configuration (commented out for SQLite)
 # CHANNEL_LAYERS = {
