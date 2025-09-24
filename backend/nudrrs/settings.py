@@ -152,7 +152,10 @@ REST_FRAMEWORK = {
     'PAGE_SIZE': 20
 }
 
+<<<<<<< HEAD
 # CORS and Security Settings
+=======
+>>>>>>> 9bd2fc5a2ef16235263c77748b82f3d31e167958
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:3000",
     "http://127.0.0.1:3000",
@@ -162,8 +165,14 @@ CORS_ALLOWED_ORIGINS = [
     "https://nudrrs.vercel.app:3000",
     "https://nudrrs.vercel.app:443",
     "https://nudrrs.vercel.app:80",
+<<<<<<< HEAD
     "https://nudrrs-frontend.onrender.com",
     "https://nudrrs-backend.onrender.com"
+=======
+    "https://nudrrs.vercel.app",
+    "https://nudrrs-frontend.onrender.com",  # Add this if using Render frontend
+    "https://your-render-frontend-url.onrender.com"  # Replace with your actual Render frontend URL
+>>>>>>> 9bd2fc5a2ef16235263c77748b82f3d31e167958
 ]
 
 # Security settings

@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 /**
  * API Configuration
  * Base URL for all API requests
@@ -16,12 +17,18 @@ export const AXIOS_CONFIG = {
 };
 
 // API Endpoints
+=======
+// frontend/src/config.js
+export const API_URL = 'https://nudrrs-backend.onrender.com';
+
+>>>>>>> 9bd2fc5a2ef16235263c77748b82f3d31e167958
 export const API_ENDPOINTS = {
   AUTH: {
     LOGIN: '/api/auth/login/',
     REGISTER: '/api/auth/register/',
     PROFILE: '/api/auth/profile/',
     LOGOUT: '/api/auth/logout/',
+<<<<<<< HEAD
     CHANGE_PASSWORD: '/api/auth/change-password/',
     RESET_PASSWORD: '/api/auth/reset-password/',
     VERIFY_OTP: '/api/auth/verify-otp/',
@@ -120,4 +127,8 @@ export default {
   SUCCESS_MESSAGES,
   PAGINATION,
   FILE_UPLOAD,
+=======
+  }
+  // ... other endpoints
+>>>>>>> 9bd2fc5a2ef16235263c77748b82f3d31e167958
 };
