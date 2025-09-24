@@ -139,14 +139,18 @@ REST_FRAMEWORK = {
     'PAGE_SIZE': 20
 }
 
-# CORS settings
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:3000",
     "http://127.0.0.1:3000",
     "http://localhost:19006",
     "exp://localhost:19000",
-    "https://nudrrs.vercel.app",  # Your Vercel frontend URL
+    "https://nudrrs.vercel.app",
     "https://nudrrs.vercel.app:3000",
+    "https://nudrrs.vercel.app:443",
+    "https://nudrrs.vercel.app:80",
+    "https://nudrrs.vercel.app",
+    "https://nudrrs-frontend.onrender.com",  # Add this if using Render frontend
+    "https://your-render-frontend-url.onrender.com"  # Replace with your actual Render frontend URL
 ]
 
 # For development, you can allow all origins
