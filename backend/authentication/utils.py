@@ -11,22 +11,24 @@ logger = logging.getLogger(__name__)
 
 def get_tokens_for_user(user_id, email):
     """
-    Generate JWT tokens for the given user
-    
-    Args:
-        user_id: The user's ID
-        email: The user's email
-        
-    Returns:
-        dict: Access and refresh tokens
+    Generate tokens for the user.
+    - Primary: JWT access/refresh tokens signed with SECRET_KEY
+    - Compatibility: include 'token' alias (access) for existing frontend
     """
-    # Issue an opaque token stored in MongoDB so we don't depend on Django User objects
-    from .mongodb_service import AuthMongoDBService
-    service = AuthMongoDBService()
-    token = service.create_token(user_id)
+    from rest_framework_simplejwt.tokens import AccessToken, RefreshToken
+
+    access = AccessToken()
+    access['user_id'] = str(user_id)
+    access['email'] = email
+
+    refresh = RefreshToken()
+    refresh['user_id'] = str(user_id)
+    refresh['email'] = email
+
     return {
-        'access': token,
-        'refresh': token,
+        'access': str(access),
+        'refresh': str(refresh),
+        'token': str(access),  # compatibility with current frontend expecting 'token'
     }
 
 def send_password_reset_email(email, otp):

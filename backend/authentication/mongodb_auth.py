@@ -4,6 +4,8 @@ Custom MongoDB Authentication Backend for Django REST Framework
 from rest_framework.authentication import BaseAuthentication
 from rest_framework.exceptions import AuthenticationFailed
 from authentication.services import auth_mongodb_service
+import jwt
+from django.conf import settings
 
 class MongoDBTokenAuthentication(BaseAuthentication):
     """
@@ -16,20 +18,36 @@ class MongoDBTokenAuthentication(BaseAuthentication):
         succeed, or `None` if authentication should fail.
         """
         auth_header = request.META.get('HTTP_AUTHORIZATION', '')
-        
-        if not auth_header.startswith('Token '):
+        if not auth_header:
             return None
-        
-        token = auth_header.split(' ')[1]
-        
-        # Validate token with MongoDB
-        user_data = auth_mongodb_service.validate_token(token)
-        
-        if user_data:
-            # Create a simple user object that Django REST Framework expects
-            user = MongoDBUser(user_data)
-            return (user, token)
-        
+
+        try:
+            scheme, token = auth_header.split(' ', 1)
+        except ValueError:
+            return None
+
+        # Support opaque Token and JWT Bearer
+        if scheme == 'Token':
+            if not auth_mongodb_service:
+                return None
+            user_data = auth_mongodb_service.validate_token(token)
+            if user_data:
+                return (MongoDBUser(user_data), token)
+            return None
+
+        if scheme == 'Bearer':
+            try:
+                payload = jwt.decode(token, settings.SECRET_KEY, algorithms=["HS256"])
+                user_id = str(payload.get('user_id'))
+                if not user_id or not auth_mongodb_service:
+                    return None
+                # Load user from Mongo to get full profile
+                user_data = auth_mongodb_service.get_user_by_id(user_id)
+                if user_data:
+                    return (MongoDBUser(user_data), token)
+            except Exception:
+                return None
+
         return None
     
     def authenticate_header(self, request):
