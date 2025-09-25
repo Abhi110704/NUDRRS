@@ -25,6 +25,7 @@ class AuthMongoDBService:
         self._is_connected = False
         self._connection_string = None
         self._database_name = None
+        self.otp_expiry = 600  # 10 minutes in seconds
         if connect_on_init:
             self.connect()
         
@@ -594,6 +595,117 @@ class AuthMongoDBService:
         except Exception as e:
             print(f"Error verifying password reset OTP: {e}")
             return None
+    
+    def generate_otp(self, user_id: str) -> str:
+        """Generate and store a new OTP for the user
+        
+        Args:
+            user_id: The user's ID
+            
+        Returns:
+            str: The generated OTP
+        """
+        try:
+            if not self.db:
+                self.connect()
+                
+            # Generate a 6-digit OTP
+            otp = ''.join([str(secrets.randbelow(10)) for _ in range(6)])
+            expiry = datetime.utcnow() + timedelta(seconds=self.otp_expiry)
+            
+            # Store OTP in database
+            self.db.otps.update_one(
+                {'user_id': user_id},
+                {'$set': {
+                    'otp': otp,
+                    'expires_at': expiry,
+                    'used': False
+                }},
+                upsert=True
+            )
+            
+            return otp
+            
+        except Exception as e:
+            logger.error(f"Error generating OTP: {str(e)}")
+            raise
+    
+    def verify_otp(self, user_id: str, otp: str) -> bool:
+        """Verify if the provided OTP is valid and not expired
+        
+        Args:
+            user_id: The user's ID
+            otp: The OTP to verify
+            
+        Returns:
+            bool: True if OTP is valid, False otherwise
+        """
+        try:
+            if not self.db:
+                self.connect()
+                
+            # Find and validate OTP
+            otp_record = self.db.otps.find_one({
+                'user_id': user_id,
+                'otp': otp,
+                'used': False,
+                'expires_at': {'$gt': datetime.utcnow()}
+            })
+            
+            return otp_record is not None
+            
+        except Exception as e:
+            logger.error(f"Error verifying OTP: {str(e)}")
+            return False
+    
+    def invalidate_otp(self, user_id: str, otp: str) -> None:
+        """Mark an OTP as used
+        
+        Args:
+            user_id: The user's ID
+            otp: The OTP to invalidate
+        """
+        try:
+            if not self.db:
+                self.connect()
+                
+            self.db.otps.update_one(
+                {'user_id': user_id, 'otp': otp},
+                {'$set': {'used': True}}
+            )
+            
+        except Exception as e:
+            logger.error(f"Error invalidating OTP: {str(e)}")
+    
+    def reset_password(self, user_id: str, new_password: str) -> bool:
+        """Reset a user's password
+        
+        Args:
+            user_id: The user's ID
+            new_password: The new password (plain text, will be hashed)
+            
+        Returns:
+            bool: True if password was reset successfully, False otherwise
+        """
+        try:
+            if not self.db:
+                self.connect()
+                
+            # Hash the new password (you should use Django's password hashing)
+            from django.contrib.auth.hashers import make_password
+            hashed_password = make_password(new_password)
+            
+            # Update user's password
+            result = self.db.users.update_one(
+                {'_id': user_id},
+                {'$set': {'password': hashed_password}}
+            )
+            
+            return result.modified_count > 0
+            
+        except Exception as e:
+            logger.error(f"Error resetting password: {str(e)}")
+            return False
     
     def reset_password_with_token(self, email: str, new_password: str) -> bool:
         """Reset password using verified token"""
