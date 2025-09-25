@@ -15,7 +15,7 @@ django-rest-auth==0.9.5
 drf-yasg==1.21.7
 django-storages==1.14.2
 boto3==1.28.62
-requests==2.31.0
+requests==2.32.3
 python-dateutil==2.8.2
 pytz==2023.3.post1
 django-imagekit==5.0.0
@@ -24,3 +24,4 @@ mongoengine==0.29.1
 dnspython==2.6.1
 pymongo==4.6.3
 google-generativeai==0.8.3
+imagekitio==4.2.0
