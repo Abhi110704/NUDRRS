@@ -6,7 +6,7 @@ from rest_framework.permissions import IsAuthenticated
 from .mongodb_service import AuthMongoDBService
 from .serializers import (
     UserRegistrationSerializer,
-    UserLoginSerializer,
+    LoginSerializer,
     UserProfileSerializer,
     ChangePasswordSerializer,
     PasswordResetRequestSerializer,
