@@ -8,6 +8,7 @@ import {
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
+import { API_URL } from '../config';
 
 const PasswordReset = () => {
   const [step, setStep] = useState(0);
@@ -62,7 +63,7 @@ const PasswordReset = () => {
     setError('');
 
     try {
-      const response = await axios.post('http://localhost:8000/api/auth/password-reset-request/', {
+      const response = await axios.post(`${API_URL}/api/auth/password-reset-request/`, {
         email: formData.email.trim()
       });
 
@@ -98,7 +99,7 @@ const PasswordReset = () => {
     setError('');
 
     try {
-      const response = await axios.post('http://localhost:8000/api/auth/password-reset-verify-otp/', {
+      const response = await axios.post(`${API_URL}/api/auth/password-reset-verify-otp/`, {
         email: formData.email,
         otp: formData.otp.trim()
       });
@@ -139,7 +140,7 @@ const PasswordReset = () => {
     setError('');
 
     try {
-      const response = await axios.post('http://localhost:8000/api/auth/password-reset-confirm/', {
+      const response = await axios.post(`${API_URL}/api/auth/password-reset-confirm/`, {
         email: formData.email,
         otp: formData.otp,
         new_password: formData.newPassword,
@@ -170,7 +171,7 @@ const PasswordReset = () => {
     setError('');
 
     try {
-      const response = await axios.post('http://localhost:8000/api/auth/password-reset-request/', {
+      const response = await axios.post(`${API_URL}/api/auth/password-reset-request/`, {
         email: formData.email.trim()
       });
 

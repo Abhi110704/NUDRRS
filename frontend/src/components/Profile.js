@@ -11,6 +11,7 @@ import {
 } from '@mui/icons-material';
 import { useAuth } from '../contexts/AuthContext';
 import axios from 'axios';
+import { API_URL } from '../config';
 
 const Profile = () => {
   const { user, isDemoMode, refreshUserProfile } = useAuth();
@@ -109,7 +110,7 @@ const Profile = () => {
 
       // Upload to backend
       const response = await axios.post(
-        'http://localhost:8000/api/auth/upload-profile-image/',
+        `${API_URL}/auth/upload-profile-image/`,
         formData,
         {
           headers: {

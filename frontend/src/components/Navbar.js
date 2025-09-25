@@ -12,6 +12,7 @@ import {
 } from '@mui/icons-material';
 import { useAuth } from '../contexts/AuthContext';
 import axios from 'axios';
+import { API_URL } from '../config';
 // import DemoToggle from './DemoToggle'; // Removed for production
 
 const Navbar = () => {
@@ -124,7 +125,7 @@ const Navbar = () => {
       console.log('Token available:', !!token);
 
       // Fetch all reports to calculate distances
-      const response = await axios.get('http://localhost:8000/api/sos_reports/', {
+      const response = await axios.get(`${API_URL}/api/sos_reports/`, {
         headers: {
           'Authorization': `Token ${token}`
         }

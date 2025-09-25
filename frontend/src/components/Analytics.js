@@ -12,6 +12,7 @@ import {
   Speed, Security, Analytics as AnalyticsIcon, Dashboard
 } from '@mui/icons-material';
 import axios from 'axios';
+import { API_URL } from '../config';
 
 const Analytics = () => {
   const [stats, setStats] = useState(null);
@@ -27,8 +28,8 @@ const Analytics = () => {
       // Try to fetch real data first, fallback to demo data
       try {
         const [statsResponse, reportsResponse] = await Promise.all([
-          axios.get('http://localhost:8000/api/sos_reports/dashboard_stats/'),
-          axios.get('http://localhost:8000/api/sos_reports/')
+          axios.get(`${API_URL}/api/sos_reports/dashboard_stats/`),
+          axios.get(`${API_URL}/api/sos_reports/`)
         ]);
         
         const realStats = statsResponse.data;

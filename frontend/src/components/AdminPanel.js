@@ -12,6 +12,7 @@ import {
 } from '@mui/icons-material';
 import { useAuth } from '../contexts/AuthContext';
 import axios from 'axios';
+import { API_URL } from '../config';
 
 const AdminPanel = () => {
   const [reports, setReports] = useState([]);
@@ -32,7 +33,7 @@ const AdminPanel = () => {
   const fetchReports = async () => {
     try {
       setLoading(true);
-      const response = await axios.get('http://localhost:8000/api/sos_reports/');
+      const response = await axios.get(`${API_URL}/api/sos_reports/`);
       console.log('🔍 AdminPanel API response:', response.data);
       const reportsData = Array.isArray(response.data) ? response.data : [];
       console.log('🔍 AdminPanel reports data:', reportsData);
@@ -72,7 +73,7 @@ const AdminPanel = () => {
   const handleVerifyReport = async (reportId, action) => {
     try {
       const newStatus = action === 'verify' ? 'VERIFIED' : 'REJECTED';
-      await axios.patch(`http://localhost:8000/api/sos_reports/${reportId}/`, {
+      await axios.patch(`${API_URL}/api/sos_reports/${reportId}/`, {
         status: newStatus,
         verified_by: user.id,
         verified_at: new Date().toISOString()

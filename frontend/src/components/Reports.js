@@ -21,6 +21,7 @@ import {
 import axios from 'axios';
 import { useAuth } from '../contexts/AuthContext';
 import { formatTimeAgo } from '../utils/timeUtils';
+import { API_URL } from '../config';
 
 const Reports = () => {
   const { user, isAdmin } = useAuth();
@@ -341,7 +342,7 @@ const Reports = () => {
 
   const fetchStats = async () => {
     try {
-      const response = await axios.get('http://localhost:8000/api/sos_reports/dashboard_stats/');
+      const response = await axios.get(`${API_URL}/api/sos_reports/dashboard_stats/`);
       const statsData = response.data;
       setStats({
         total_reports: statsData.total_reports || 0,
@@ -364,7 +365,7 @@ const Reports = () => {
       setLoading(true);
       setUpdateStatus('updating');
       
-        const response = await axios.get('http://localhost:8000/api/sos_reports/');
+        const response = await axios.get(`${API_URL}/api/sos_reports/`);
         const reportsData = Array.isArray(response.data) ? response.data : [];
         
       setReports(reportsData);
@@ -381,7 +382,7 @@ const Reports = () => {
 
   const fetchComments = async (reportId) => {
     try {
-      const response = await axios.get(`http://localhost:8000/api/sos_reports/${reportId}/updates/`);
+      const response = await axios.get(`${API_URL}/api/sos_reports/${reportId}/updates/`);
       setComments(response.data || []);
     } catch (error) {
       console.error('Error fetching comments:', error);
@@ -393,7 +394,7 @@ const Reports = () => {
     if (!newComment.trim()) return;
 
     try {
-      const response = await axios.post(`http://localhost:8000/api/sos_reports/${reportId}/updates/`, {
+      const response = await axios.post(`${API_URL}/api/sos_reports/${reportId}/updates/`, {
         message: newComment.trim()
       }, {
         headers: {
@@ -428,7 +429,7 @@ const Reports = () => {
 
   const fetchReportComments = async (reportId) => {
     try {
-      const response = await axios.get(`http://localhost:8000/api/sos_reports/${reportId}/updates/`);
+      const response = await axios.get(`${API_URL}/api/sos_reports/${reportId}/updates/`);
       setReportComments(response.data || []);
     } catch (error) {
       console.error('Error fetching comments:', error);
@@ -440,7 +441,7 @@ const Reports = () => {
     if (!newReportComment.trim() || !commentReport) return;
 
     try {
-      const response = await axios.post(`http://localhost:8000/api/sos_reports/${commentReport.id}/updates/`, {
+      const response = await axios.post(`${API_URL}/api/sos_reports/${commentReport.id}/updates/`, {
         message: newReportComment.trim()
       }, {
         headers: {
@@ -470,7 +471,7 @@ const Reports = () => {
     if (!commentReport) return;
 
     try {
-      await axios.delete(`http://localhost:8000/api/sos_reports/${commentReport.id}/updates/`, {
+      await axios.delete(`${API_URL}/api/sos_reports/${commentReport.id}/updates/`, {
         headers: {
           'Authorization': `Token ${localStorage.getItem('token')}`,
           'Content-Type': 'application/json'
@@ -518,7 +519,7 @@ const Reports = () => {
     setVoting(prev => ({ ...prev, [reportId]: true }));
 
     try {
-      const response = await axios.post(`http://localhost:8000/api/sos_reports/${reportId}/votes/`, {
+      const response = await axios.post(`${API_URL}/api/sos_reports/${reportId}/votes/`, {
         vote_type: voteType
       }, {
           headers: {
@@ -679,7 +680,7 @@ const Reports = () => {
       
       if (isEditMode) {
         // Update existing report
-        response = await axios.put(`http://localhost:8000/api/sos_reports/${selectedReport.id}/`, formData, {
+        response = await axios.put(`${API_URL}/api/sos_reports/${selectedReport.id}/`, formData, {
             headers: {
             'Authorization': `Token ${localStorage.getItem('token')}`,
             'Content-Type': 'multipart/form-data'
@@ -687,7 +688,7 @@ const Reports = () => {
           });
         } else {
         // Create new report
-        response = await axios.post('http://localhost:8000/api/sos_reports/', formData, {
+        response = await axios.post(`${API_URL}/api/sos_reports/`, formData, {
         headers: {
             'Authorization': `Token ${localStorage.getItem('token')}`,
             'Content-Type': 'multipart/form-data'
@@ -774,7 +775,7 @@ const Reports = () => {
     }
 
     try {
-      await axios.delete(`http://localhost:8000/api/sos_reports/${reportId}/`, {
+      await axios.delete(`${API_URL}/api/sos_reports/${reportId}/`, {
         headers: {
           'Authorization': `Token ${localStorage.getItem('token')}`
         }
@@ -966,7 +967,7 @@ const Reports = () => {
     });
 
     try {
-      const response = await axios.post('http://localhost:8000/api/ai/generate-description/', {
+      const response = await axios.post(`${API_URL}/api/ai/generate-description/`, {
         disaster_type: newReportForm.disaster_type,
         location: newReportForm.address,
         priority: newReportForm.priority

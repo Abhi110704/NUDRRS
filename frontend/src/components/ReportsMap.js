@@ -16,6 +16,7 @@ import {
   Cloud, LocalFireDepartment, Flood, Landscape as Earthquake, Thunderstorm as Storm
 } from '@mui/icons-material';
 import axios from 'axios';
+import { API_URL } from '../config';
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
 
@@ -126,7 +127,7 @@ const ReportsMap = () => {
     try {
       // Try real API first, fallback to demo data
       try {
-        const response = await axios.get('http://localhost:8000/api/sos_reports/');
+        const response = await axios.get(`${API_URL}/sos_reports/`);
         const reportsData = Array.isArray(response.data) ? response.data : [];
         
         // Transform the data to include coordinates if not present

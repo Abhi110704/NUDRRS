@@ -21,6 +21,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { formatTimeAgo } from '../utils/timeUtils';
 import { useTheme } from '@mui/material/styles';
 import axios from 'axios';
+import { API_URL } from '../config';
 
 const Dashboard = () => {
   const [stats, setStats] = useState(null);
@@ -62,7 +63,7 @@ const Dashboard = () => {
   // Fetch comments for a report
   const fetchComments = async (reportId) => {
     try {
-      const response = await axios.get(`http://localhost:8000/api/sos_reports/${reportId}/updates/`, {
+      const response = await axios.get(`${API_URL}/api/sos_reports/${reportId}/updates/`, {
         headers: {
           'Authorization': `Token ${localStorage.getItem('token')}`
         }
@@ -80,7 +81,7 @@ const Dashboard = () => {
 
     try {
       const response = await axios.post(
-        `http://localhost:8000/api/sos_reports/${selectedReport.id}/updates/`,
+        `${API_URL}/api/sos_reports/${selectedReport.id}/updates/`,
         { message: newComment },
         {
           headers: {
@@ -103,7 +104,7 @@ const Dashboard = () => {
 
     try {
       const response = await axios.post(
-        'http://localhost:8000/api/notifications/broadcast/',
+        `${API_URL}/api/notifications/broadcast/`,
         {
           message: alertMessage,
           priority: alertPriority,
@@ -140,7 +141,7 @@ const Dashboard = () => {
 
     try {
       await axios.delete(
-        `http://localhost:8000/api/sos_reports/${selectedReport.id}/updates/${commentId}/`,
+        `${API_URL}/api/sos_reports/${selectedReport.id}/updates/${commentId}/`,
         {
           headers: {
             'Authorization': `Token ${localStorage.getItem('token')}`,
@@ -183,7 +184,7 @@ const Dashboard = () => {
   // Fetch comments for a specific report
   const fetchReportComments = async (reportId) => {
     try {
-      const response = await axios.get(`http://localhost:8000/api/sos_reports/${reportId}/updates/`, {
+      const response = await axios.get(`${API_URL}/api/sos_reports/${reportId}/updates/`, {
         headers: {
           'Authorization': `Token ${localStorage.getItem('token')}`
         }
@@ -201,7 +202,7 @@ const Dashboard = () => {
 
     try {
       const response = await axios.post(
-        `http://localhost:8000/api/sos_reports/${commentReport.id}/updates/`,
+        `${API_URL}/api/sos_reports/${commentReport.id}/updates/`,
         { message: newReportComment },
         {
           headers: {
@@ -226,7 +227,7 @@ const Dashboard = () => {
 
     try {
       await axios.delete(
-        `http://localhost:8000/api/sos_reports/${commentReport.id}/updates/`,
+        `${API_URL}/api/sos_reports/${commentReport.id}/updates/`,
         {
           headers: {
             'Authorization': `Token ${localStorage.getItem('token')}`,
@@ -273,7 +274,7 @@ const Dashboard = () => {
       const reportsWithComments = await Promise.all(
         reports.map(async (report) => {
           try {
-            const response = await axios.get(`http://localhost:8000/api/sos_reports/${report.id}/updates/`, {
+            const response = await axios.get(`${API_URL}/api/sos_reports/${report.id}/updates/`, {
               headers: {
                 'Authorization': `Token ${localStorage.getItem('token')}`
               }
@@ -304,8 +305,8 @@ const Dashboard = () => {
       
       // Fetch real data from backend
         const [statsResponse, reportsResponse] = await Promise.all([
-            axios.get(`http://localhost:8000/api/sos_reports/dashboard_stats/`),
-            axios.get(`http://localhost:8000/api/sos_reports/?limit=2`)
+            axios.get(`${API_URL}/api/sos_reports/dashboard_stats/`),
+            axios.get(`${API_URL}/api/sos_reports/?limit=2`)
           ]);
           
           // Transform the data to ensure proper structure
@@ -339,7 +340,7 @@ const Dashboard = () => {
           // Fetch user-specific reports if user is logged in
           if (user) {
             try {
-              const userReportsResponse = await axios.get(`http://localhost:8000/api/sos_reports/?user=${user.id}`);
+              const userReportsResponse = await axios.get(`${API_URL}/api/sos_reports/?user=${user.id}`);
               const userReportsData = userReportsResponse.data.results || userReportsResponse.data || [];
               const transformedUserReports = (Array.isArray(userReportsData) ? userReportsData : []).map(report => ({
                 ...report,
