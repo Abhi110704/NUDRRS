@@ -149,7 +149,10 @@ def change_password(request):
 
 @api_view(['POST'])
 def password_reset_request(request):
-    serializer = PasswordResetRequestSerializer(data=request.data)
+    serializer = PasswordResetRequestSerializer(
+        data=request.data,
+        context={'request': request}
+    )
     if serializer.is_valid():
         email = serializer.validated_data['email']
         try:
@@ -163,43 +166,58 @@ def password_reset_request(request):
                 
                 return Response({
                     'message': 'OTP sent to your email',
-                    'user_id': str(user['_id'])
-                })
-            return Response(
-                {'error': 'No user found with this email'},
-                status=status.HTTP_404_NOT_FOUND
-            )
+                    'user_id': str(user['_id']),
+                    'email': email  # Return email for frontend reference
+                }, status=status.HTTP_200_OK)
+            
+            # Even if user doesn't exist, return success to prevent email enumeration
+            return Response({
+                'message': 'If your email is registered, you will receive an OTP',
+                'email': email
+            }, status=status.HTTP_200_OK)
+            
         except Exception as e:
             return Response(
-                {'error': str(e)},
+                {'error': 'Failed to process password reset request'},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 @api_view(['POST'])
 def password_reset_verify_otp(request):
-    serializer = PasswordResetConfirmSerializer(data=request.data)
+    serializer = PasswordResetVerifyOTPSerializer(data=request.data)
     if serializer.is_valid():
-        user_id = serializer.validated_data['user_id']
+        email = serializer.validated_data['email']
         otp = serializer.validated_data['otp']
         
         try:
+            user = mongo_service.get_user_by_email(email)
+            if not user:
+                return Response(
+                    {'error': 'User not found'},
+                    status=status.HTTP_404_NOT_FOUND
+                )
+                
+            user_id = str(user['_id'])
             if mongo_service.verify_otp(user_id, otp):
-                # Generate a one-time token for password reset
+                # Generate a one-time token for password reset (valid for 10 minutes)
                 reset_token = str(uuid.uuid4())
                 mongo_service.store_reset_token(user_id, reset_token)
                 
                 return Response({
                     'message': 'OTP verified successfully',
-                    'reset_token': reset_token
-                })
+                    'reset_token': reset_token,
+                    'email': email
+                }, status=status.HTTP_200_OK)
+                
             return Response(
                 {'error': 'Invalid or expired OTP'},
                 status=status.HTTP_400_BAD_REQUEST
             )
+            
         except Exception as e:
             return Response(
-                {'error': str(e)},
+                {'error': 'Failed to verify OTP'},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
@@ -208,20 +226,44 @@ def password_reset_verify_otp(request):
 def password_reset_confirm(request):
     serializer = PasswordResetConfirmSerializer(data=request.data)
     if serializer.is_valid():
-        user_id = serializer.validated_data['user_id']
+        email = serializer.validated_data['email']
+        otp = serializer.validated_data['otp']
         new_password = serializer.validated_data['new_password']
-        reset_token = serializer.validated_data.get('reset_token')
         
         try:
-            if mongo_service.reset_password(user_id, reset_token, new_password):
-                return Response({'message': 'Password reset successfully'})
+            user = mongo_service.get_user_by_email(email)
+            if not user:
+                return Response(
+                    {'error': 'User not found'},
+                    status=status.HTTP_404_NOT_FOUND
+                )
+                
+            user_id = str(user['_id'])
+            
+            # Verify OTP first
+            if not mongo_service.verify_otp(user_id, otp):
+                return Response(
+                    {'error': 'Invalid or expired OTP'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # Reset password
+            if mongo_service.reset_password(user_id, new_password):
+                # Invalidate the used OTP
+                mongo_service.invalidate_otp(user_id, otp)
+                return Response({
+                    'message': 'Password reset successfully',
+                    'email': email
+                }, status=status.HTTP_200_OK)
+                
             return Response(
-                {'error': 'Invalid or expired reset token'},
+                {'error': 'Failed to reset password'},
                 status=status.HTTP_400_BAD_REQUEST
             )
+            
         except Exception as e:
             return Response(
-                {'error': str(e)},
+                {'error': 'Failed to reset password'},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
