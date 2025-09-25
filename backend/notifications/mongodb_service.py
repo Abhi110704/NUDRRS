@@ -3,7 +3,6 @@ MongoDB service for Notifications
 Handles all notification operations using MongoDB
 """
 from pymongo import MongoClient
-import ssl
 from django.conf import settings
 from datetime import datetime
 from typing import List, Dict, Optional
@@ -23,7 +22,8 @@ class NotificationMongoDBService:
             connection_string = settings.MONGODB_SETTINGS['host']
             database_name = settings.MONGODB_SETTINGS['db']
             
-            self.client = MongoClient(connection_string, serverSelectionTimeoutMS=10000, ssl_cert_reqs=ssl.CERT_NONE)
+            # PyMongo 4+: rely on URI TLS options; do not pass legacy ssl_cert_reqs
+            self.client = MongoClient(connection_string, serverSelectionTimeoutMS=10000)
             self.db = self.client[database_name]
             
             # Test connection
