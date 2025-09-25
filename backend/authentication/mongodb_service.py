@@ -3,6 +3,8 @@ MongoDB service for Authentication
 Handles all user authentication operations using MongoDB
 """
 
+import logging
+import time
 from pymongo import MongoClient
 import ssl
 from django.conf import settings
@@ -11,34 +13,83 @@ import hashlib
 import secrets
 from typing import Dict, Optional, List
 
+# Set up logging
+logger = logging.getLogger(__name__)
+
 class AuthMongoDBService:
     """Service class for Authentication operations with MongoDB"""
     
     def __init__(self):
         self.client = None
         self.db = None
+        self._is_connected = False
         self.connect()
+        
+    def __del__(self):
+        """Ensure connections are closed when the object is garbage collected"""
+        self.close()
     
-    def connect(self):
-        """Connect to MongoDB Atlas"""
-        try:
-            # Get connection string from environment variables
-            connection_string = settings.MONGODB_SETTINGS['host']
-            database_name = settings.MONGODB_SETTINGS['db']
+    def connect(self, max_retries=3, initial_delay=1):
+        """Connect to MongoDB Atlas with retry logic
+        
+        Args:
+            max_retries (int): Maximum number of connection attempts
+            initial_delay (int): Initial delay between retries in seconds
             
-            # PyMongo 4+: do not pass legacy SSL options. Use a clean SRV URI or modern tls* options in the URI if needed.
-            # Example insecure (not recommended): ...?tls=true&tlsInsecure=true
-            # Here we trust the URI and only set a sensible server selection timeout.
-            self.client = MongoClient(connection_string, serverSelectionTimeoutMS=10000)
-            self.db = self.client[database_name]
-            
-            # Test connection
-            self.client.admin.command('ping')
-            print("✅ Connected to MongoDB Atlas for Authentication")
-        except Exception as e:
-            print(f"❌ MongoDB connection failed: {e}")
-            self.client = None
-            self.db = None
+        Raises:
+            ConnectionError: If connection fails after all retries
+        """
+        retry_count = 0
+        delay = initial_delay
+        
+        while retry_count < max_retries:
+            try:
+                logger.info(f"Attempting to connect to MongoDB (Attempt {retry_count + 1}/{max_retries})")
+                
+                # Get connection string from environment variables
+                connection_string = settings.MONGODB_SETTINGS['host']
+                database_name = settings.MONGODB_SETTINGS['db']
+                
+                # Set a reasonable server selection timeout
+                self.client = MongoClient(
+                    connection_string,
+                    serverSelectionTimeoutMS=5000,  # 5 second timeout
+                    connectTimeoutMS=10000,         # 10 second connection timeout
+                    socketTimeoutMS=30000            # 30 second socket timeout
+                )
+                
+                self.db = self.client[database_name]
+                
+                # Test connection with a ping
+                self.client.admin.command('ping')
+                self._is_connected = True
+                logger.info("✅ Successfully connected to MongoDB Atlas")
+                return  # Success, exit the retry loop
+                
+            except Exception as e:
+                retry_count += 1
+                logger.warning(f"Connection attempt {retry_count} failed: {str(e)}")
+                
+                if retry_count >= max_retries:
+                    logger.error("❌ Failed to connect to MongoDB after maximum retries")
+                    raise ConnectionError(f"Failed to connect to MongoDB after {max_retries} attempts: {str(e)}")
+                
+                # Exponential backoff
+                time.sleep(delay)
+                delay = min(delay * 2, 30)  # Cap the delay at 30 seconds
+                
+    def close(self):
+        """Close the MongoDB connection"""
+        if self.client and self._is_connected:
+            try:
+                self.client.close()
+                logger.info("Closed MongoDB connection")
+            except Exception as e:
+                logger.error(f"Error closing MongoDB connection: {e}")
+            finally:
+                self.client = None
+                self.db = None
+                self._is_connected = False
     
     def hash_password(self, password: str) -> str:
         """Hash password using SHA-256"""
