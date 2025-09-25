@@ -175,14 +175,22 @@ SESSION_COOKIE_HTTPONLY = True
 CSRF_COOKIE_HTTPONLY = True
 CSRF_TRUSTED_ORIGINS = CORS_ALLOWED_ORIGINS.copy()
 
-# For development only - remove in production
+# For development only - relax policies for local HTTP dev
 if DEBUG:
+    # Allow all origins in development (don't set wildcard list for CORS_ALLOWED_ORIGINS)
     CORS_ALLOW_ALL_ORIGINS = True
-    CORS_ALLOWED_ORIGINS = ["*"]
-    CSRF_TRUSTED_ORIGINS = ["*"]
+    # Trust local dev frontends explicitly for CSRF
+    CSRF_TRUSTED_ORIGINS = [
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+    ]
+    # Cookies over HTTP should not be 'Secure' in local dev
+    SESSION_COOKIE_SECURE = False
+    CSRF_COOKIE_SECURE = False
+    # SameSite can be 'Lax' to allow basic cross-site GETs during dev
+    SESSION_COOKIE_SAMESITE = 'Lax'
 
-# For development, you can allow all origins
-# In production, it's better to specify allowed origins
+# For development, you can allow all origins. In production, specify allowed origins.
 CORS_ALLOW_ALL_ORIGINS = DEBUG  # Set to False in production
 
 # Allow credentials

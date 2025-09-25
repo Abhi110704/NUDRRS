@@ -1,0 +1,31 @@
+NUDRRS - Quick Commands (Windows)
+=================================
+
+One-click start (recommended):
+  - Double-click: start_nudrrs.cmd
+    • Creates/uses Python venv in backend\venv
+    • Installs Python deps from backend\requirements.txt
+    • Starts backend via backend\run_server.py on http://localhost:8000
+    • Installs npm deps (if needed) and starts React on http://localhost:3000
+
+Start only backend:
+  - Double-click: run_backend.cmd
+  - Or run manually:
+      cd backend
+      py -3 -m venv venv   (first time only)
+      venv\Scripts\activate
+      pip install -r requirements.txt
+      python run_server.py
+
+Start only frontend:
+  - Double-click: run_frontend.cmd
+  - Or run manually:
+      cd frontend
+      npm install   (first time only)
+      npm start
+
+Notes:
+  - Configure backend environment in backend\.env (see SETUP.md for keys)
+  - Backend default: http://localhost:8000
+  - Frontend default: http://localhost:3000
+  - Admin (auto-created if missing): username=admin, password=admin123
