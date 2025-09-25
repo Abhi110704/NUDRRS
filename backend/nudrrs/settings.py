@@ -163,6 +163,11 @@ CORS_ALLOWED_ORIGINS = [
     "https://nudrrs.vercel.app:3000",
     "https://nudrrs.vercel.app:443",
     "https://nudrrs.vercel.app:80",
+    # Render frontend domains
+    "https://nudrrs-frontend.onrender.com",
+    "https://nudrrs-1.onrender.com",
+    # Render backend domains (allowing CORS for API explorer, etc.)
+    "https://nudrrs.onrender.com",
     "https://nudrrs-frontend.onrender.com",
     "https://nudrrs-backend.onrender.com"
 ]
@@ -184,6 +189,11 @@ CSRF_TRUSTED_ORIGINS = [
     "https://nudrrs.vercel.app:3000",
     "https://nudrrs.vercel.app:443",
     "https://nudrrs.vercel.app:80",
+    # Render frontend domains
+    "https://nudrrs-frontend.onrender.com",
+    "https://nudrrs-1.onrender.com",
+    # Render backend primary domain if form posts from same site
+    "https://nudrrs.onrender.com",
     "https://nudrrs-frontend.onrender.com",
     "https://nudrrs-backend.onrender.com",
 ]
