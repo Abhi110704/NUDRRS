@@ -1,274 +1,612 @@
 """
-MongoDB service for Notifications
-Handles all notification operations using MongoDB
+MongoDB service for Authentication
+Handles all user authentication operations using MongoDB
 """
-from urllib.parse import urlparse, urlunparse, parse_qs, urlencode
-from pymongo import MongoClient
-from django.conf import settings
-from datetime import datetime
-from typing import List, Dict, Optional
-import os
 
-class NotificationMongoDBService:
-    """Service class for Notification operations with MongoDB"""
+from pymongo import MongoClient
+import ssl
+from django.conf import settings
+from datetime import datetime, timedelta
+import hashlib
+import secrets
+from typing import Dict, Optional, List
+
+class AuthMongoDBService:
+    """Service class for Authentication operations with MongoDB"""
     
-    def __init__(self, connection_string=None):
+    def __init__(self):
         self.client = None
         self.db = None
-        self.connect(connection_string)
+        self.connect()
     
-    @staticmethod
-    def sanitize_mongodb_uri(uri: str) -> str:
-        """Remove ssl_* query parameters from MongoDB URI."""
-        if not uri:
-            return uri
-        
-        try:
-            # Parse the URI
-            parsed = urlparse(uri)
-            
-            # Parse query parameters
-            query_params = parse_qs(parsed.query)
-            
-            # Remove ssl_* parameters
-            ssl_params = [k for k in query_params.keys() if k.startswith('ssl')]
-            for param in ssl_params:
-                del query_params[param]
-            
-            # Rebuild the query string
-            new_query = urlencode(query_params, doseq=True)
-            
-            # Reconstruct the URI
-            clean_uri = urlunparse((
-                parsed.scheme,
-                parsed.netloc,
-                parsed.path,
-                parsed.params,
-                new_query,
-                parsed.fragment
-            ))
-            
-            return clean_uri
-        except Exception as e:
-            print(f"⚠️ Warning: Could not sanitize MongoDB URI: {e}")
-            return uri
-    
-    def connect(self, connection_string=None):
+    def connect(self):
         """Connect to MongoDB Atlas"""
         try:
-            # Get connection string from settings or environment
-            if not connection_string:
-                if hasattr(settings, 'MONGODB_SETTINGS') and 'host' in settings.MONGODB_SETTINGS:
-                    connection_string = settings.MONGODB_SETTINGS['host']
-                    database_name = settings.MONGODB_SETTINGS.get('db', 'NUDDRS')
-                else:
-                    connection_string = os.getenv('MONGODB_CONNECTION_STRING')
-                    database_name = 'NUDDRS'  # Default database name
+            # Get connection string from environment variables
+            connection_string = settings.MONGODB_SETTINGS['host']
+            database_name = settings.MONGODB_SETTINGS['db']
             
-            if not connection_string:
-                raise ValueError("No MongoDB connection string provided")
-            
-            # Sanitize the connection string
-            connection_string = self.sanitize_mongodb_uri(connection_string)
-            print(f"🔧 [Notifications] Using MongoDB URI: {connection_string}")
-            
-            # Connect with sanitized URI
+            # PyMongo 4+: do not pass legacy SSL options. Use a clean SRV URI or modern tls* options in the URI if needed.
+            # Example insecure (not recommended): ...?tls=true&tlsInsecure=true
+            # Here we trust the URI and only set a sensible server selection timeout.
             self.client = MongoClient(connection_string, serverSelectionTimeoutMS=10000)
             self.db = self.client[database_name]
             
             # Test connection
             self.client.admin.command('ping')
-            print("✅ [Notifications] Successfully connected to MongoDB")
-            print("✅ Connected to MongoDB Atlas for Notifications")
+            print("✅ Connected to MongoDB Atlas for Authentication")
         except Exception as e:
             print(f"❌ MongoDB connection failed: {e}")
             self.client = None
             self.db = None
     
-    def create_notification(self, notification_data: Dict) -> Optional[Dict]:
-        """Create a new notification in MongoDB"""
+    def hash_password(self, password: str) -> str:
+        """Hash password using SHA-256"""
+        return hashlib.sha256(password.encode()).hexdigest()
+    
+    def _serialize_user_data(self, user_data: Dict) -> Dict:
+        """Convert ObjectIds to strings for JSON serialization"""
+        from bson import ObjectId
+        
+        serialized_data = {}
+        for key, value in user_data.items():
+            if isinstance(value, ObjectId):
+                serialized_data[key] = str(value)
+            elif isinstance(value, dict):
+                serialized_data[key] = self._serialize_user_data(value)
+            elif isinstance(value, list):
+                serialized_data[key] = [
+                    str(item) if isinstance(item, ObjectId) else item
+                    for item in value
+                ]
+            else:
+                serialized_data[key] = value
+        
+        return serialized_data
+    
+    def create_user(self, user_data: Dict) -> Optional[Dict]:
+        """Create a new user in MongoDB"""
         try:
-            if not self.db:
+            if self.db is None:
                 return None
             
-            collection = self.db['notifications']
+            collection = self.db['users']
+            
+            # Check if user already exists
+            existing_user = collection.find_one({
+                '$or': [
+                    {'username': user_data['username']},
+                    {'email': user_data['email']}
+                ]
+            })
+            
+            if existing_user:
+                return None  # User already exists
+            
+            # Hash password
+            user_data['password'] = self.hash_password(user_data['password'])
             
             # Add timestamps
             now = datetime.utcnow()
-            notification_data['created_at'] = now
-            notification_data['sent_at'] = None
-            notification_data['status'] = 'pending'
+            user_data['created_at'] = now
+            user_data['updated_at'] = now
+            user_data['last_login'] = None
+            user_data['is_active'] = True
+            user_data['is_staff'] = False
+            user_data['is_superuser'] = False
             
-            # Insert the notification
-            result = collection.insert_one(notification_data)
+            # Insert the user
+            result = collection.insert_one(user_data)
             
             if result.inserted_id:
-                # Return the created notification
-                notification_data['id'] = str(result.inserted_id)
-                notification_data['created_at'] = now.isoformat()
-                return notification_data
+                # Return the created user (without password)
+                user_data['id'] = str(result.inserted_id)
+                user_data['created_at'] = now.isoformat()
+                user_data['updated_at'] = now.isoformat()
+                del user_data['password']  # Remove password from response
+                
+                # Ensure all ObjectIds are converted to strings for JSON serialization
+                return self._serialize_user_data(user_data)
             
             return None
         except Exception as e:
-            print(f"Error creating notification in MongoDB: {e}")
+            print(f"Error creating user in MongoDB: {e}")
             return None
     
-    def get_notifications(self, limit: int = 50, skip: int = 0, user_id: Optional[str] = None) -> List[Dict]:
-        """Get notifications from MongoDB"""
+    def authenticate_user(self, username: str, password: str) -> Optional[Dict]:
+        """Authenticate user with username/email and password"""
         try:
-            if not self.db:
-                return []
+            if self.db is None:
+                return None
             
-            collection = self.db['notifications']
-            query = {}
+            collection = self.db['users']
             
-            # Filter by user if specified
-            if user_id:
-                query['recipient'] = user_id
+            # Find user by username or email
+            user = collection.find_one({
+                '$or': [
+                    {'username': username},
+                    {'email': username}
+                ],
+                'is_active': True
+            })
             
-            # Execute query
-            cursor = collection.find(query).sort('created_at', -1).skip(skip).limit(limit)
-            notifications = list(cursor)
-            
-            # Convert ObjectId to string and format dates
-            for notification in notifications:
-                if '_id' in notification:
-                    notification['id'] = str(notification['_id'])
-                    del notification['_id']
+            if user and 'password' in user and user['password'] == self.hash_password(password):
+                # Update last login
+                collection.update_one(
+                    {'_id': user['_id']},
+                    {'$set': {'last_login': datetime.utcnow()}}
+                )
                 
-                # Ensure dates are properly formatted
-                if 'created_at' in notification and isinstance(notification['created_at'], datetime):
-                    notification['created_at'] = notification['created_at'].isoformat()
+                # Return user without password
+                user['id'] = str(user['_id'])
+                del user['_id']
+                if 'password' in user:
+                    del user['password']
                 
-                if 'sent_at' in notification and isinstance(notification['sent_at'], datetime):
-                    notification['sent_at'] = notification['sent_at'].isoformat()
-                elif 'sent_at' in notification and notification['sent_at'] is None:
-                    notification['sent_at'] = None
+                # Format dates
+                if 'created_at' in user and isinstance(user['created_at'], datetime):
+                    user['created_at'] = user['created_at'].isoformat()
+                if 'updated_at' in user and isinstance(user['updated_at'], datetime):
+                    user['updated_at'] = user['updated_at'].isoformat()
+                if 'last_login' in user and isinstance(user['last_login'], datetime):
+                    user['last_login'] = user['last_login'].isoformat()
+                
+                # Ensure all ObjectIds are converted to strings for JSON serialization
+                return self._serialize_user_data(user)
             
-            return notifications
+            return None
         except Exception as e:
-            print(f"Error getting notifications from MongoDB: {e}")
-            return []
+            print(f"Error authenticating user in MongoDB: {e}")
+            return None
     
-    def update_notification_status(self, notification_id: str, status: str) -> bool:
-        """Update notification status"""
+    def get_user_by_id(self, user_id: str) -> Optional[Dict]:
+        """Get user by ID"""
         try:
-            if not self.db:
+            if self.db is None:
+                return None
+            
+            collection = self.db['users']
+            
+            # Try to find user by ObjectId first, then by string ID
+            from bson import ObjectId
+            try:
+                user = collection.find_one({'_id': ObjectId(user_id)})
+            except:
+                user = collection.find_one({'_id': user_id})
+            
+            if user:
+                user['id'] = str(user['_id'])
+                del user['_id']
+                if 'password' in user:
+                    del user['password']  # Remove password
+                
+                # Format dates
+                if 'created_at' in user and isinstance(user['created_at'], datetime):
+                    user['created_at'] = user['created_at'].isoformat()
+                if 'updated_at' in user and isinstance(user['updated_at'], datetime):
+                    user['updated_at'] = user['updated_at'].isoformat()
+                if 'last_login' in user and isinstance(user['last_login'], datetime):
+                    user['last_login'] = user['last_login'].isoformat()
+                
+                # Ensure all ObjectIds are converted to strings for JSON serialization
+                return self._serialize_user_data(user)
+            
+            return None
+        except Exception as e:
+            print(f"Error getting user by ID from MongoDB: {e}")
+            return None
+    
+    def get_user_by_username(self, username: str) -> Optional[Dict]:
+        """Get user by username"""
+        try:
+            if self.db is None:
+                return None
+            
+            collection = self.db['users']
+            user = collection.find_one({'username': username})
+            
+            if user:
+                user['id'] = str(user['_id'])
+                del user['_id']
+                del user['password']  # Remove password
+                
+                # Format dates
+                if 'created_at' in user and isinstance(user['created_at'], datetime):
+                    user['created_at'] = user['created_at'].isoformat()
+                if 'updated_at' in user and isinstance(user['updated_at'], datetime):
+                    user['updated_at'] = user['updated_at'].isoformat()
+                if 'last_login' in user and isinstance(user['last_login'], datetime):
+                    user['last_login'] = user['last_login'].isoformat()
+                
+                return user
+            
+            return None
+        except Exception as e:
+            print(f"Error getting user by username from MongoDB: {e}")
+            return None
+    
+    def get_user_by_email(self, email: str) -> Optional[Dict]:
+        """Get user by email address"""
+        try:
+            if self.db is None:
+                return None
+            
+            collection = self.db['users']
+            user = collection.find_one({'email': email})
+            
+            if user:
+                user['id'] = str(user['_id'])
+                del user['_id']
+                del user['password']  # Remove password
+                
+                # Format dates
+                if 'created_at' in user and isinstance(user['created_at'], datetime):
+                    user['created_at'] = user['created_at'].isoformat()
+                if 'updated_at' in user and isinstance(user['updated_at'], datetime):
+                    user['updated_at'] = user['updated_at'].isoformat()
+                if 'last_login' in user and isinstance(user['last_login'], datetime):
+                    user['last_login'] = user['last_login'].isoformat()
+                
+                return user
+            
+            return None
+        except Exception as e:
+            print(f"Error getting user by email from MongoDB: {e}")
+            return None
+    
+    def update_user(self, user_id: str, update_data: Dict) -> Optional[Dict]:
+        """Update user information"""
+        try:
+            if self.db is None:
+                return None
+            
+            collection = self.db['users']
+            
+            # Remove password from update data if present
+            if 'password' in update_data:
+                del update_data['password']
+            
+            # Add updated timestamp
+            update_data['updated_at'] = datetime.utcnow()
+            
+            # Convert string user_id to ObjectId
+            from bson import ObjectId
+            object_id = ObjectId(user_id)
+            
+            # Update the user
+            result = collection.update_one(
+                {'_id': object_id},
+                {'$set': update_data}
+            )
+            
+            if result.modified_count > 0:
+                # Return the updated user
+                return self.get_user_by_id(user_id)
+            
+            return None
+        except Exception as e:
+            print(f"Error updating user in MongoDB: {e}")
+            return None
+    
+    def update_user_profile(self, user_id: str, update_data: dict) -> bool:
+        """Update user profile information"""
+        try:
+            if self.db is None:
                 return False
             
-            collection = self.db['notifications']
+            collection = self.db['users']
             
-            update_data = {'status': status}
-            if status == 'sent':
-                update_data['sent_at'] = datetime.utcnow()
+            # Add updated timestamp
+            update_data['updated_at'] = datetime.utcnow()
             
+            # Update the user profile
             result = collection.update_one(
-                {'_id': notification_id},
+                {'_id': user_id},
                 {'$set': update_data}
             )
             
             return result.modified_count > 0
         except Exception as e:
-            print(f"Error updating notification status in MongoDB: {e}")
+            print(f"Error updating user profile in MongoDB: {e}")
+            return False
+
+    def change_password(self, user_id: str, old_password: str, new_password: str) -> bool:
+        """Change user password"""
+        try:
+            if self.db is None:
+                return False
+            
+            collection = self.db['users']
+            
+            # Find user and verify old password
+            user = collection.find_one({'_id': user_id})
+            if not user or user['password'] != self.hash_password(old_password):
+                return False
+            
+            # Update password
+            result = collection.update_one(
+                {'_id': user_id},
+                {'$set': {
+                    'password': self.hash_password(new_password),
+                    'updated_at': datetime.utcnow()
+                }}
+            )
+            
+            return result.modified_count > 0
+        except Exception as e:
+            print(f"Error changing password in MongoDB: {e}")
             return False
     
-    def get_notification_by_id(self, notification_id: str) -> Optional[Dict]:
-        """Get a single notification by ID"""
+    def create_token(self, user_id: str) -> str:
+        """Create authentication token for user"""
+        try:
+            if self.db is None:
+                return None
+            
+            collection = self.db['auth_tokens']
+            
+            # Generate token
+            token = secrets.token_urlsafe(32)
+            
+            # Store token
+            token_data = {
+                'user_id': user_id,
+                'token': token,
+                'created_at': datetime.utcnow(),
+                'expires_at': datetime.utcnow().replace(year=datetime.utcnow().year + 1)  # 1 year expiry
+            }
+            
+            result = collection.insert_one(token_data)
+            
+            if result.inserted_id:
+                return token
+            
+            return None
+        except Exception as e:
+            print(f"Error creating token in MongoDB: {e}")
+            return None
+    
+    def validate_token(self, token: str) -> Optional[Dict]:
+        """Validate authentication token"""
+        try:
+            if self.db is None:
+                return None
+            
+            collection = self.db['auth_tokens']
+            
+            # Find token
+            token_doc = collection.find_one({
+                'token': token,
+                'expires_at': {'$gt': datetime.utcnow()}
+            })
+            
+            if token_doc:
+                # Get user by ID (convert to string if needed)
+                user_id = str(token_doc['user_id'])
+                user = self.get_user_by_id(user_id)
+                return user
+            
+            return None
+        except Exception as e:
+            print(f"Error validating token in MongoDB: {e}")
+            return None
+    
+    def delete_token(self, token: str) -> bool:
+        """Delete authentication token"""
+        try:
+            if self.db is None:
+                return False
+            
+            collection = self.db['auth_tokens']
+            result = collection.delete_one({'token': token})
+            
+            return result.deleted_count > 0
+        except Exception as e:
+            print(f"Error deleting token in MongoDB: {e}")
+            return False
+    
+    def get_all_users(self, limit: int = 100, skip: int = 0) -> List[Dict]:
+        """Get all users"""
+        try:
+            if self.db is None:
+                return []
+            
+            collection = self.db['users']
+            cursor = collection.find({}).sort('created_at', -1).skip(skip).limit(limit)
+            users = list(cursor)
+            
+            # Convert ObjectId to string and remove passwords
+            for user in users:
+                user['id'] = str(user['_id'])
+                del user['_id']
+                if 'password' in user:
+                    del user['password']
+                
+                # Format dates
+                if 'created_at' in user and isinstance(user['created_at'], datetime):
+                    user['created_at'] = user['created_at'].isoformat()
+                if 'updated_at' in user and isinstance(user['updated_at'], datetime):
+                    user['updated_at'] = user['updated_at'].isoformat()
+                if 'last_login' in user and isinstance(user['last_login'], datetime):
+                    user['last_login'] = user['last_login'].isoformat()
+            
+            return users
+        except Exception as e:
+            print(f"Error getting all users from MongoDB: {e}")
+            return []
+    
+    def create_password_reset_token(self, email: str) -> Optional[Dict]:
+        """Create password reset token for email"""
         try:
             if not self.db:
                 return None
             
-            collection = self.db['notifications']
-            notification = collection.find_one({'_id': notification_id})
+            # Check if user exists
+            user = self.get_user_by_email(email)
+            if not user:
+                return None
             
-            if notification:
-                if '_id' in notification:
-                    notification['id'] = str(notification['_id'])
-                    del notification['_id']
-                
-                # Format dates
-                if 'created_at' in notification and isinstance(notification['created_at'], datetime):
-                    notification['created_at'] = notification['created_at'].isoformat()
-                
-                if 'sent_at' in notification and isinstance(notification['sent_at'], datetime):
-                    notification['sent_at'] = notification['sent_at'].isoformat()
-                elif 'sent_at' in notification and notification['sent_at'] is None:
-                    notification['sent_at'] = None
+            # Generate OTP
+            from .email_service import EmailService
+            otp = EmailService.generate_otp()
             
-            return notification
+            # Create reset token document
+            reset_data = {
+                'email': email,
+                'otp': otp,
+                'user_id': user['id'],
+                'created_at': datetime.now(),
+                'expires_at': datetime.now() + timedelta(seconds=900),  # 15 minutes
+                'is_used': False,
+                'attempts': 0
+            }
+            
+            collection = self.db['password_reset_tokens']
+            result = collection.insert_one(reset_data)
+            
+            if result.inserted_id:
+                # Send OTP email
+                email_sent = EmailService.send_otp_email(
+                    email=email,
+                    otp=otp,
+                    user_name=f"{user.get('first_name', '')} {user.get('last_name', '')}".strip()
+                )
+                
+                if email_sent:
+                    return {
+                        'id': str(result.inserted_id),
+                        'email': email,
+                        'expires_at': reset_data['expires_at'].isoformat(),
+                        'message': 'OTP sent successfully'
+                    }
+                else:
+                    # If email failed, delete the token
+                    collection.delete_one({'_id': result.inserted_id})
+                    return None
+            
+            return None
         except Exception as e:
-            print(f"Error getting notification by ID from MongoDB: {e}")
+            print(f"Error creating password reset token: {e}")
             return None
     
-    def delete_notification(self, notification_id: str) -> bool:
-        """Delete a notification from MongoDB"""
+    def verify_password_reset_otp(self, email: str, otp: str) -> Optional[Dict]:
+        """Verify password reset OTP"""
+        try:
+            if not self.db:
+                return None
+            
+            collection = self.db['password_reset_tokens']
+            
+            # Find valid token
+            token_doc = collection.find_one({
+                'email': email,
+                'otp': otp,
+                'is_used': False,
+                'expires_at': {'$gt': datetime.now()}
+            })
+            
+            if not token_doc:
+                # Increment attempts for failed verification
+                collection.update_one(
+                    {'email': email, 'is_used': False},
+                    {'$inc': {'attempts': 1}}
+                )
+                return None
+            
+            # Mark token as verified but not used yet
+            collection.update_one(
+                {'_id': token_doc['_id']},
+                {'$set': {'verified_at': datetime.now()}}
+            )
+            
+            return {
+                'id': str(token_doc['_id']),
+                'user_id': token_doc['user_id'],
+                'email': email,
+                'verified_at': datetime.now().isoformat()
+            }
+        except Exception as e:
+            print(f"Error verifying password reset OTP: {e}")
+            return None
+    
+    def reset_password_with_token(self, email: str, new_password: str) -> bool:
+        """Reset password using verified token"""
         try:
             if not self.db:
                 return False
             
-            collection = self.db['notifications']
-            result = collection.delete_one({'_id': notification_id})
+            # Find verified token (either used or recently verified)
+            collection = self.db['password_reset_tokens']
+            token_doc = collection.find_one({
+                'email': email,
+                '$or': [
+                    {'is_used': True, 'verified_at': {'$exists': True}},
+                    {'is_used': False, 'verified_at': {'$exists': True}}
+                ]
+            })
             
-            return result.deleted_count > 0
+            if not token_doc:
+                return False
+            
+            # Update user password
+            user_id = token_doc['user_id']
+            hashed_password = self.hash_password(new_password)
+            
+            from bson import ObjectId
+            users_collection = self.db['users']
+            result = users_collection.update_one(
+                {'_id': ObjectId(user_id)},
+                {
+                    '$set': {
+                        'password': hashed_password,
+                        'updated_at': datetime.now()
+                    }
+                }
+            )
+            
+            if result.modified_count > 0:
+                # Mark token as used and completed
+                collection.update_one(
+                    {'_id': token_doc['_id']},
+                    {'$set': {'is_used': True, 'completed_at': datetime.now()}}
+                )
+                
+                # Send success email
+                from .email_service import EmailService
+                user = self.get_user_by_id(user_id)
+                if user:
+                    EmailService.send_password_reset_success_email(
+                        email=email,
+                        user_name=f"{user.get('first_name', '')} {user.get('last_name', '')}".strip()
+                    )
+                
+                return True
+            
+            return False
         except Exception as e:
-            print(f"Error deleting notification from MongoDB: {e}")
+            print(f"Error resetting password: {e}")
             return False
     
-    def get_notifications_by_recipient(self, recipient: str, limit: int = 50) -> List[Dict]:
-        """Get notifications for a specific recipient"""
+    def cleanup_expired_tokens(self):
+        """Clean up expired password reset tokens"""
         try:
             if not self.db:
-                return []
+                return
             
-            collection = self.db['notifications']
-            cursor = collection.find({'recipient': recipient}).sort('created_at', -1).limit(limit)
-            notifications = list(cursor)
+            collection = self.db['password_reset_tokens']
+            result = collection.delete_many({
+                'expires_at': {'$lt': datetime.now()}
+            })
             
-            # Convert ObjectId to string and format dates
-            for notification in notifications:
-                if '_id' in notification:
-                    notification['id'] = str(notification['_id'])
-                    del notification['_id']
-                
-                # Format dates
-                if 'created_at' in notification and isinstance(notification['created_at'], datetime):
-                    notification['created_at'] = notification['created_at'].isoformat()
-                
-                if 'sent_at' in notification and isinstance(notification['sent_at'], datetime):
-                    notification['sent_at'] = notification['sent_at'].isoformat()
-                elif 'sent_at' in notification and notification['sent_at'] is None:
-                    notification['sent_at'] = None
-            
-            return notifications
+            if result.deleted_count > 0:
+                print(f"Cleaned up {result.deleted_count} expired password reset tokens")
         except Exception as e:
-            print(f"Error getting notifications by recipient from MongoDB: {e}")
-            return []
-    
-    def broadcast_notification(self, message: str, notification_type: str = 'BROADCAST', priority: str = 'MEDIUM') -> Optional[Dict]:
-        """Create a broadcast notification"""
-        try:
-            if not self.db:
-                return None
-            
-            # Create broadcast notification
-            broadcast_data = {
-                'recipient': 'ALL_USERS',
-                'message': message,
-                'type': notification_type,
-                'priority': priority,
-                'is_broadcast': True,
-                'created_by': 'SYSTEM'
-            }
-            
-            return self.create_notification(broadcast_data)
-        except Exception as e:
-            print(f"Error creating broadcast notification in MongoDB: {e}")
-            return None
-    
+            print(f"Error cleaning up expired tokens: {e}")
+
     def close(self):
         """Close MongoDB connection"""
         if self.client:
             self.client.close()
 
 # Global instance
-notification_mongodb_service = NotificationMongoDBService()
+auth_mongodb_service = AuthMongoDBService()
