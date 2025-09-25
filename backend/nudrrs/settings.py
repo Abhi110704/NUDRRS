@@ -143,8 +143,7 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': [
-        'rest_framework.authentication.TokenAuthentication',
-        'rest_framework.authentication.SessionAuthentication',
+        'authentication.mongodb_auth.MongoDBTokenAuthentication',
     ],
     'DEFAULT_PERMISSION_CLASSES': [
         'rest_framework.permissions.AllowAny',  # Allow public access for dashboard data
@@ -158,6 +157,7 @@ CORS_ALLOWED_ORIGINS = [
     "http://localhost:3000",
     "http://127.0.0.1:3000",
     "http://localhost:19006",
+    # Non-HTTP schemes should not be included in CSRF trusted origins
     "exp://localhost:19000",
     "https://nudrrs.vercel.app",
     "https://nudrrs.vercel.app:3000",
@@ -174,7 +174,19 @@ SESSION_COOKIE_SECURE = True
 CSRF_COOKIE_SECURE = True
 SESSION_COOKIE_HTTPONLY = True
 CSRF_COOKIE_HTTPONLY = True
-CSRF_TRUSTED_ORIGINS = CORS_ALLOWED_ORIGINS.copy()
+
+# CSRF trusted origins must be HTTP/HTTPS only (Django 4.0+ requirement)
+CSRF_TRUSTED_ORIGINS = [
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+    "http://localhost:19006",
+    "https://nudrrs.vercel.app",
+    "https://nudrrs.vercel.app:3000",
+    "https://nudrrs.vercel.app:443",
+    "https://nudrrs.vercel.app:80",
+    "https://nudrrs-frontend.onrender.com",
+    "https://nudrrs-backend.onrender.com",
+]
 
 # For development only - relax policies for local HTTP dev
 if DEBUG:
@@ -240,10 +252,6 @@ OPENAI_API_KEY = os.environ.get('OPENAI_API_KEY', '')
 TWILIO_ACCOUNT_SID = os.environ.get('TWILIO_ACCOUNT_SID', '')
 TWILIO_AUTH_TOKEN = os.environ.get('TWILIO_AUTH_TOKEN', '')
 
-# ImageKit Configuration (Legacy - being replaced by Cloudinary)
-IMAGEKIT_PUBLIC_KEY = os.environ.get('IMAGEKIT_PUBLIC_KEY', '')
-IMAGEKIT_PRIVATE_KEY = os.environ.get('IMAGEKIT_PRIVATE_KEY', '')
-IMAGEKIT_URL_ENDPOINT = os.environ.get('IMAGEKIT_URL_ENDPOINT', '')
 
 # Cloudinary Configuration
 CLOUDINARY_CLOUD_NAME = os.environ.get('CLOUDINARY_CLOUD_NAME', '')
@@ -273,10 +281,6 @@ EMAIL_SSL_CONTEXT.verify_mode = ssl.CERT_NONE
 PASSWORD_RESET_TIMEOUT = 900  # 15 minutes in seconds
 OTP_LENGTH = 6
 
-#ImageKit Settings
-IMAGEKIT_PRIVATE_KEY = os.getenv("IMAGEKIT_PRIVATE_KEY")
-IMAGEKIT_PUBLIC_KEY = os.getenv("IMAGEKIT_PUBLIC_KEY")
-IMAGEKIT_URL_ENDPOINT = os.getenv("IMAGEKIT_URL_ENDPOINT")
 
 # Logging
 LOGGING = {
