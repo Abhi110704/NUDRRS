@@ -73,8 +73,9 @@ def login_view(request):
             # Authenticate user - we'll use username as email for authentication
             user = mongo_service.authenticate_user(username, password)
             if user:
-                # Generate tokens
-                tokens = get_tokens_for_user(str(user['_id']), username)  # Using username as email
+                # Generate tokens using serialized user id
+                user_id = user.get('id') or str(user.get('_id'))
+                tokens = get_tokens_for_user(user_id, username)
                 return Response({
                     'message': 'Login successful',
                     'tokens': tokens
