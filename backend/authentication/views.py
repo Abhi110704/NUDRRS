@@ -3,6 +3,7 @@ from rest_framework import status, generics
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
 from rest_framework.permissions import AllowAny, IsAuthenticated
+from rest_framework.views import APIView
 from rest_framework.authtoken.models import Token
 from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.models import User
@@ -22,12 +23,10 @@ from .serializers import (
 )
 
 @method_decorator(csrf_exempt, name='dispatch')
-class RegisterView(generics.CreateAPIView):
-    queryset = User.objects.all()
+class RegisterView(APIView):
     permission_classes = [AllowAny]
-    serializer_class = UserRegistrationSerializer
-    
-    def create(self, request, *args, **kwargs):
+
+    def post(self, request, *args, **kwargs):
         # Handle CORS preflight
         if request.method == 'OPTIONS':
             response = JsonResponse({}, status=200)
@@ -37,7 +36,7 @@ class RegisterView(generics.CreateAPIView):
             response['Access-Control-Allow-Credentials'] = 'true'
             return response
         try:
-            serializer = self.get_serializer(data=request.data)
+            serializer = UserRegistrationSerializer(data=request.data)
             serializer.is_valid(raise_exception=True)
             
             # Prepare user data for MongoDB
