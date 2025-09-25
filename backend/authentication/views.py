@@ -15,7 +15,7 @@ from django.utils.decorators import method_decorator
 from django.http import JsonResponse
 from django.middleware.csrf import get_token
 from .models import UserProfile, Organization
-from .mongodb_service import auth_mongodb_service
+from .services import auth_mongodb_service
 from .serializers import (
     UserSerializer, UserRegistrationSerializer, LoginSerializer, UserProfileSerializer, 
     ChangePasswordSerializer, PasswordResetSerializer, PasswordResetConfirmSerializer,
@@ -398,7 +398,7 @@ def upload_profile_image(request):
         # Handle MongoDB user (new system)
         if hasattr(request.user, '_user_data'):
             # This is a MongoDBUser
-            from .mongodb_service import auth_mongodb_service
+            from .services import auth_mongodb_service
             from cloudinary_service import cloudinary_service
             import uuid
             
