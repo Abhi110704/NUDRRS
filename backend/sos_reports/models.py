@@ -124,12 +124,13 @@ class ReportMedia(models.Model):
     report = models.ForeignKey(SOSReport, related_name='media', on_delete=models.CASCADE)
     media_type = models.CharField(max_length=10, choices=MEDIA_TYPES)
     
-    # ImageKit fields
-    imagekit_file_id = models.CharField(max_length=255, blank=True, null=True, help_text='ImageKit file ID')
-    imagekit_url = models.URLField(blank=True, null=True, help_text='ImageKit URL')
-    imagekit_name = models.CharField(max_length=255, blank=True, null=True, help_text='Original filename')
-    imagekit_size = models.IntegerField(blank=True, null=True, help_text='File size in bytes')
-    imagekit_file_type = models.CharField(max_length=50, blank=True, null=True, help_text='MIME type')
+    # Cloudinary fields
+    public_id = models.CharField(max_length=255, blank=True, null=True, help_text='Cloudinary public ID')
+    url = models.URLField(blank=True, null=True, help_text='Cloudinary URL')
+    format = models.CharField(max_length=50, blank=True, null=True)
+    width = models.IntegerField(blank=True, null=True)
+    height = models.IntegerField(blank=True, null=True)
+    bytes = models.IntegerField(blank=True, null=True)
     
     # Legacy file field (for backward compatibility)
     file = models.FileField(upload_to='reports/%Y/%m/%d/', blank=True, null=True)
@@ -142,19 +143,23 @@ class ReportMedia(models.Model):
     
     @property
     def image_url(self):
-        """Get the image URL (ImageKit or local file)"""
-        if self.imagekit_url:
-            return self.imagekit_url
-        elif self.file:
+        """Get the image URL from Cloudinary or local file"""
+        if self.url:
+            return self.url
+        if self.file:
             return self.file.url
         return None
     
     @property
     def thumbnail_url(self):
-        """Get thumbnail URL from ImageKit"""
-        if self.imagekit_file_id:
-            from imagekit_service import imagekit_service
-            return imagekit_service.get_thumbnail_url(self.imagekit_file_id, width=300, height=300)
+        """Get thumbnail URL via Cloudinary transformation if available"""
+        if self.public_id:
+            from cloudinary_service import cloudinary_service
+            return cloudinary_service.transform_url(self.public_id, {
+                'transformation': [
+                    { 'width': 300, 'height': 300, 'crop': 'fill', 'gravity': 'auto' }
+                ]
+            })
         return self.image_url
 
 class ReportUpdate(models.Model):

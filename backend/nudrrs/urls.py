@@ -19,7 +19,6 @@ urlpatterns = [
     path('api/resources/', include('resources.urls')),
     path('api/analytics/', include('analytics.urls')),
     path('api/mongodb/', include('mongodb_integration.urls')),
-    path('api/imagekit/', include('imagekit_urls')),
 ]
 
 # Serve media files in development
