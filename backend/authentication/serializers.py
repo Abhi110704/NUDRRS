@@ -73,14 +73,20 @@ class ChangePasswordSerializer(serializers.Serializer):
             raise serializers.ValidationError({"new_password": "Password fields didn't match."})
         return attrs
 
-class PasswordResetSerializer(serializers.Serializer):
-    email = serializers.EmailField()
+class PasswordResetRequestSerializer(serializers.Serializer):
+    email = serializers.EmailField(required=True)
+
+    def validate_email(self, value):
+        User = self.context.get('user_model', User)
+        if not User.objects.filter(email=value).exists():
+            raise serializers.ValidationError("No user is registered with this email address.")
+        return value
 
 class PasswordResetConfirmSerializer(serializers.Serializer):
-    email = serializers.EmailField()
-    otp = serializers.CharField(max_length=6, min_length=6)
-    new_password = serializers.CharField(validators=[validate_password])
-    new_password2 = serializers.CharField()
+    email = serializers.EmailField(required=True)
+    otp = serializers.CharField(max_length=6, min_length=6, required=True)
+    new_password = serializers.CharField(required=True, validators=[validate_password])
+    new_password2 = serializers.CharField(required=True, write_only=True)
     
     def validate(self, attrs):
         if attrs['new_password'] != attrs['new_password2']:
@@ -88,8 +94,20 @@ class PasswordResetConfirmSerializer(serializers.Serializer):
         return attrs
 
 class PasswordResetOTPSerializer(serializers.Serializer):
-    email = serializers.EmailField()
+    email = serializers.EmailField(required=True)
+    
+    def validate_email(self, value):
+        User = self.context.get('user_model', User)
+        if not User.objects.filter(email=value).exists():
+            raise serializers.ValidationError("No user is registered with this email address.")
+        return value
 
 class PasswordResetVerifyOTPSerializer(serializers.Serializer):
-    email = serializers.EmailField()
-    otp = serializers.CharField(max_length=6, min_length=6)
+    email = serializers.EmailField(required=True)
+    otp = serializers.CharField(max_length=6, min_length=6, required=True)
+    
+    def validate_email(self, value):
+        User = self.context.get('user_model', User)
+        if not User.objects.filter(email=value).exists():
+            raise serializers.ValidationError("No user is registered with this email address.")
+        return value
