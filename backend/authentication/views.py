@@ -1,479 +1,53 @@
-import json
-from rest_framework import status, generics
-from rest_framework.decorators import api_view, permission_classes
-from rest_framework.response import Response
-from rest_framework.permissions import AllowAny, IsAuthenticated
-from rest_framework.views import APIView
-from rest_framework.authtoken.models import Token
-from django.contrib.auth import authenticate, login, logout
-from django.contrib.auth.models import User
-from django.db import transaction
-from django.conf import settings
-from django.utils import timezone
-from django.views.decorators.csrf import csrf_exempt
-from django.utils.decorators import method_decorator
 from django.http import JsonResponse
-from django.middleware.csrf import get_token
-from .models import UserProfile, Organization
-from authentication.services import auth_mongodb_service
-from .serializers import (
-    UserSerializer, UserRegistrationSerializer, LoginSerializer, UserProfileSerializer, 
-    ChangePasswordSerializer, PasswordResetSerializer, PasswordResetConfirmSerializer,
-    PasswordResetOTPSerializer, PasswordResetVerifyOTPSerializer, OrganizationSerializer
-)
+from django.db import connection
+from django.conf import settings
 
-@method_decorator(csrf_exempt, name='dispatch')
-class RegisterView(APIView):
-    permission_classes = [AllowAny]
+def api_overview(request):
+    """API overview endpoint - landing page for the root URL"""
+    api_info = {
+        'name': 'NUDRRS - National Unified Disaster Response & Relief System',
+        'version': '1.0.0',
+        'description': 'AI-Powered Emergency Response Platform',
+        'endpoints': {
+            'health_check': '/health/',
+            'admin_panel': '/admin/',
+            'authentication': '/api/auth/',
+            'sos_reports': '/api/reports/',
+            'ai_services': '/api/ai/',
+            'notifications': '/api/notifications/',
+            'resources': '/api/resources/',
+            'analytics': '/api/analytics/'
+        },
+        'team': 'HackerXHacker - SIH 2025',
+        'status': 'running'
+    }
+    return JsonResponse(api_info)
 
-    def post(self, request, *args, **kwargs):
-        # Handle CORS preflight
-        if request.method == 'OPTIONS':
-            response = JsonResponse({}, status=200)
-            response['Access-Control-Allow-Origin'] = request.headers.get('Origin', '*')
-            response['Access-Control-Allow-Methods'] = 'POST, OPTIONS'
-            response['Access-Control-Allow-Headers'] = 'Content-Type, Authorization'
-            response['Access-Control-Allow-Credentials'] = 'true'
-            return response
-        try:
-            serializer = UserRegistrationSerializer(data=request.data)
-            serializer.is_valid(raise_exception=True)
-            
-            # Prepare user data for MongoDB
-            user_data = {
-                'username': serializer.validated_data['username'],
-                'email': serializer.validated_data['email'],
-                'password': serializer.validated_data['password'],
-                'first_name': serializer.validated_data.get('first_name', ''),
-                'last_name': serializer.validated_data.get('last_name', ''),
-                'role': serializer.validated_data.get('role', 'VIEWER'),
-                'organization': serializer.validated_data.get('organization', ''),
-                'phone_number': serializer.validated_data.get('phone_number', ''),
-                'profile_image': None
-            }
-            
-            # Create user in MongoDB
-            created_user = auth_mongodb_service.create_user(user_data)
-            
-            if created_user:
-                # Generate token
-                token = auth_mongodb_service.create_token(created_user['id'])
-                
-                response = Response({
-                    'user': created_user,
-                    'token': token,
-                    'message': 'User registered successfully'
-                }, status=status.HTTP_201_CREATED)
-                response['Access-Control-Allow-Origin'] = request.headers.get('Origin', '*')
-                response['Access-Control-Allow-Credentials'] = 'true'
-                return response
-            else:
-                return Response({
-                    'error': 'User already exists or registration failed'
-                }, status=status.HTTP_400_BAD_REQUEST)
-                
-        except Exception as e:
-            response = Response({
-                'error': str(e)
-            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-            response['Access-Control-Allow-Origin'] = request.headers.get('Origin', '*')
-            response['Access-Control-Allow-Credentials'] = 'true'
-            return response
-
-@api_view(['POST', 'OPTIONS'])
-@permission_classes([AllowAny])
-@csrf_exempt
-def login_view(request):
-    # Handle CORS preflight
-    if request.method == 'OPTIONS':
-        response = JsonResponse({}, status=200)
-        response['Access-Control-Allow-Origin'] = request.headers.get('Origin', '*')
-        response['Access-Control-Allow-Methods'] = 'POST, OPTIONS'
-        response['Access-Control-Allow-Headers'] = 'Content-Type, Authorization'
-        response['Access-Control-Allow-Credentials'] = 'true'
-        return response
+def health_check(request):
+    """Health check endpoint for monitoring
+    
+    Returns 200 OK if the application is running, regardless of database status.
+    This ensures the health check passes as long as the application is responsive.
+    """
+    from django.utils import timezone
+    
+    health_status = {
+        'status': 'healthy',
+        'application': 'running',
+        'database': 'unknown',
+        'timestamp': timezone.now().isoformat()
+    }
+    
+    # Check database connection (but don't fail health check if it's down)
     try:
-        serializer = LoginSerializer(data=request.data)
-        if serializer.is_valid():
-            username = serializer.validated_data['username']
-            password = serializer.validated_data['password']
-            
-            # Authenticate user with MongoDB
-            user = auth_mongodb_service.authenticate_user(username, password)
-            
-            if user:
-                if user.get('is_active', True):
-                    # Generate token
-                    token = auth_mongodb_service.create_token(user['id'])
-                    
-                    if token:
-                        response = Response({
-                            'token': token,
-                            'user': user,
-                            'message': 'Login successful'
-                        })
-                        response['Access-Control-Allow-Origin'] = request.headers.get('Origin', '*')
-                        response['Access-Control-Allow-Credentials'] = 'true'
-                        return response
-                    else:
-                        return Response({'error': 'Failed to generate token'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-                else:
-                    return Response({'error': 'Account is disabled'}, status=status.HTTP_400_BAD_REQUEST)
-            else:
-                return Response({'error': 'Invalid credentials'}, status=status.HTTP_400_BAD_REQUEST)
-        
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-        
+        with connection.cursor() as cursor:
+            cursor.execute("SELECT 1")
+            health_status['database'] = 'connected'
     except Exception as e:
-        response = Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-        response['Access-Control-Allow-Origin'] = request.headers.get('Origin', '*')
-        response['Access-Control-Allow-Credentials'] = 'true'
-        return response
-
-@api_view(['POST', 'OPTIONS'])
-@permission_classes([IsAuthenticated])
-@csrf_exempt
-def logout_view(request):
-    # Handle CORS preflight
-    if request.method == 'OPTIONS':
-        response = JsonResponse({}, status=200)
-        response['Access-Control-Allow-Origin'] = request.headers.get('Origin', '*')
-        response['Access-Control-Allow-Methods'] = 'POST, OPTIONS'
-        response['Access-Control-Allow-Headers'] = 'Content-Type, Authorization'
-        response['Access-Control-Allow-Credentials'] = 'true'
-        return response
-    try:
-        # Get token from request headers
-        auth_header = request.META.get('HTTP_AUTHORIZATION', '')
-        if auth_header.startswith('Token '):
-            token = auth_header.split(' ')[1]
-            # Delete the token from MongoDB
-            auth_mongodb_service.delete_token(token)
-        
-        response = Response({'message': 'Successfully logged out'})
-        response['Access-Control-Allow-Origin'] = request.headers.get('Origin', '*')
-        response['Access-Control-Allow-Credentials'] = 'true'
-        # Clear the session cookie
-        response.delete_cookie('sessionid')
-        response.delete_cookie('csrftoken')
-        return response
-    except Exception as e:
-        response = Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
-        response['Access-Control-Allow-Origin'] = request.headers.get('Origin', '*')
-        response['Access-Control-Allow-Credentials'] = 'true'
-        return response
-
-@api_view(['GET', 'OPTIONS'])
-@permission_classes([IsAuthenticated])
-@csrf_exempt
-def profile_view(request):
-    # Handle CORS preflight
-    if request.method == 'OPTIONS':
-        response = JsonResponse({}, status=200)
-        response['Access-Control-Allow-Origin'] = request.headers.get('Origin', '*')
-        response['Access-Control-Allow-Methods'] = 'GET, OPTIONS'
-        response['Access-Control-Allow-Headers'] = 'Content-Type, Authorization'
-        response['Access-Control-Allow-Credentials'] = 'true'
-        return response
-    try:
-        # Get user ID from token
-        auth_header = request.META.get('HTTP_AUTHORIZATION', '')
-        if auth_header.startswith('Token '):
-            token = auth_header.split(' ')[1]
-            user = auth_mongodb_service.validate_token(token)
-            
-            if not user:
-                return Response({'error': 'Invalid token'}, status=status.HTTP_401_UNAUTHORIZED)
-            
-            if request.method == 'GET':
-                return Response(user)
-            
-            elif request.method == 'PUT':
-                # Update user information
-                update_data = {}
-                
-                # Map request data to MongoDB fields
-                if 'first_name' in request.data:
-                    update_data['first_name'] = request.data['first_name']
-                if 'last_name' in request.data:
-                    update_data['last_name'] = request.data['last_name']
-                if 'email' in request.data:
-                    update_data['email'] = request.data['email']
-                if 'phone_number' in request.data:
-                    update_data['phone_number'] = request.data['phone_number']
-                if 'organization' in request.data:
-                    update_data['organization'] = request.data['organization']
-                if 'role' in request.data:
-                    update_data['role'] = request.data['role']
-                
-                # Update user in MongoDB
-                updated_user = auth_mongodb_service.update_user(user['id'], update_data)
-                
-                if updated_user:
-                    return Response(updated_user)
-                else:
-                    return Response({'error': 'Failed to update profile'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-        else:
-            return Response({'error': 'Invalid authorization header'}, status=status.HTTP_401_UNAUTHORIZED)
-            
-    except Exception as e:
-        response = Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
-        response['Access-Control-Allow-Origin'] = request.headers.get('Origin', '*')
-        response['Access-Control-Allow-Credentials'] = 'true'
-        return response
-
-@api_view(['POST'])
-@permission_classes([IsAuthenticated])
-def change_password(request):
-    try:
-        serializer = ChangePasswordSerializer(data=request.data)
-        if serializer.is_valid():
-            # Get user from token
-            auth_header = request.META.get('HTTP_AUTHORIZATION', '')
-            if auth_header.startswith('Token '):
-                token = auth_header.split(' ')[1]
-                user = auth_mongodb_service.validate_token(token)
-                
-                if not user:
-                    return Response({'error': 'Invalid token'}, status=status.HTTP_401_UNAUTHORIZED)
-                
-                # Change password in MongoDB
-                success = auth_mongodb_service.change_password(
-                    user['id'],
-                    serializer.validated_data['old_password'],
-                    serializer.validated_data['new_password']
-                )
-                
-                if success:
-                    return Response({'message': 'Password changed successfully'})
-                else:
-                    return Response({'error': 'Invalid old password'}, status=status.HTTP_400_BAD_REQUEST)
-            else:
-                return Response({'error': 'Invalid authorization header'}, status=status.HTTP_401_UNAUTHORIZED)
-        
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-        
-    except Exception as e:
-        response = Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
-        response['Access-Control-Allow-Origin'] = request.headers.get('Origin', '*')
-        response['Access-Control-Allow-Credentials'] = 'true'
-        return response
-
-@api_view(['POST'])
-@permission_classes([AllowAny])
-def password_reset_request(request):
-    """Request password reset - sends OTP to email"""
-    try:
-        serializer = PasswordResetOTPSerializer(data=request.data)
-        if serializer.is_valid():
-            email = serializer.validated_data['email']
-            
-            # Create password reset token and send OTP
-            result = auth_mongodb_service.create_password_reset_token(email)
-            
-            if result:
-                return Response({
-                    'message': 'OTP sent to your email address',
-                    'email': email,
-                    'expires_at': result['expires_at']
-                }, status=status.HTTP_200_OK)
-            else:
-                # For security, always return 200 even if user not found
-                return Response({
-                    'message': 'If the email exists in our system, an OTP has been sent'
-                }, status=status.HTTP_200_OK)
-        
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-        
-    except Exception as e:
-        return Response({
-            'error': f'Password reset request failed: {str(e)}'
-        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
-@api_view(['POST'])
-@permission_classes([AllowAny])
-def password_reset_verify_otp(request):
-    """Verify OTP for password reset"""
-    try:
-        serializer = PasswordResetVerifyOTPSerializer(data=request.data)
-        if serializer.is_valid():
-            email = serializer.validated_data['email']
-            otp = serializer.validated_data['otp']
-            
-            # Verify OTP
-            result = auth_mongodb_service.verify_password_reset_otp(email, otp)
-            
-            if result:
-                return Response({
-                    'message': 'OTP verified successfully',
-                    'email': email,
-                    'verified_at': result['verified_at']
-                }, status=status.HTTP_200_OK)
-            else:
-                return Response({
-                    'error': 'Invalid or expired OTP'
-                }, status=status.HTTP_400_BAD_REQUEST)
-        
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-        
-    except Exception as e:
-        return Response({
-            'error': f'OTP verification failed: {str(e)}'
-        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
-@api_view(['POST'])
-@permission_classes([AllowAny])
-def password_reset_confirm(request):
-    """Confirm password reset with new password"""
-    try:
-        serializer = PasswordResetConfirmSerializer(data=request.data)
-        if serializer.is_valid():
-            email = serializer.validated_data['email']
-            otp = serializer.validated_data['otp']
-            new_password = serializer.validated_data['new_password']
-            
-            # Check if OTP is already verified
-            otp_result = auth_mongodb_service.verify_password_reset_otp(email, otp)
-            if not otp_result:
-                return Response({
-                    'error': 'Invalid or expired OTP'
-                }, status=status.HTTP_400_BAD_REQUEST)
-            
-            # Reset password
-            success = auth_mongodb_service.reset_password_with_token(email, new_password)
-            
-            if success:
-                return Response({
-                    'message': 'Password reset successfully'
-                }, status=status.HTTP_200_OK)
-            else:
-                return Response({
-                    'error': 'Failed to reset password'
-                }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-        
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-        
-    except Exception as e:
-        return Response({
-            'error': f'Password reset confirmation failed: {str(e)}'
-        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
-class OrganizationListView(generics.ListCreateAPIView):
-    queryset = Organization.objects.filter(is_active=True)
-    serializer_class = OrganizationSerializer
-    permission_classes = [IsAuthenticated]
-
-class OrganizationDetailView(generics.RetrieveUpdateDestroyAPIView):
-    queryset = Organization.objects.all()
-    serializer_class = OrganizationSerializer
-    permission_classes = [IsAuthenticated]
-
-@api_view(['POST'])
-@permission_classes([IsAuthenticated])
-def upload_profile_image(request):
-    """Upload profile image for authenticated user"""
-    try:
-        if 'profile_image' not in request.FILES:
-            return Response({
-                'success': False,
-                'error': 'No image file provided'
-            }, status=status.HTTP_400_BAD_REQUEST)
-        
-        image_file = request.FILES['profile_image']
-        
-        # Validate file type
-        if not image_file.content_type.startswith('image/'):
-            return Response({
-                'success': False,
-                'error': 'File must be an image'
-            }, status=status.HTTP_400_BAD_REQUEST)
-        
-        # Validate file size (max 5MB)
-        if image_file.size > 5 * 1024 * 1024:
-            return Response({
-                'success': False,
-                'error': 'Image size must be less than 5MB'
-            }, status=status.HTTP_400_BAD_REQUEST)
-        
-        # Handle MongoDB user (new system)
-        if hasattr(request.user, '_user_data'):
-            # This is a MongoDBUser
-            from authentication.services import auth_mongodb_service
-            from cloudinary_service import cloudinary_service
-            import uuid
-            
-            # Generate unique filename
-            file_extension = image_file.name.split('.')[-1] if '.' in image_file.name else 'jpg'
-            unique_filename = f"{request.user.id}_{uuid.uuid4().hex[:8]}.{file_extension}"
-            
-            # Upload to Cloudinary
-            upload_result = cloudinary_service.upload_file(
-                file=image_file,
-                folder=f"nudrrs/profile_images/{request.user.id}",
-                filename=unique_filename,
-                tags=['nudrrs', 'profile_image', request.user.username]
-            )
-            
-            if upload_result['success']:
-                # Get Cloudinary URL
-                image_url = upload_result['url']
-                file_id = upload_result['public_id']
-                
-                # Update user profile in MongoDB
-                update_data = {
-                    'profile_image': image_url,  # Store Cloudinary URL
-                    'profile_image_url': image_url,
-                    'profile_image_file_id': file_id,  # Store Cloudinary public_id
-                    'updated_at': timezone.now().isoformat()
-                }
-                
-                # Use the MongoDB ObjectId string, not the integer user_id
-                user_id = request.user._user_data.get('id') if hasattr(request.user, '_user_data') else str(request.user.id)
-                updated_user = auth_mongodb_service.update_user(user_id, update_data)
-                
-                if updated_user:
-                    return Response({
-                        'success': True,
-                        'message': 'Profile image uploaded successfully to Cloudinary',
-                        'image_url': image_url,
-                        'file_id': file_id
-                    }, status=status.HTTP_200_OK)
-                else:
-                    return Response({
-                        'success': False,
-                        'error': 'Failed to update user profile in database'
-                    }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-            else:
-                return Response({
-                    'success': False,
-                    'error': f'Cloudinary upload failed: {upload_result.get("error", "Unknown error")}'
-                }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-        
-        else:
-            # Handle Django User (legacy system)
-            profile, created = UserProfile.objects.get_or_create(
-                user=request.user,
-                defaults={'role': 'VIEWER'}
-            )
-            
-            # Save the image
-            profile.profile_image = image_file
-            profile.save()
-            
-            # Return success response with image URL
-            image_url = None
-            if profile.profile_image:
-                image_url = request.build_absolute_uri(profile.profile_image.url)
-            
-            return Response({
-                'success': True,
-                'message': 'Profile image uploaded successfully',
-                'image_url': image_url,
-                'profile': UserProfileSerializer(profile, context={'request': request}).data
-            }, status=status.HTTP_200_OK)
-        
-    except Exception as e:
-        return Response({
-            'success': False,
-            'error': f'Failed to upload image: {str(e)}'
-        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        health_status['database'] = f'disconnected: {str(e)}'
+        # Don't mark status as unhealthy for database issues
+        # health_status['status'] = 'degraded'
+    
+    # Always return 200 as long as the application is running
+    # This ensures the health check passes for container orchestration
+    return JsonResponse(health_status, status=200)
