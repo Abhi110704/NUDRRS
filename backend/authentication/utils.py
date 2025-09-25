@@ -20,13 +20,13 @@ def get_tokens_for_user(user_id, email):
     Returns:
         dict: Access and refresh tokens
     """
-    from rest_framework_simplejwt.tokens import RefreshToken
-    
-    refresh = RefreshToken.for_user({'id': user_id, 'email': email})
-    
+    # Issue an opaque token stored in MongoDB so we don't depend on Django User objects
+    from .mongodb_service import AuthMongoDBService
+    service = AuthMongoDBService()
+    token = service.create_token(user_id)
     return {
-        'refresh': str(refresh),
-        'access': str(refresh.access_token),
+        'access': token,
+        'refresh': token,
     }
 
 def send_password_reset_email(email, otp):
