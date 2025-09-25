@@ -28,7 +28,8 @@ class SOSReportMongoDBService:
             connection_string = settings.MONGODB_SETTINGS['host']
             database_name = settings.MONGODB_SETTINGS['db']
             
-            self.client = MongoClient(connection_string, serverSelectionTimeoutMS=10000, ssl_cert_reqs=ssl.CERT_NONE)
+            # PyMongo 4+: avoid legacy SSL kwargs. Use a clean SRV URI or modern tls* options in the URI if needed.
+            self.client = MongoClient(connection_string, serverSelectionTimeoutMS=10000)
             self.db = self.client[database_name]
             
             # Test connection
