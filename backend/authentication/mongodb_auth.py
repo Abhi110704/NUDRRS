@@ -3,7 +3,7 @@ Custom MongoDB Authentication Backend for Django REST Framework
 """
 from rest_framework.authentication import BaseAuthentication
 from rest_framework.exceptions import AuthenticationFailed
-from .services import auth_mongodb_service
+from authentication.services import auth_mongodb_service
 
 class MongoDBTokenAuthentication(BaseAuthentication):
     """
