@@ -19,49 +19,64 @@ logger = logging.getLogger(__name__)
 class AuthMongoDBService:
     """Service class for Authentication operations with MongoDB"""
     
-    def __init__(self):
+    def __init__(self, connect_on_init=True):
         self.client = None
         self.db = None
         self._is_connected = False
-        self.connect()
+        self._connection_string = None
+        self._database_name = None
+        if connect_on_init:
+            self.connect()
         
     def __del__(self):
         """Ensure connections are closed when the object is garbage collected"""
         self.close()
     
-    def connect(self, max_retries=3, initial_delay=1):
+    def connect(self, max_retries=5, initial_delay=2):
         """Connect to MongoDB Atlas with retry logic
         
         Args:
-            max_retries (int): Maximum number of connection attempts
-            initial_delay (int): Initial delay between retries in seconds
+            max_retries (int): Maximum number of connection attempts (default: 5)
+            initial_delay (int): Initial delay between retries in seconds (default: 2)
             
         Raises:
             ConnectionError: If connection fails after all retries
         """
+        if self._is_connected:
+            logger.info("Already connected to MongoDB")
+            return
+            
         retry_count = 0
         delay = initial_delay
+        
+        # Get connection details from settings
+        try:
+            self._connection_string = settings.MONGODB_SETTINGS['host']
+            self._database_name = settings.MONGODB_SETTINGS['db']
+            logger.info(f"Connecting to MongoDB database: {self._database_name}")
+        except (KeyError, AttributeError) as e:
+            error_msg = "Missing or invalid MongoDB settings in configuration"
+            logger.error(f"{error_msg}: {str(e)}")
+            raise ConnectionError(error_msg) from e
         
         while retry_count < max_retries:
             try:
                 logger.info(f"Attempting to connect to MongoDB (Attempt {retry_count + 1}/{max_retries})")
                 
-                # Get connection string from environment variables
-                connection_string = settings.MONGODB_SETTINGS['host']
-                database_name = settings.MONGODB_SETTINGS['db']
-                
-                # Set a reasonable server selection timeout
+                # Set connection timeouts
                 self.client = MongoClient(
-                    connection_string,
-                    serverSelectionTimeoutMS=5000,  # 5 second timeout
-                    connectTimeoutMS=10000,         # 10 second connection timeout
-                    socketTimeoutMS=30000            # 30 second socket timeout
+                    self._connection_string,
+                    serverSelectionTimeoutMS=10000,  # 10 second timeout
+                    connectTimeoutMS=15000,          # 15 second connection timeout
+                    socketTimeoutMS=30000,           # 30 second socket timeout
+                    retryWrites=True,
+                    retryReads=True,
+                    connect=False  # Defer connection
                 )
                 
-                self.db = self.client[database_name]
-                
-                # Test connection with a ping
+                # Force connection with a ping
                 self.client.admin.command('ping')
+                self.db = self.client[self._database_name]
                 self._is_connected = True
                 logger.info("✅ Successfully connected to MongoDB Atlas")
                 return  # Success, exit the retry loop
