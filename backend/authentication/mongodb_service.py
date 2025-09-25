@@ -691,13 +691,19 @@ class AuthMongoDBService:
             if not self.db:
                 self.connect()
                 
-            # Hash the new password (you should use Django's password hashing)
-            from django.contrib.auth.hashers import make_password
-            hashed_password = make_password(new_password)
+            # Hash the new password using the same scheme as authenticate_user
+            hashed_password = self.hash_password(new_password)
             
             # Update user's password
+            # Attempt update by ObjectId first, fallback to string id
+            from bson import ObjectId
+            try:
+                filter_id = {'_id': ObjectId(user_id)}
+            except Exception:
+                filter_id = {'_id': user_id}
+
             result = self.db.users.update_one(
-                {'_id': user_id},
+                filter_id,
                 {'$set': {'password': hashed_password}}
             )
             

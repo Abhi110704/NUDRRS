@@ -75,12 +75,7 @@ class ChangePasswordSerializer(serializers.Serializer):
 
 class PasswordResetRequestSerializer(serializers.Serializer):
     email = serializers.EmailField(required=True)
-
-    def validate_email(self, value):
-        User = self.context.get('user_model', User)
-        if not User.objects.filter(email=value).exists():
-            raise serializers.ValidationError("No user is registered with this email address.")
-        return value
+    # Do not validate against Django ORM; MongoDB is the source of truth
 
 class PasswordResetConfirmSerializer(serializers.Serializer):
     email = serializers.EmailField(required=True)
@@ -95,19 +90,9 @@ class PasswordResetConfirmSerializer(serializers.Serializer):
 
 class PasswordResetOTPSerializer(serializers.Serializer):
     email = serializers.EmailField(required=True)
-    
-    def validate_email(self, value):
-        User = self.context.get('user_model', User)
-        if not User.objects.filter(email=value).exists():
-            raise serializers.ValidationError("No user is registered with this email address.")
-        return value
+    # Skip Django ORM validation; handled in service layer
 
 class PasswordResetVerifyOTPSerializer(serializers.Serializer):
     email = serializers.EmailField(required=True)
     otp = serializers.CharField(max_length=6, min_length=6, required=True)
-    
-    def validate_email(self, value):
-        User = self.context.get('user_model', User)
-        if not User.objects.filter(email=value).exists():
-            raise serializers.ValidationError("No user is registered with this email address.")
-        return value
+    # Skip Django ORM validation; handled in service layer

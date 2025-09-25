@@ -61,14 +61,18 @@ def send_password_reset_email(email, otp):
         """
         
         # Send email
-        send_mail(
-            subject=subject,
-            message=strip_tags(plain_message),
-            from_email=settings.DEFAULT_FROM_EMAIL,
-            recipient_list=[email],
-            html_message=html_message,
-            fail_silently=False,
-        )
+        # If email backend creds are missing, fall back to console log
+        if not settings.EMAIL_HOST_USER or not settings.EMAIL_HOST_PASSWORD:
+            logger.warning(f"EMAIL not configured; OTP for {email}: {otp}")
+        else:
+            send_mail(
+                subject=subject,
+                message=strip_tags(plain_message),
+                from_email=settings.DEFAULT_FROM_EMAIL,
+                recipient_list=[email],
+                html_message=html_message,
+                fail_silently=False,
+            )
         
         logger.info(f"Password reset email sent to {email}")
         return True
