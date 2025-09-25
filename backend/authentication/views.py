@@ -73,12 +73,25 @@ def login_view(request):
             # Authenticate user - we'll use username as email for authentication
             user = mongo_service.authenticate_user(username, password)
             if user:
-                # Generate tokens using serialized user id
+                # Generate token and respond in shape expected by frontend
                 user_id = user.get('id') or str(user.get('_id'))
                 tokens = get_tokens_for_user(user_id, username)
+                token_value = tokens.get('access') or tokens.get('token')
+
+                # Minimal safe user payload for client
+                user_payload = {
+                    'id': user_id,
+                    'username': user.get('username') or username,
+                    'email': user.get('email', ''),
+                    'first_name': user.get('first_name', ''),
+                    'last_name': user.get('last_name', ''),
+                    'role': user.get('role', 'VIEWER'),
+                }
+
                 return Response({
                     'message': 'Login successful',
-                    'tokens': tokens
+                    'token': token_value,
+                    'user': user_payload,
                 })
 
             return Response(
