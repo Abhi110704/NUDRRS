@@ -24,52 +24,27 @@ class UserProfileSerializer(serializers.ModelSerializer):
                 return request.build_absolute_uri(obj.profile_image.url)
         return None
 
-class UserRegistrationSerializer(serializers.ModelSerializer):
-    password = serializers.CharField(write_only=True, required=True, validators=[validate_password])
+class UserRegistrationSerializer(serializers.Serializer):
+    """Registration serializer that does NOT touch Django ORM.
+    This avoids hitting the relational DB on Render.
+    Registration is handled by MongoDB in views.RegisterView.
+    """
+    username = serializers.CharField(max_length=150)
+    email = serializers.EmailField()
+    first_name = serializers.CharField(max_length=150)
+    last_name = serializers.CharField(max_length=150)
+    password = serializers.CharField(write_only=True, required=True)
     password2 = serializers.CharField(write_only=True, required=True)
     phone_number = serializers.CharField(max_length=15, required=False, allow_blank=True)
     organization = serializers.CharField(max_length=200, required=False, allow_blank=True)
-    
-    class Meta:
-        model = User
-        fields = ['id', 'username', 'email', 'first_name', 'last_name', 'password', 'password2', 'phone_number', 'organization']
-        extra_kwargs = {
-            'first_name': {'required': True},
-            'last_name': {'required': True},
-            'email': {'required': True}
-        }
-    
+
     def validate(self, attrs):
-        if attrs['password'] != attrs['password2']:
+        # Check password confirmation
+        if attrs.get('password') != attrs.get('password2'):
             raise serializers.ValidationError({"password": "Password fields didn't match."})
+        # Apply Django's password strength validators (does not require DB)
+        validate_password(attrs.get('password'))
         return attrs
-    
-    def create(self, validated_data):
-        # Extract profile data
-        phone_number = validated_data.pop('phone_number', '')
-        organization_name = validated_data.pop('organization', '')
-        password2 = validated_data.pop('password2')
-        
-        # Create user
-        user = User.objects.create_user(**validated_data)
-        
-        # Create or get organization
-        organization = None
-        if organization_name:
-            organization, created = Organization.objects.get_or_create(
-                name=organization_name,
-                defaults={'org_type': 'OTHER'}
-            )
-        
-        # Create user profile
-        UserProfile.objects.create(
-            user=user,
-            role='VIEWER',  # Default role for new users
-            phone_number=phone_number,
-            organization=organization
-        )
-        
-        return user
 
 class UserSerializer(serializers.ModelSerializer):
     profile = UserProfileSerializer(read_only=True)
