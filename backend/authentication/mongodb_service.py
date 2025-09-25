@@ -66,7 +66,7 @@ class AuthMongoDBService:
     def create_user(self, user_data: Dict) -> Optional[Dict]:
         """Create a new user in MongoDB"""
         try:
-            if not self.db:
+            if self.db is None:
                 return None
             
             collection = self.db['users']
@@ -115,7 +115,7 @@ class AuthMongoDBService:
     def authenticate_user(self, username: str, password: str) -> Optional[Dict]:
         """Authenticate user with username/email and password"""
         try:
-            if not self.db:
+            if self.db is None:
                 return None
             
             collection = self.db['users']
@@ -161,7 +161,7 @@ class AuthMongoDBService:
     def get_user_by_id(self, user_id: str) -> Optional[Dict]:
         """Get user by ID"""
         try:
-            if not self.db:
+            if self.db is None:
                 return None
             
             collection = self.db['users']
@@ -198,7 +198,7 @@ class AuthMongoDBService:
     def get_user_by_username(self, username: str) -> Optional[Dict]:
         """Get user by username"""
         try:
-            if not self.db:
+            if self.db is None:
                 return None
             
             collection = self.db['users']
@@ -227,7 +227,7 @@ class AuthMongoDBService:
     def get_user_by_email(self, email: str) -> Optional[Dict]:
         """Get user by email address"""
         try:
-            if not self.db:
+            if self.db is None:
                 return None
             
             collection = self.db['users']
@@ -256,7 +256,7 @@ class AuthMongoDBService:
     def update_user(self, user_id: str, update_data: Dict) -> Optional[Dict]:
         """Update user information"""
         try:
-            if not self.db:
+            if self.db is None:
                 return None
             
             collection = self.db['users']
@@ -290,7 +290,7 @@ class AuthMongoDBService:
     def update_user_profile(self, user_id: str, update_data: dict) -> bool:
         """Update user profile information"""
         try:
-            if not self.db:
+            if self.db is None:
                 return False
             
             collection = self.db['users']
@@ -312,7 +312,7 @@ class AuthMongoDBService:
     def change_password(self, user_id: str, old_password: str, new_password: str) -> bool:
         """Change user password"""
         try:
-            if not self.db:
+            if self.db is None:
                 return False
             
             collection = self.db['users']
@@ -339,7 +339,7 @@ class AuthMongoDBService:
     def create_token(self, user_id: str) -> str:
         """Create authentication token for user"""
         try:
-            if not self.db:
+            if self.db is None:
                 return None
             
             collection = self.db['auth_tokens']
@@ -368,7 +368,7 @@ class AuthMongoDBService:
     def validate_token(self, token: str) -> Optional[Dict]:
         """Validate authentication token"""
         try:
-            if not self.db:
+            if self.db is None:
                 return None
             
             collection = self.db['auth_tokens']
@@ -393,7 +393,7 @@ class AuthMongoDBService:
     def delete_token(self, token: str) -> bool:
         """Delete authentication token"""
         try:
-            if not self.db:
+            if self.db is None:
                 return False
             
             collection = self.db['auth_tokens']
@@ -407,7 +407,7 @@ class AuthMongoDBService:
     def get_all_users(self, limit: int = 100, skip: int = 0) -> List[Dict]:
         """Get all users"""
         try:
-            if not self.db:
+            if self.db is None:
                 return []
             
             collection = self.db['users']
