@@ -61,23 +61,23 @@ class RegisterView(APIView):
 
 @api_view(['POST'])
 def login_view(request):
-    serializer = UserLoginSerializer(data=request.data)
+    serializer = LoginSerializer(data=request.data)
     if serializer.is_valid():
-        email = serializer.validated_data['email']
+        username = serializer.validated_data['username']
         password = serializer.validated_data['password']
         
-        # Authenticate user
-        user = mongo_service.authenticate_user(email, password)
+        # Authenticate user - we'll use username as email for authentication
+        user = mongo_service.authenticate_user(username, password)
         if user:
             # Generate tokens
-            tokens = get_tokens_for_user(str(user['_id']), email)
+            tokens = get_tokens_for_user(str(user['_id']), username)  # Using username as email
             return Response({
                 'message': 'Login successful',
                 'tokens': tokens
             })
         
         return Response(
-            {'error': 'Invalid email or password'},
+            {'error': 'Invalid username or password'},
             status=status.HTTP_401_UNAUTHORIZED
         )
     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
