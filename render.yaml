@@ -1,0 +1,35 @@
+services:
+  - type: web
+    name: nudrrs-backend
+    env: python
+    rootDir: backend
+    buildCommand: ./build.sh
+    startCommand: gunicorn nudrrs.wsgi:application
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.10.8
+      - key: SECRET_KEY
+        generateValue: true
+      - key: DEBUG
+        value: "False"
+      - key: ALLOWED_HOSTS
+        value: "nudrrs-backend.onrender.com"
+      # Supply your own MongoDB Atlas URI in Render dashboard or here
+      # - key: MONGODB_CONNECTION_STRING
+      #   value: "mongodb+srv://<user>:<pass>@<cluster>/<db>?retryWrites=true&w=majority"
+
+  - type: web
+    name: nudrrs-frontend
+    env: static
+    rootDir: frontend
+    buildCommand: npm install && npm run build
+    staticPublishPath: build
+    envVars:
+      - key: REACT_APP_API_URL
+        value: "https://nudrrs-backend.onrender.com"
+    routes:
+      - type: rewrite
+        source: "/*"
+        destination: "/index.html"
+
+
