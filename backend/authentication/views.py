@@ -23,6 +23,9 @@ from django.core.files.base import ContentFile
 import os
 from datetime import datetime
 import uuid
+import logging
+
+logger = logging.getLogger(__name__)
 
 # Initialize MongoDB service
 mongo_service = AuthMongoDBService()
@@ -61,26 +64,30 @@ class RegisterView(APIView):
 
 @api_view(['POST'])
 def login_view(request):
-    serializer = LoginSerializer(data=request.data)
-    if serializer.is_valid():
-        username = serializer.validated_data['username']
-        password = serializer.validated_data['password']
-        
-        # Authenticate user - we'll use username as email for authentication
-        user = mongo_service.authenticate_user(username, password)
-        if user:
-            # Generate tokens
-            tokens = get_tokens_for_user(str(user['_id']), username)  # Using username as email
-            return Response({
-                'message': 'Login successful',
-                'tokens': tokens
-            })
-        
-        return Response(
-            {'error': 'Invalid username or password'},
-            status=status.HTTP_401_UNAUTHORIZED
-        )
-    return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    try:
+        serializer = LoginSerializer(data=request.data)
+        if serializer.is_valid():
+            username = serializer.validated_data['username']
+            password = serializer.validated_data['password']
+
+            # Authenticate user - we'll use username as email for authentication
+            user = mongo_service.authenticate_user(username, password)
+            if user:
+                # Generate tokens
+                tokens = get_tokens_for_user(str(user['_id']), username)  # Using username as email
+                return Response({
+                    'message': 'Login successful',
+                    'tokens': tokens
+                })
+
+            return Response(
+                {'error': 'Invalid username or password'},
+                status=status.HTTP_401_UNAUTHORIZED
+            )
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    except Exception as exc:
+        logger.exception("Login failed due to unexpected error")
+        return Response({'error': 'Internal server error'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
